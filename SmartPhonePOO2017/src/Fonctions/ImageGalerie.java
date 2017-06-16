@@ -24,7 +24,7 @@ public class ImageGalerie {
 //	}
 	
 	public void setNomIcon(String nomIcon, Dimension dimIcon) {
-		this.nomIcon = nomIcon;
+		ImageGalerie.nomIcon = nomIcon;
 		ImageIcon tmpImageIcon = new ImageIcon(nomIcon);
 		this.setImgIconResized(tmpImageIcon,dimIcon);
 	}
@@ -128,7 +128,7 @@ public class ImageGalerie {
 	 * @param imgIcon the imgIcon to set
 	 */
 	public void setImgIcon(ImageIcon imgIcon) {
-		this.imgIcon = imgIcon;
+		ImageGalerie.imgIcon = imgIcon;
 	}
 
 }

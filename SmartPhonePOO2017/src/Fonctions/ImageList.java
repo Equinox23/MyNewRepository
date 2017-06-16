@@ -49,7 +49,7 @@ public abstract class ImageList extends PanGalerieTop{
 		for (int i=0; i<tblButtonIMG.length; i++){
 			MainFrame.galerie.picture.setDimIcon(dim);
 			MainFrame.galerie.setPicture(i);
-			tblButtonIMG[i] = new BoutonImg(MainFrame.galerie.picture.getImgIcon(),dim);
+			tblButtonIMG[i] = new BoutonImg(ImageGalerie.getImgIcon(),dim);
 		}
 		
 		setGUI();	

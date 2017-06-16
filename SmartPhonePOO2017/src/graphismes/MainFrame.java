@@ -46,7 +46,6 @@ public class MainFrame {
 	private JLabel heuretelephonepetit;
 	private JLabel photo1;
 	private JLabel photo2;
-	private JLabel test;
 	
 	private JScrollPane listScroller;
 	
@@ -80,11 +79,12 @@ public class MainFrame {
 	private Font fontHeure;
 	private Font fontHeurepetit;
 	
-	private JList jlistContact ;
+	private JList<?> jlistContact ;
 	protected static Contact newContact;
 	
 	protected static int contactencours;
 	
+	@SuppressWarnings({ "unchecked", "rawtypes" })
 	public MainFrame() throws ClassNotFoundException, IOException {
 		
 		ArrayList<Contact> arraylistContact = new ArrayList<Contact>();

@@ -3,9 +3,6 @@ package fonctionsSmartphone;
 import java.io.Serializable;
 import java.util.UUID;
 
-import javax.swing.Icon;
-import javax.swing.ImageIcon;
-
 public class Contact implements Serializable {
 
 	private static final long serialVersionUID = 1L;

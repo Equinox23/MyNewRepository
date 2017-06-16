@@ -164,6 +164,7 @@ public class PanelGalerie extends JPanel implements ActionListener  {
 		afficherImageZoom(index);
 	}
 	
+	@SuppressWarnings("static-access")
 	public static void afficherImageZoom(int index) {
 		Dimension dimPicture = new Dimension(400,650);
 		PanelGalerie.btnLBLZoom.setPreferredSize(dimPicture);
@@ -184,6 +185,7 @@ public class PanelGalerie extends JPanel implements ActionListener  {
 	
 	
 		/*lecteur d'image"*/	
+		@SuppressWarnings("unused")
 		public void actionPerformed(ActionEvent e) {
 			int result;   			
 			chooser = new JFileChooser();
