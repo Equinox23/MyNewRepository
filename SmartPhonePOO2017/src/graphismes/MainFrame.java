@@ -780,7 +780,7 @@ public class MainFrame {
 		newprofilpicture1 = new JButton();
 		panelNewContact.add(newprofilpicture1);
 		newprofilpicture1.setBounds(330, 370, 60, 60);
-		newprofilpicture1.setBackground(Color.red);
+		newprofilpicture1.setBackground(Color.white);
 		newprofilpicture1.setIcon(new ImageIcon(MainFrame.class.getResource("/imagesSmartphone/addPhoto.png")));
 		newprofilpicture1.setBorder(null);
 		
@@ -790,7 +790,7 @@ public class MainFrame {
 		    	newprofilpicture1.setBackground(Color.GRAY);
 		    }
 		    public void mouseExited(java.awt.event.MouseEvent e) {
-		    	newprofilpicture1.setBackground(Color.red);
+		    	newprofilpicture1.setBackground(Color.white);
 		    }
 		});
 		
@@ -808,7 +808,7 @@ public class MainFrame {
 		newprofilpicture2 = new JButton();
 		panelModifDeleteContact.add(newprofilpicture2);
 		newprofilpicture2.setBounds(330, 370, 60, 60);
-		newprofilpicture2.setBackground(Color.red);
+		newprofilpicture2.setBackground(Color.white);
 		newprofilpicture2.setIcon(new ImageIcon(MainFrame.class.getResource("/imagesSmartphone/addPhoto.png")));
 		newprofilpicture2.setBorder(null);
 		
@@ -818,7 +818,7 @@ public class MainFrame {
 		    	newprofilpicture2.setBackground(Color.GRAY);
 		    }
 		    public void mouseExited(java.awt.event.MouseEvent e) {
-		    	newprofilpicture2.setBackground(Color.red);
+		    	newprofilpicture2.setBackground(Color.white);
 		    }
 		});
 		

@@ -99,18 +99,19 @@ public class PanelGalerie extends JPanel implements ActionListener  {
 		buttonAjouterImage.addActionListener(this);
 		
 		/*Création du bouton "Ajouter à un contact existant"*/
-		buttonLieContact = new JButton("Exist");
+		buttonLieContact = new JButton();
 		buttonLieContact.setVisible(false);
 		boutons.add(buttonLieContact);
 		buttonLieContact.setBounds(260, 5, 75, 75);
-		buttonLieContact.setBackground(Color.red);
+		buttonLieContact.setBackground(Color.black);
 		buttonLieContact.setBorder(null);
+		buttonLieContact.setIcon(new ImageIcon(MainFrame.class.getResource("/imagesSmartphone/downloadcontact.png")));
 		buttonLieContact.addMouseListener(new java.awt.event.MouseAdapter() {
 		    public void mouseEntered(java.awt.event.MouseEvent e) {
 		    	buttonLieContact.setBackground(Color.GRAY);
 		    }
 		    public void mouseExited(java.awt.event.MouseEvent e) {
-		    	buttonLieContact.setBackground(Color.red);
+		    	buttonLieContact.setBackground(Color.black);
 		    }
 		});
 		buttonLieContact.addActionListener(new ActionListener() {
@@ -123,18 +124,19 @@ public class PanelGalerie extends JPanel implements ActionListener  {
 		});
 		
 		/*Création du bouton "Ajouter à un nouveau contact"*/
-		buttonLieNewContact = new JButton("Nouv");
+		buttonLieNewContact = new JButton();
 		buttonLieNewContact.setVisible(false);
 		boutons.add(buttonLieNewContact);
 		buttonLieNewContact.setBounds(260, 5, 75, 75);
-		buttonLieNewContact.setBackground(Color.red);
+		buttonLieNewContact.setBackground(Color.black);
 		buttonLieNewContact.setBorder(null);
+		buttonLieNewContact.setIcon(new ImageIcon(MainFrame.class.getResource("/imagesSmartphone/downloadcontact.png")));
 		buttonLieNewContact.addMouseListener(new java.awt.event.MouseAdapter() {
 		    public void mouseEntered(java.awt.event.MouseEvent e) {
 		    	buttonLieNewContact.setBackground(Color.GRAY);
 		    }
 		    public void mouseExited(java.awt.event.MouseEvent e) {
-		    	buttonLieNewContact.setBackground(Color.red);
+		    	buttonLieNewContact.setBackground(Color.black);
 		    }
 		});
 		buttonLieNewContact.addActionListener(new ActionListener() {
