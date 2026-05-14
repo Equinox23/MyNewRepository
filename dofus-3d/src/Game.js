@@ -114,6 +114,7 @@ export class Game {
 
   async castSelf(caster, spell) {
     caster.pa -= spell.apCost;
+    caster.character.popCost(spell.apCost, 'pa');
     this.hud.update(caster, this.mode, this.selectedSpellId);
     await this.applySpellEffects(caster, spell, { c: caster.c, r: caster.r });
   }
@@ -146,6 +147,8 @@ export class Game {
     if (cost > cur.pm) return;
     this.busy = true;
     this.picker.setHover(null);
+    // Popup "-N" vert au-dessus du perso pour materialiser le cout PM.
+    cur.character.popCost(cost, 'pm');
     // Decompte PAS par PAS pour que le HUD diminue visuellement les PM
     // a chaque case parcourue (au lieu d un seul saut a la fin).
     for (const step of path.slice(1)) {
@@ -166,7 +169,8 @@ export class Game {
     const reason = this.validateSpellTarget(cur, spell, c, r);
     if (reason) { this.hud.flash(reason, 900); return; }
     cur.pa -= spell.apCost;
-    // Mise a jour HUD AVANT l animation : on voit les PA chuter en direct.
+    // Popup "-X" bleu au-dessus du perso + HUD a jour avant l anim.
+    cur.character.popCost(spell.apCost, 'pa');
     this.hud.update(cur, this.mode, this.selectedSpellId);
     this.busy = true;
     this.picker.setHover(null);
@@ -229,7 +233,7 @@ export class Game {
         if (!tf) return;
         const amt = effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1));
         const healed = tf.heal(amt);
-        tf.character.popDamage('+' + healed, '#7dffa0');
+        tf.character.popHeal(healed);
         tf.character.hpBar.setHp(tf.hp, tf.maxHp);
         tf.character.flashGlow(0x2ecc71, 700);
         await new Promise(r => setTimeout(r, 500));
@@ -322,6 +326,7 @@ export class Game {
       usable.sort((a, b) => avgDmg(b) - avgDmg(a));
       const spell = usable[0];
       ai.pa -= spell.apCost;
+      ai.character.popCost(spell.apCost, 'pa');
       this.hud.update(ai, this.mode, this.selectedSpellId);
       await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
       if (this.checkEnd()) return;
@@ -363,6 +368,8 @@ export class Game {
     const fullPath = pathTo(result, bestGoal);
     if (!fullPath || fullPath.length <= 1) return;
     const maxSteps = Math.min(ai.pm, fullPath.length - 1);
+    if (maxSteps === 0) return;
+    ai.character.popCost(maxSteps, 'pm');
     const steps = fullPath.slice(1, maxSteps + 1);
     for (const step of steps) {
       ai.pm--;

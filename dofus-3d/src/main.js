@@ -5,6 +5,25 @@ import { Hud } from './Hud.js';
 import { Game } from './Game.js';
 import { RangeOverlay } from './RangeOverlay.js';
 
+// --- CURSEURS PERSONNALISES ---
+// Curseur de base : fleche doree style RPG (hotspot a la pointe = 3,2).
+const POINTER_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 28 28">
+  <polygon points="3 2, 3 22, 9 17, 12 25, 16 23, 13 16, 21 15"
+           fill="#f1c40f" stroke="#1a1a2e" stroke-width="2" stroke-linejoin="round"/>
+</svg>`;
+// Curseur "epee" pour survol d ennemi (hotspot a la pointe de la lame).
+const SWORD_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <circle cx="6" cy="26" r="3" fill="#f1c40f" stroke="#1a1a2e" stroke-width="2"/>
+  <line x1="2" y1="22" x2="13" y2="11" stroke="#1a1a2e" stroke-width="7" stroke-linecap="round"/>
+  <line x1="2" y1="22" x2="13" y2="11" stroke="#8a6d3b" stroke-width="4" stroke-linecap="round"/>
+  <line x1="7" y1="25" x2="26" y2="6" stroke="#1a1a2e" stroke-width="6" stroke-linecap="round"/>
+  <line x1="7" y1="25" x2="26" y2="6" stroke="#fdfefe" stroke-width="3.5" stroke-linecap="round"/>
+  <polygon points="25 5, 30 4, 27 9" fill="#fdfefe" stroke="#1a1a2e" stroke-width="1.5"/>
+</svg>`;
+const POINTER_CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(POINTER_SVG)}") 3 2, auto`;
+const SWORD_CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(SWORD_SVG)}") 27 5, crosshair`;
+document.body.style.cursor = POINTER_CURSOR;
+
 // --- INIT ---
 const scene3d = new Scene3D();
 const map3d = new Map3D(scene3d.scene);
@@ -23,6 +42,7 @@ game.setup();
 
 // --- INPUTS souris / tactile ---
 const canvas = scene3d.renderer.domElement;
+canvas.style.cursor = POINTER_CURSOR;
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 canvas.addEventListener('wheel', (e) => {
@@ -105,10 +125,23 @@ canvas.addEventListener('pointercancel', (e) => {
 canvas.addEventListener('pointerleave', () => picker.setHover(null));
 
 function handleHover(x, y) {
-  if (game.busy) { picker.setHover(null); return; }
+  if (game.busy) {
+    picker.setHover(null);
+    canvas.style.cursor = POINTER_CURSOR;
+    return;
+  }
   const hit = picker.pick(x, y);
-  if (!hit) { picker.setHover(null); return; }
+  if (!hit) {
+    picker.setHover(null);
+    canvas.style.cursor = POINTER_CURSOR;
+    return;
+  }
   picker.setHover(hit.c, hit.r, hit.isWall);
+  // Curseur en forme d epee si on survole une case occupee par un ennemi.
+  const enemyHere = game.fighters.some(f =>
+    f.alive && f.team !== 'player' && f.c === hit.c && f.r === hit.r
+  );
+  canvas.style.cursor = enemyHere ? SWORD_CURSOR : POINTER_CURSOR;
 }
 
 function handleTap(x, y) {

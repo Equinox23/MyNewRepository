@@ -155,40 +155,75 @@ export class Character3D {
     });
   }
 
-  // Fait apparaitre un nombre flottant au-dessus du perso.
-  popDamage(value, color = '#ff5577') {
+  // Texte flottant au-dessus du perso, generique.
+  popText(text, color = '#ffffff', options = {}) {
+    const fontSize = options.fontSize || 32;
+    const dx = options.dx || 0;
+    const yStart = options.yStart || 1.6;
+    const yRise = options.yRise || 0.9;
+    const duration = options.duration || 900;
+    const scaleX = options.scaleX || 1.0;
+    const scaleY = options.scaleY || 0.5;
     const canvas = document.createElement('canvas');
-    canvas.width = 96; canvas.height = 48;
+    canvas.width = 160; canvas.height = 56;
     const ctx = canvas.getContext('2d');
-    ctx.font = 'bold 32px "Trebuchet MS", sans-serif';
+    ctx.font = `bold ${fontSize}px "Trebuchet MS", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.lineWidth = 6;
     ctx.strokeStyle = '#000';
-    ctx.strokeText('-' + value, 48, 24);
+    ctx.strokeText(text, 80, 28);
     ctx.fillStyle = color;
-    ctx.fillText('-' + value, 48, 24);
+    ctx.fillText(text, 80, 28);
     const tex = new THREE.CanvasTexture(canvas);
     tex.minFilter = THREE.LinearFilter;
     const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
     const sprite = new THREE.Sprite(mat);
-    sprite.scale.set(0.9, 0.45, 1);
-    sprite.position.set(this.group.position.x, 1.6, this.group.position.z);
+    sprite.scale.set(scaleX, scaleY, 1);
+    sprite.position.set(this.group.position.x + dx, yStart, this.group.position.z);
     sprite.renderOrder = 1000;
     this.scene.add(sprite);
     const start = performance.now();
     const tick = (now) => {
-      const t = Math.min(1, (now - start) / 900);
-      sprite.position.y = 1.6 + t * 0.9;
+      const t = Math.min(1, (now - start) / duration);
+      sprite.position.y = yStart + t * yRise;
       sprite.material.opacity = 1 - t;
       if (t < 1) requestAnimationFrame(tick);
       else {
         this.scene.remove(sprite);
-        sprite.material.map.dispose();
-        sprite.material.dispose();
+        tex.dispose();
+        mat.dispose();
       }
     };
     requestAnimationFrame(tick);
+  }
+
+  // Pop chiffre de degats : "-15" en rouge.
+  popDamage(value, color = '#ff5577') {
+    this.popText('-' + value, color);
+  }
+
+  // Pop "+30" en vert pour les soins.
+  popHeal(value) {
+    this.popText('+' + value, '#7dffa0');
+  }
+
+  // Pop de cout de ressource: '-N' decale a droite (PA bleu etoile)
+  // ou gauche (PM vert fleche). Plus petit que les degats pour ne pas
+  // dominer visuellement les coups recus.
+  popCost(amount, type) {
+    if (!amount) return;
+    const isPm = type === 'pm';
+    const color = isPm ? '#74e69b' : '#7ec6ff';
+    this.popText('-' + amount, color, {
+      fontSize: 22,
+      dx: isPm ? -0.42 : 0.42,
+      yStart: 1.35,
+      yRise: 0.7,
+      duration: 850,
+      scaleX: 0.85,
+      scaleY: 0.42,
+    });
   }
 
   // Teleportation : le perso se pince verticalement (disparaitre dans

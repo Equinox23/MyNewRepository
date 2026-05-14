@@ -58,11 +58,23 @@ const ICON_HORNS = `
     <path d="M21 24 C29 17 27 7 19 5 C20 10 18 14 21 24 Z" fill="currentColor"/>
   </svg>`;
 
+// Couleurs canoniques par categorie de sort.
+//   attaque (damage)    -> rouge
+//   soin (heal)         -> rose
+//   boost (buff)        -> jaune
+//   deplacement         -> vert
+export const SPELL_CATEGORY_COLOR = {
+  attack: '#c0392b',
+  heal:   '#e91e63',
+  boost:  '#f1c40f',
+  move:   '#27ae60',
+};
+
 export const SPELLS = {
   // ---------- IOP ----------
   pression: {
     id: 'pression', name: 'Pression', short: 'PR', icon: ICON_SWORD,
-    color: '#c0392b',
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
     effects: [{ type: 'damage', min: 12, max: 18 }],
@@ -70,7 +82,7 @@ export const SPELLS = {
   },
   bond: {
     id: 'bond', name: 'Bond', short: 'BD', icon: ICON_JUMP,
-    color: '#e67e22',
+    category: 'move', color: SPELL_CATEGORY_COLOR.move,
     apCost: 4, range: { min: 1, max: 5 }, needsLOS: true,
     target: 'tile', area: { type: 'single' },
     effects: [{ type: 'teleport' }],
@@ -78,7 +90,7 @@ export const SPELLS = {
   },
   epeeDivine: {
     id: 'epeeDivine', name: 'Epee Divine', short: 'ED', icon: ICON_GREATSWORD,
-    color: '#f1c40f',
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 5, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
     effects: [{ type: 'damage', min: 22, max: 30 }],
@@ -86,7 +98,7 @@ export const SPELLS = {
   },
   concentration: {
     id: 'concentration', name: 'Concentration', short: 'CO', icon: ICON_FIST,
-    color: '#9b59b6',
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
     effects: [{ type: 'buff', stat: 'damage', value: 0.3, duration: 2 }],
@@ -96,7 +108,7 @@ export const SPELLS = {
   // ---------- BOUFTOU ----------
   coupDeCorne: {
     id: 'coupDeCorne', name: 'Coup de Corne', short: 'CC', icon: ICON_HORNS,
-    color: '#7a5d0a',
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
     effects: [{ type: 'damage', min: 8, max: 12 }],
