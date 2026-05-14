@@ -523,14 +523,16 @@ export class Hud {
     // affiche duration - 1 pour le restant apres le tour en cours.
     if (fighter.buffs && fighter.buffs.length) {
       this.buffsEl.innerHTML = fighter.buffs.map(b => {
-        const remaining = Math.max(0, b.duration - 1);
         const parts = [];
         if (b.damageMult) parts.push(`+${Math.round(b.damageMult * 100)}% degats`);
         if (b.bonusPa) parts.push(`+${b.bonusPa} PA`);
         if (b.bonusPm) parts.push(`+${b.bonusPm} PM`);
         if (b.shield) parts.push(`-${Math.round(b.shield * 100)}% degats reçus`);
-        return `<span class="buff">${parts.join(', ')} (${remaining}t)</span>`;
-      }).join('  ');
+        if (b.dot) parts.push(`Poison ${b.dot.min}-${b.dot.max}/tour`);
+        if (parts.length === 0) return '';
+        const tag = b.permanent ? '(carte)' : `(${Math.max(0, b.duration - 1)}t)`;
+        return `<span class="buff">${parts.join(', ')} ${tag}</span>`;
+      }).filter(s => s).join('  ');
     } else {
       this.buffsEl.innerHTML = '';
     }

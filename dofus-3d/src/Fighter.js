@@ -1,8 +1,8 @@
 import { SPELLS } from './Spells.js';
 
 // Definitions des classes / creatures.
-// `ai` decrit le caractere autonome (cf Game.runAI). Un Craqueleur (invocation)
-// est sur l equipe 'player' mais a ai='aggressive' : il joue tout seul.
+// `ai` decrit le caractere autonome (cf Game.runAI).
+// `isAquatic` autorise la traversee des cases d eau (cf BFS).
 export const DEFS = {
   iop: {
     name: 'Iop',
@@ -19,14 +19,14 @@ export const DEFS = {
   bouftou: {
     name: 'Bouftou',
     role: 'Meute',
-    hp: 55, pa: 5, pm: 4, initiative: 10,
+    hp: 150, pa: 5, pm: 4, initiative: 10,
     spellIds: ['morsureBouftou'],
     ai: 'aggressive',
   },
   bouftouRoyal: {
     name: 'Bouftou Royal',
     role: 'Chef de meute',
-    hp: 160, pa: 7, pm: 3, initiative: 9,
+    hp: 400, pa: 7, pm: 3, initiative: 9,
     spellIds: ['morsureRoyale', 'soinAnimal'],
     ai: 'aggressive',
   },
@@ -36,6 +36,22 @@ export const DEFS = {
     hp: 80, pa: 5, pm: 3, initiative: 8,
     spellIds: ['frappeCraqueleur', 'lancerRocher'],
     ai: 'aggressive',
+  },
+  crapaud: {
+    name: 'Crapaud',
+    role: 'Crachat',
+    hp: 130, pa: 4, pm: 3, initiative: 11,
+    spellIds: ['crachat'],
+    ai: 'fearful',
+    isAquatic: true,
+  },
+  crapaudChef: {
+    name: 'Crapaud Chef',
+    role: 'Maitre des crapauds',
+    hp: 220, pa: 6, pm: 3, initiative: 10,
+    spellIds: ['crachatEmpoisonne', 'peauDure'],
+    ai: 'fearful',
+    isAquatic: true,
   },
 };
 
@@ -48,7 +64,6 @@ export class Fighter {
     this.team = team;
     this.c = c;
     this.r = r;
-    // Marque les invocations (Craqueleur) avec un suffixe lisible.
     this.isSummon = def.role === 'Invocation';
     this.name = def.name
       + (team === 'enemy' ? ' (E)' : (this.isSummon ? ' (Invoc.)' : ''));
@@ -61,9 +76,8 @@ export class Fighter {
     this.initiative = def.initiative + Math.random();
     this.alive = true;
     this.character = null;
-    // Buffs : { duration, damageMult?, bonusPa?, bonusPm?, shield? }
+    // Buffs : { duration, damageMult?, bonusPa?, bonusPm?, shield?, dot?, permanent? }
     this.buffs = [];
-    // Cooldown des sorts : { [spellId]: tours restants }
     this.spellCooldowns = {};
   }
 
@@ -74,24 +88,38 @@ export class Fighter {
   startTurn() {
     this.pa = this.maxPa;
     this.pm = this.maxPm;
-    // Decremente la duree des buffs ; retire ceux a 0.
+    // Decremente la duree des buffs non permanents.
     this.buffs = this.buffs
-      .map(b => ({ ...b, duration: b.duration - 1 }))
-      .filter(b => b.duration > 0);
-    // Applique les bonus PA / PM des buffs encore actifs.
+      .map(b => b.permanent ? b : { ...b, duration: b.duration - 1 })
+      .filter(b => b.permanent || b.duration > 0);
+    // Applique les bonus PA / PM des buffs actifs (au-dessus du max).
     for (const b of this.buffs) {
       if (b.bonusPa) this.pa += b.bonusPa;
       if (b.bonusPm) this.pm += b.bonusPm;
     }
-    // Decremente les cooldowns des sorts.
+    // Decremente les cooldowns.
     for (const id in this.spellCooldowns) {
       this.spellCooldowns[id] = Math.max(0, this.spellCooldowns[id] - 1);
     }
   }
 
+  // Applique les DoT actifs et renvoie le total de degats subis ce tour.
+  // Appele par Game.startTurn pour pouvoir gerer la mort eventuelle.
+  tickDots() {
+    let total = 0;
+    for (const b of this.buffs) {
+      if (b.dot) {
+        const dmg = b.dot.min + Math.floor(Math.random() * (b.dot.max - b.dot.min + 1));
+        const actual = this.takeDamage(dmg);
+        total += actual;
+        if (!this.alive) break;
+      }
+    }
+    return total;
+  }
+
   takeDamage(amount) {
     let dmg = amount;
-    // Reductions cumulatives multiplicatives des boucliers actifs.
     for (const b of this.buffs) {
       if (b.shield) dmg *= (1 - b.shield);
     }

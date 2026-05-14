@@ -121,6 +121,23 @@ const ICON_CROSS_PUNCH = `
     <rect x="13" y="13" width="6" height="6" fill="currentColor"/>
   </svg>`;
 
+const ICON_SPIT = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="22" cy="22" rx="5" ry="3" fill="currentColor" transform="rotate(-30 22 22)"/>
+    <line x1="3" y1="6" x2="9" y2="9" stroke-dasharray="2 2"/>
+    <line x1="5" y1="14" x2="11" y2="15" stroke-dasharray="2 2"/>
+    <line x1="3" y1="22" x2="9" y2="20" stroke-dasharray="2 2"/>
+    <circle cx="14" cy="16" r="2" fill="currentColor" opacity="0.6"/>
+  </svg>`;
+
+const ICON_POISON_SPIT = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M16 4 Q22 10 22 16 Q22 24 16 28 Q10 24 10 16 Q10 10 16 4 Z" fill="currentColor"/>
+    <circle cx="14" cy="14" r="2" fill="#fff" opacity="0.6"/>
+    <circle cx="18" cy="20" r="1.5" fill="#fff" opacity="0.6"/>
+    <circle cx="13" cy="22" r="1" fill="#fff" opacity="0.5"/>
+  </svg>`;
+
 // Couleurs canoniques par categorie.
 export const SPELL_CATEGORY_COLOR = {
   attack: '#c0392b',
@@ -150,10 +167,10 @@ export const SPELLS = {
   epeeDivine: {
     id: 'epeeDivine', name: 'Epee Divine', short: 'ED', icon: ICON_LINE,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 5, range: { min: 1, max: 4 }, needsLOS: false,
-    target: 'tile', area: { type: 'line', length: 4 },
+    apCost: 5, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'tile', area: { type: 'line', length: 5, piercing: true },
     effects: [{ type: 'damage', min: 18, max: 24 }],
-    desc: 'Frappe une ligne droite devant soi : touche tout dans la ligne.',
+    desc: 'Lance sur la case devant soi : la lame divine fonce ensuite tout droit et traverse murs et ennemis sur 5 cases.',
   },
   concentration: {
     id: 'concentration', name: 'Concentration', short: 'CO', icon: ICON_FIST,
@@ -244,6 +261,34 @@ export const SPELLS = {
     effects: [{ type: 'debuff_pm', value: 2 }],
     desc: 'Jette un rocher : la cible perd 2 PM.',
   },
+
+  // ---------- CRAPAUD ----------
+  crachat: {
+    id: 'crachat', name: 'Crachat', short: 'CR', icon: ICON_SPIT,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'debuff_pa', value: 1 }],
+    desc: 'Crache une mixture acide. La cible perd 1 PA.',
+  },
+
+  // ---------- CRAPAUD CHEF ----------
+  crachatEmpoisonne: {
+    id: 'crachatEmpoisonne', name: 'Crachat Empoisonne', short: 'CE', icon: ICON_POISON_SPIT,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 6 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'dot', min: 6, max: 9, duration: 3 }],
+    desc: 'Empoisonne la cible : degats sur 3 tours.',
+  },
+  peauDure: {
+    id: 'peauDure', name: 'Peau Dure', short: 'PD', icon: ICON_SHIELD,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
+    target: 'ally', area: { type: 'single' },
+    effects: [{ type: 'buff', shield: 0.3, duration: 3 }],
+    desc: 'Renforce la peau d un allie : -30% degats reçus pendant 3 tours.',
+  },
 };
 
 // Helpers pour fabriquer le contenu du tooltip a partir d un spell.
@@ -283,6 +328,12 @@ export function spellEffectLines(spell) {
         break;
       case 'debuff_pm':
         lines.push(`Cible perd ${eff.value} PM`);
+        break;
+      case 'debuff_pa':
+        lines.push(`Cible perd ${eff.value} PA`);
+        break;
+      case 'dot':
+        lines.push(`Poison : ${eff.min}-${eff.max} degats pendant ${eff.duration} tours`);
         break;
     }
   }

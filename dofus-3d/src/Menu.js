@@ -92,29 +92,57 @@ const COMBAT_OPTIONS = [
     available: true,
     icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
       <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
-      <!-- horns -->
       <path d="M20 22 Q10 14 14 6 Q16 14 24 18 Z" fill="#fdfefe" stroke="#1a0d05" stroke-width="1.5"/>
       <path d="M44 22 Q54 14 50 6 Q48 14 40 18 Z" fill="#fdfefe" stroke="#1a0d05" stroke-width="1.5"/>
-      <!-- body -->
       <circle cx="32" cy="38" r="22" fill="#f1c40f" stroke="#5a3a07" stroke-width="2"/>
-      <!-- wool puffs -->
       <circle cx="14" cy="32" r="6" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
       <circle cx="22" cy="22" r="5" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
       <circle cx="42" cy="22" r="5" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
       <circle cx="50" cy="32" r="6" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
       <circle cx="14" cy="48" r="5" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
       <circle cx="50" cy="48" r="5" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
-      <!-- mask -->
       <ellipse cx="32" cy="38" rx="14" ry="10" fill="#1a0d05"/>
-      <!-- glow eyes -->
       <circle cx="26" cy="36" r="2.8" fill="#e74c3c"/>
       <circle cx="38" cy="36" r="2.8" fill="#e74c3c"/>
       <circle cx="26" cy="36" r="4" fill="#e74c3c" opacity="0.35"/>
       <circle cx="38" cy="36" r="4" fill="#e74c3c" opacity="0.35"/>
-      <!-- teeth -->
       <path d="M26 44 L28 48 L30 44 L32 48 L34 44 L36 48 L38 44" stroke="#fff" stroke-width="1.5" fill="none"/>
-      <!-- crown hint -->
       <path d="M22 6 L26 -2 L32 4 L38 -2 L42 6 Z" fill="#f1c40f" stroke="#7a5d0a" stroke-width="1.5" opacity="0.9"/>
+    </svg>`,
+  },
+  {
+    id: 'crapaud',
+    name: 'Crapauds de la mare',
+    desc: '3 Crapauds + 1 Chef (haut-de-forme). Aquatiques.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="crapBody" cx="50%" cy="40%" r="60%">
+          <stop offset="0" stop-color="#73b550"/>
+          <stop offset="1" stop-color="#2f5a24"/>
+        </radialGradient>
+      </defs>
+      <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
+      <!-- body -->
+      <ellipse cx="32" cy="42" rx="22" ry="14" fill="url(#crapBody)" stroke="#1a3010" stroke-width="2"/>
+      <!-- legs -->
+      <ellipse cx="10" cy="50" rx="6" ry="3" fill="#2f5a24"/>
+      <ellipse cx="54" cy="50" rx="6" ry="3" fill="#2f5a24"/>
+      <!-- belly -->
+      <ellipse cx="32" cy="50" rx="14" ry="5" fill="#ccd66a"/>
+      <!-- eyes -->
+      <circle cx="22" cy="22" r="9" fill="#fff" stroke="#1a3010" stroke-width="2"/>
+      <circle cx="42" cy="22" r="9" fill="#fff" stroke="#1a3010" stroke-width="2"/>
+      <circle cx="22" cy="24" r="4" fill="#1a1a1a"/>
+      <circle cx="42" cy="24" r="4" fill="#1a1a1a"/>
+      <circle cx="20" cy="22" r="1.5" fill="#fff"/>
+      <circle cx="40" cy="22" r="1.5" fill="#fff"/>
+      <!-- mouth -->
+      <path d="M14 42 Q32 50 50 42" stroke="#3a2010" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <!-- top hat hint -->
+      <ellipse cx="32" cy="14" rx="10" ry="2" fill="#141416"/>
+      <rect x="26" y="2" width="12" height="12" fill="#141416"/>
+      <rect x="26" y="11" width="12" height="3" fill="#c0392b"/>
     </svg>`,
   },
 ];
@@ -123,30 +151,46 @@ const MAP_OPTIONS = [
   {
     id: 'foret',
     name: 'Foret',
-    desc: 'Clairiere boisee, arbres et rochers',
+    desc: 'Clairiere boisee. Bouftous +1 PM ici.',
     available: true,
     icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <!-- ground -->
       <rect x="0" y="42" width="64" height="22" fill="#3a6e3a"/>
-      <!-- grass tufts -->
       <line x1="6" y1="44" x2="6" y2="40" stroke="#2a5a2a" stroke-width="2"/>
       <line x1="20" y1="46" x2="20" y2="42" stroke="#2a5a2a" stroke-width="2"/>
       <line x1="50" y1="46" x2="50" y2="42" stroke="#2a5a2a" stroke-width="2"/>
-      <!-- sky -->
       <rect x="0" y="0" width="64" height="42" fill="#88b07d"/>
-      <!-- big tree center -->
       <rect x="29" y="32" width="6" height="14" fill="#5a3a1a" stroke="#2c1a08" stroke-width="1"/>
       <polygon points="32 8, 22 24, 42 24" fill="#2a5a2a" stroke="#063a0e" stroke-width="1.5"/>
       <polygon points="32 14, 24 28, 40 28" fill="#3a6e3a" stroke="#063a0e" stroke-width="1.5"/>
       <polygon points="32 20, 26 32, 38 32" fill="#4a8a3a" stroke="#063a0e" stroke-width="1.5"/>
-      <!-- left tree -->
       <rect x="9" y="36" width="4" height="10" fill="#5a3a1a"/>
       <polygon points="11 20, 5 36, 17 36" fill="#3a6e3a" stroke="#063a0e" stroke-width="1"/>
-      <!-- right tree -->
       <rect x="51" y="36" width="4" height="10" fill="#5a3a1a"/>
       <polygon points="53 22, 47 36, 59 36" fill="#3a6e3a" stroke="#063a0e" stroke-width="1"/>
-      <!-- rock -->
       <ellipse cx="46" cy="46" rx="6" ry="3" fill="#7a6a5a" stroke="#1a0d05" stroke-width="1"/>
+    </svg>`,
+  },
+  {
+    id: 'cascade',
+    name: 'Cascade',
+    desc: 'Riviere serpentine + pont. Crapauds +30% degats ici.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="64" height="64" fill="#a4c4cc"/>
+      <rect x="0" y="42" width="64" height="22" fill="#5a7050"/>
+      <!-- riviere qui serpente -->
+      <path d="M16 0 L24 18 L18 32 L26 46 L20 64 L40 64 L44 46 L36 32 L42 18 L34 0 Z" fill="#2b8aab" stroke="#1a5a72" stroke-width="1.5"/>
+      <!-- pont au milieu -->
+      <rect x="14" y="28" width="36" height="8" fill="#6e4a20" stroke="#3a2010" stroke-width="1.5"/>
+      <line x1="20" y1="28" x2="20" y2="36" stroke="#3a2010" stroke-width="1"/>
+      <line x1="32" y1="28" x2="32" y2="36" stroke="#3a2010" stroke-width="1"/>
+      <line x1="44" y1="28" x2="44" y2="36" stroke="#3a2010" stroke-width="1"/>
+      <!-- rocher -->
+      <ellipse cx="8" cy="52" rx="5" ry="3" fill="#7a6a5a" stroke="#1a0d05" stroke-width="1"/>
+      <ellipse cx="55" cy="56" rx="5" ry="3" fill="#7a6a5a" stroke="#1a0d05" stroke-width="1"/>
+      <!-- vagues -->
+      <line x1="24" y1="8" x2="32" y2="8" stroke="#eaf3f7" stroke-width="1"/>
+      <line x1="20" y1="48" x2="28" y2="48" stroke="#eaf3f7" stroke-width="1"/>
     </svg>`,
   },
 ];

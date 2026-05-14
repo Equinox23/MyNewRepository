@@ -4,6 +4,8 @@ import { buildBouftou } from './models/bouftou.js';
 import { buildBouftouRoyal } from './models/bouftouRoyal.js';
 import { buildOsamodas } from './models/osamodas.js';
 import { buildCraqueleur } from './models/craqueleur.js';
+import { buildCrapaud } from './models/crapaud.js';
+import { buildCrapaudChef } from './models/crapaudChef.js';
 import { HpBar3D } from './HpBar3D.js';
 
 const BUILDERS = {
@@ -12,6 +14,8 @@ const BUILDERS = {
   bouftou: buildBouftou,
   bouftouRoyal: buildBouftouRoyal,
   craqueleur: buildCraqueleur,
+  crapaud: buildCrapaud,
+  crapaudChef: buildCrapaudChef,
 };
 
 const HP_BAR_Y = {
@@ -20,6 +24,8 @@ const HP_BAR_Y = {
   bouftou: 1.30,
   bouftouRoyal: 1.95,
   craqueleur: 1.55,
+  crapaud: 1.10,
+  crapaudChef: 1.80,
 };
 
 export class Character3D {
@@ -223,13 +229,14 @@ export class Character3D {
     if (!amount) return;
     const isPm = type === 'pm';
     const color = isPm ? '#74e69b' : '#7ec6ff';
-    this.popText('-' + amount, color, {
+    const label = '-' + amount + (isPm ? ' PM' : ' PA');
+    this.popText(label, color, {
       fontSize: 22,
-      dx: isPm ? -0.42 : 0.42,
+      dx: isPm ? -0.45 : 0.45,
       yStart: 1.35,
       yRise: 0.7,
-      duration: 850,
-      scaleX: 0.85,
+      duration: 900,
+      scaleX: 1.1,
       scaleY: 0.42,
     });
   }

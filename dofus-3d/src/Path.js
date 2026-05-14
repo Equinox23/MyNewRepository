@@ -1,13 +1,17 @@
 import { MAP_SIZE } from './Map3D.js';
 
-// BFS sur grille orthogonale 4-voisins. occupied est un Set de cles "c,r"
-// representant les cases bloquees par des combattants.
-export function bfs(mapData, occupied, start, maxDist = 999) {
+// BFS sur grille orthogonale 4-voisins.
+// - `mapData` : grille 2D de codes terrain (0=sol, 1=mur, 2=eau, 3=pont).
+// - `occupied` : Set de cles "c,r" bloquees par des combattants.
+// - `isBlocked` (optionnel) : (c, r) => bool. Si fourni, utilise pour
+//   tester chaque case. Defaut : mapData[r][c] === 1 (mur).
+export function bfs(mapData, occupied, start, maxDist = 999, isBlocked = null) {
   const key = (c, r) => `${c},${r}`;
   const dist = new Map();
   const prev = new Map();
   const queue = [start];
   dist.set(key(start.c, start.r), 0);
+  const blocked = isBlocked || ((c, r) => mapData[r][c] === 1);
 
   while (queue.length) {
     const cur = queue.shift();
@@ -23,7 +27,7 @@ export function bfs(mapData, occupied, start, maxDist = 999) {
       if (n.c < 0 || n.c >= MAP_SIZE || n.r < 0 || n.r >= MAP_SIZE) continue;
       const k = key(n.c, n.r);
       if (dist.has(k)) continue;
-      if (mapData[n.r][n.c] === 1) continue;
+      if (blocked(n.c, n.r)) continue;
       if (occupied.has(k)) continue;
       dist.set(k, d + 1);
       prev.set(k, key(cur.c, cur.r));

@@ -3,11 +3,16 @@ import { Character3D } from './Character3D.js';
 import { TurnManager } from './TurnManager.js';
 import { bfs, pathTo, hasLOS } from './Path.js';
 import { SPELLS } from './Spells.js';
+import { MAP_BOOSTS } from './Map3D.js';
 
 export const COMBATS = {
   bouftou: {
     name: 'Meute de Bouftous',
     enemyComposition: ['bouftou', 'bouftou', 'bouftou', 'bouftouRoyal'],
+  },
+  crapaud: {
+    name: 'Crapauds de la mare',
+    enemyComposition: ['crapaud', 'crapaud', 'crapaud', 'crapaudChef'],
   },
 };
 
@@ -43,6 +48,9 @@ export class Game {
     this.selectedSpellId = null;
     this.rangeOverlay && this.rangeOverlay.clear();
 
+    // Rebuild la carte si necessaire (eau/pont/foret/cascade).
+    if (config.mapId) this.map3d.rebuild(config.mapId);
+
     const playerClasses = config.playerClasses || ['iop'];
     const enemyComposition = config.enemyComposition
       || (COMBATS[config.combatId] && COMBATS[config.combatId].enemyComposition)
@@ -61,6 +69,9 @@ export class Game {
       this.fighters.push(f);
     });
 
+    // Boosts de map : applique des buffs permanents aux creatures concernees.
+    this.applyMapBoosts(config.mapId);
+
     for (const f of this.fighters) {
       const other = this.fighters.find(o => o.alive && o.team !== f.team);
       if (other) f.character.faceToward(other.c, other.r);
@@ -69,6 +80,27 @@ export class Game {
     this.turn = new TurnManager(this.fighters);
     this.refreshHpBars();
     this.startTurn();
+  }
+
+  applyMapBoosts(mapId) {
+    const boosts = MAP_BOOSTS[mapId];
+    if (!boosts) return;
+    for (const f of this.fighters) {
+      const boost = boosts[f.classId];
+      if (!boost) continue;
+      const buff = {
+        permanent: true,
+        duration: 9999,
+        damageMult: boost.damageMult,
+        bonusPa: boost.bonusPa,
+        bonusPm: boost.bonusPm,
+        shield: boost.shield,
+      };
+      f.buffs.push(buff);
+      // Application immediate des bonus PA / PM.
+      if (boost.bonusPa) f.pa += boost.bonusPa;
+      if (boost.bonusPm) f.pm += boost.bonusPm;
+    }
   }
 
   cleanup() {
@@ -85,9 +117,38 @@ export class Game {
     this.picker && this.picker.setHover(null);
   }
 
+  // ---------- TOUR ----------
   startTurn() {
     if (this.checkEnd()) return;
     const cur = this.turn.current();
+    // 1) Appliquer les DoT actifs AVANT que la nouvelle ressource se
+    //    rafraichisse (pour pouvoir mourir avant ses actions).
+    let dotTotal = 0;
+    for (const b of cur.buffs) {
+      if (b.dot && cur.alive) {
+        const dmg = b.dot.min + Math.floor(Math.random() * (b.dot.max - b.dot.min + 1));
+        const actual = cur.takeDamage(dmg);
+        dotTotal += actual;
+      }
+    }
+    if (dotTotal > 0 && cur.character) {
+      cur.character.popText('-' + dotTotal, '#c39bd3', {
+        fontSize: 26, yStart: 1.6, yRise: 0.9, duration: 900, scaleX: 0.9, scaleY: 0.45,
+      });
+      cur.character.hpBar.setHp(cur.hp, cur.maxHp);
+    }
+    if (!cur.alive) {
+      // Le combattant meurt du poison : on declenche son anim et on
+      // avance au combattant suivant.
+      if (cur.character) cur.character.die();
+      this.checkEnd();
+      if (this.ended) return;
+      this.turn.advance();
+      this.startTurn();
+      return;
+    }
+    if (this.checkEnd()) return;
+
     cur.startTurn();
     for (const f of this.fighters) f.character.setActive(f === cur);
     this.mode = 'move';
@@ -95,8 +156,6 @@ export class Game {
     this.hud.update(cur, this.mode, null);
     this.hud.flash(`Tour ${this.turn.round}  -  ${cur.name}`, 1200);
     this.refreshRangeOverlay();
-    // Tout combattant avec un profil IA joue tout seul : enemis ET
-    // invocations cote joueur (Craqueleur, etc.).
     if (cur.def.ai) {
       this.busy = true;
       setTimeout(() => this.runAI(), 700);
@@ -169,16 +228,22 @@ export class Game {
     if (this.busy || this.ended) return;
     const cur = this.turn.current();
     if (cur.team !== 'player' || cur.def.ai) return;
-    if (this.map3d.isWall(c, r) && this.mode === 'move') return;
-    if (this.mode === 'move') await this.tryMove(c, r);
-    else if (this.mode === 'spell') await this.tryCastSpell(c, r);
+    if (this.mode === 'move') {
+      // En mode deplacement, on bloque les cases inutilisables.
+      if (this.map3d.isBlockedFor(c, r, cur)) return;
+      await this.tryMove(c, r);
+    } else if (this.mode === 'spell') {
+      await this.tryCastSpell(c, r);
+    }
   }
 
+  // ---------- DEPLACEMENT ----------
   async tryMove(c, r) {
     const cur = this.turn.current();
     if (c === cur.c && r === cur.r) return;
     const occ = this.computeOccupied(cur);
-    const result = bfs(this.map3d.getData(), occ, { c: cur.c, r: cur.r }, cur.pm);
+    const blocked = (cc, rr) => this.map3d.isBlockedFor(cc, rr, cur);
+    const result = bfs(this.map3d.getData(), occ, { c: cur.c, r: cur.r }, cur.pm, blocked);
     const path = pathTo(result, { c, r });
     if (!path || path.length <= 1) {
       this.hud.flash('Hors de portee', 800);
@@ -202,6 +267,7 @@ export class Game {
     this.hud.update(cur, this.mode, this.selectedSpellId);
   }
 
+  // ---------- SORTS (joueur) ----------
   async tryCastSpell(c, r) {
     const cur = this.turn.current();
     const spell = SPELLS[this.selectedSpellId];
@@ -227,6 +293,9 @@ export class Game {
   validateSpellTarget(caster, spell, c, r) {
     const dist = Math.abs(caster.c - c) + Math.abs(caster.r - r);
     if (dist < spell.range.min || dist > spell.range.max) return 'Hors de portee';
+    // Pour les sorts de degats, on n empeche pas de viser l eau (sauf
+    // si target='tile' + summon/teleport, traite ci-dessous). Un mur
+    // bloque toujours le ciblage.
     if (this.map3d.isWall(c, r)) return 'Mur';
     if (spell.needsLOS && !hasLOS(this.map3d.getData(), caster.c, caster.r, c, r)) return 'Pas de vue';
     if (spell.area && spell.area.type === 'line') {
@@ -238,10 +307,16 @@ export class Game {
     if (spell.target === 'enemy' && (!targetFighter || targetFighter.team === caster.team)) return 'Pas d ennemi';
     if (spell.target === 'ally' && (!targetFighter || targetFighter.team !== caster.team)) return 'Pas d allie';
     if (spell.target === 'tile') {
-      const needsEmpty = spell.effects.some(e =>
-        e.type === 'teleport' || e.type === 'summon'
-      );
+      const needsEmpty = spell.effects.some(e => e.type === 'teleport' || e.type === 'summon');
       if (needsEmpty && targetFighter) return 'Case occupee';
+      // Pour summon, le Craqueleur ne peut pas apparaitre dans l eau.
+      if (spell.effects.some(e => e.type === 'summon')) {
+        if (this.map3d.isWater(c, r)) return 'Pas dans l eau';
+      }
+      // Pour teleport, on interdit a un non-aquatique d arriver dans l eau.
+      if (spell.effects.some(e => e.type === 'teleport')) {
+        if (this.map3d.isBlockedFor(c, r, caster)) return 'Inaccessible';
+      }
     }
     return null;
   }
@@ -258,7 +333,7 @@ export class Game {
       case 'damage': {
         let cells;
         if (spell.area && spell.area.type === 'line') {
-          cells = this.lineCells(caster, target, spell.area.length);
+          cells = this.lineCells(caster, target, spell.area.length, !!spell.area.piercing);
         } else if (spell.area && spell.area.type === 'cross') {
           cells = this.crossCells(target.c, target.r, spell.area.size);
         } else {
@@ -322,7 +397,6 @@ export class Game {
           shield: effect.shield,
         };
         tf.buffs.push(buff);
-        // Application immediate des bonus PA/PM pour le tour en cours.
         if (effect.bonusPa) tf.pa += effect.bonusPa;
         if (effect.bonusPm) tf.pm += effect.bonusPm;
         tf.character.flashGlow(parseInt(spell.color.slice(1), 16), 900);
@@ -338,12 +412,42 @@ export class Game {
         tf.pm = Math.max(0, tf.pm - (effect.value || 0));
         const lost = before - tf.pm;
         if (lost > 0) {
-          tf.character.popText('-' + lost, '#74e69b', {
-            fontSize: 22, dx: -0.42, yStart: 1.35,
+          tf.character.popText('-' + lost + ' PM', '#74e69b', {
+            fontSize: 22, dx: -0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42,
           });
           tf.character.flashGlow(0x7a6b5a, 500);
         }
         if (this.turn.current() === tf) this.hud.update(tf, this.mode, this.selectedSpellId);
+        await new Promise(r => setTimeout(r, 400));
+        return;
+      }
+      case 'debuff_pa': {
+        const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
+        if (!tf) return;
+        const before = tf.pa;
+        tf.pa = Math.max(0, tf.pa - (effect.value || 0));
+        const lost = before - tf.pa;
+        if (lost > 0) {
+          tf.character.popText('-' + lost + ' PA', '#7ec6ff', {
+            fontSize: 22, dx: 0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42,
+          });
+          tf.character.flashGlow(0x2980b9, 500);
+        }
+        if (this.turn.current() === tf) this.hud.update(tf, this.mode, this.selectedSpellId);
+        await new Promise(r => setTimeout(r, 400));
+        return;
+      }
+      case 'dot': {
+        const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
+        if (!tf) return;
+        tf.buffs.push({
+          duration: (effect.duration || 1) + 1,
+          dot: { min: effect.min, max: effect.max },
+        });
+        tf.character.popText('POISON', '#c39bd3', {
+          fontSize: 18, yStart: 1.5, yRise: 0.7, scaleX: 1.1, scaleY: 0.4,
+        });
+        tf.character.flashGlow(0x9b59b6, 700);
         await new Promise(r => setTimeout(r, 400));
         return;
       }
@@ -353,7 +457,6 @@ export class Game {
         if (this.map3d.isWall(target.c, target.r)) return;
         const summon = new Fighter(effect.creatureId, caster.team, target.c, target.r);
         summon.character = new Character3D(this.scene3d.scene, effect.creatureId, caster.team, target.c, target.r);
-        // Oriente vers l ennemi le plus proche
         const closestEnemy = this.fighters
           .filter(f => f.alive && f.team !== caster.team)
           .sort((a, b) =>
@@ -363,7 +466,6 @@ export class Game {
         if (closestEnemy) summon.character.faceToward(closestEnemy.c, closestEnemy.r);
         this.fighters.push(summon);
         this.turn.addFighter(summon);
-        // Animation d apparition: scale 0 -> 1
         summon.character.group.scale.setScalar(0.01);
         await new Promise(resolve => {
           const start = performance.now();
@@ -382,16 +484,18 @@ export class Game {
     }
   }
 
-  lineCells(caster, target, length) {
+  // Ligne droite depuis la case cible (`target`) dans la direction
+  // caster->target. `piercing` : si true, traverse les murs.
+  lineCells(caster, target, length, piercing = false) {
     const dc = Math.sign(target.c - caster.c);
     const dr = Math.sign(target.r - caster.r);
     if (dc === 0 && dr === 0) return [];
     const cells = [];
-    for (let i = 1; i <= length; i++) {
-      const cc = caster.c + dc * i;
-      const cr = caster.r + dr * i;
+    for (let i = 0; i < length; i++) {
+      const cc = target.c + dc * i;
+      const cr = target.r + dr * i;
       if (!this.map3d.inBounds(cc, cr)) break;
-      if (this.map3d.isWall(cc, cr)) break;
+      if (!piercing && this.map3d.isWall(cc, cr)) break;
       cells.push({ c: cc, r: cr });
     }
     return cells;
@@ -416,7 +520,8 @@ export class Game {
 
     if (this.mode === 'move') {
       const occ = this.computeOccupied(cur);
-      const result = bfs(this.map3d.getData(), occ, { c: cur.c, r: cur.r }, cur.pm);
+      const blocked = (c, r) => this.map3d.isBlockedFor(c, r, cur);
+      const result = bfs(this.map3d.getData(), occ, { c: cur.c, r: cur.r }, cur.pm, blocked);
       const tiles = [];
       for (const [key, d] of result.dist.entries()) {
         if (d === 0) continue;
@@ -465,6 +570,7 @@ export class Game {
     const ai = this.turn.current();
     const profile = ai.def.ai || 'aggressive';
     if (profile === 'aggressive') await this.runAggressive(ai);
+    else if (profile === 'fearful') await this.runFearful(ai);
     if (this.ended) return;
     this.busy = false;
     this._advanceTurn();
@@ -475,12 +581,11 @@ export class Game {
       await this.aiTryHeal(ai);
       if (this.ended) return;
     }
-
     const target = this.pickWeakestTarget(ai);
     if (!target) return;
     const attackSpells = ai.spells.filter(s =>
       !ai.isOnCooldown(s.id) &&
-      s.effects.some(e => e.type === 'damage' || e.type === 'debuff_pm' || e.type === 'dot') &&
+      s.effects.some(e => e.type === 'damage' || e.type === 'debuff_pm' || e.type === 'debuff_pa' || e.type === 'dot') &&
       (s.target === 'enemy' || s.target === 'tile')
     );
     if (attackSpells.length === 0) return;
@@ -492,6 +597,40 @@ export class Game {
     }
     if (this.ended) return;
 
+    await this.aiAttackLoop(ai, target, attackSpells);
+  }
+
+  // IA peureuse : essaie de tirer le plus loin possible (proche du max
+  // range) tout en gardant la ligne de vue. Garde aussi un "tour de
+  // soutien" : pose des boucliers sur les allies pas encore proteges.
+  async runFearful(ai) {
+    // 1. Bouclier prioritaire sur allies
+    if (ai.spells.some(s => s.effects.some(e => e.type === 'buff' && e.shield) && s.target === 'ally')) {
+      await this.aiTryShield(ai);
+      if (this.ended) return;
+    }
+
+    const target = this.pickWeakestTarget(ai);
+    if (!target) return;
+    const attackSpells = ai.spells.filter(s =>
+      !ai.isOnCooldown(s.id) &&
+      s.effects.some(e => e.type === 'damage' || e.type === 'debuff_pm' || e.type === 'debuff_pa' || e.type === 'dot') &&
+      (s.target === 'enemy' || s.target === 'tile')
+    );
+    if (attackSpells.length === 0) return;
+    const maxRange = attackSpells.reduce((m, s) => Math.max(m, s.range.max), 0);
+
+    // 2. Repositionnement : ideal = max-1, sans aller plus pres que 3
+    if (ai.pm > 0) {
+      const ideal = Math.max(maxRange - 1, 3);
+      await this.aiPositionAtRange(ai, target, ideal, maxRange);
+      if (this.ended) return;
+    }
+
+    await this.aiAttackLoop(ai, target, attackSpells);
+  }
+
+  async aiAttackLoop(ai, target, attackSpells) {
     while (ai.alive && target.alive) {
       const usable = attackSpells.filter(s => s.apCost <= ai.pa).filter(s => {
         const d = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
@@ -538,6 +677,33 @@ export class Game {
     }
   }
 
+  async aiTryShield(ai) {
+    const shieldSpells = ai.spells.filter(s =>
+      !ai.isOnCooldown(s.id) &&
+      s.effects.some(e => e.type === 'buff' && e.shield) &&
+      s.target === 'ally'
+    );
+    if (shieldSpells.length === 0) return;
+    const unshielded = this.fighters.filter(f =>
+      f.alive && f.team === ai.team && f !== ai && !f.buffs.some(b => b.shield)
+    );
+    if (unshielded.length === 0) return;
+    for (const target of unshielded) {
+      for (const spell of shieldSpells) {
+        if (ai.pa < spell.apCost) continue;
+        const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
+        if (dist < spell.range.min || dist > spell.range.max) continue;
+        if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r)) continue;
+        ai.pa -= spell.apCost;
+        if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
+        ai.character.popCost(spell.apCost, 'pa');
+        this.hud.update(ai, this.mode, this.selectedSpellId);
+        await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
+        return;
+      }
+    }
+  }
+
   pickWeakestTarget(ai) {
     const enemies = this.fighters.filter(f => f.alive && f.team !== ai.team);
     if (enemies.length === 0) return null;
@@ -552,7 +718,8 @@ export class Game {
 
   async aiApproach(ai, target, range) {
     const occ = this.computeOccupied(ai);
-    const result = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, 999);
+    const blocked = (c, r) => this.map3d.isBlockedFor(c, r, ai);
+    const result = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, 999, blocked);
     const goals = [];
     for (let dc = -range; dc <= range; dc++) {
       for (let dr = -range; dr <= range; dr++) {
@@ -584,6 +751,45 @@ export class Game {
     }
   }
 
+  // Positionne le combattant a la distance ideale de la cible (1 case
+  // de moins que max range, plancher 3), avec ligne de vue obligatoire.
+  async aiPositionAtRange(ai, target, idealDist, maxDist) {
+    const occ = this.computeOccupied(ai);
+    const blocked = (c, r) => this.map3d.isBlockedFor(c, r, ai);
+    const result = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, ai.pm, blocked);
+    const scoreDist = (d) => {
+      if (d > maxDist) return 1000 + d;
+      if (d < 1) return 200 - d;
+      return Math.abs(d - idealDist);
+    };
+    let best = { c: ai.c, r: ai.r };
+    const initialDist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
+    let bestScore = scoreDist(initialDist);
+    for (const [key, d] of result.dist.entries()) {
+      const [c, r] = key.split(',').map(Number);
+      const distToTarget = Math.abs(c - target.c) + Math.abs(r - target.r);
+      if (distToTarget > maxDist) continue;
+      // On veut conserver une ligne de vue sur la cible
+      if (!hasLOS(this.map3d.getData(), c, r, target.c, target.r)) continue;
+      const s = scoreDist(distToTarget);
+      if (s < bestScore) { bestScore = s; best = { c, r }; }
+    }
+    if (best.c === ai.c && best.r === ai.r) return;
+    const path = pathTo(result, best);
+    if (!path || path.length <= 1) return;
+    const steps = path.slice(1);
+    if (steps.length === 0) return;
+    ai.character.popCost(steps.length, 'pm');
+    for (const step of steps) {
+      ai.pm--;
+      this.hud.update(ai, this.mode, this.selectedSpellId);
+      await ai.character.moveTo(step.c, step.r, 170);
+      ai.c = step.c;
+      ai.r = step.r;
+    }
+  }
+
+  // ---------- HELPERS ----------
   computeOccupied(exclude) {
     const occ = new Set();
     for (const f of this.fighters) {
@@ -612,12 +818,12 @@ export class Game {
   }
 }
 
-// Score d un sort pour l IA : combine degats moyens + utility (debuff PM).
 function spellScore(spell) {
   let score = 0;
   for (const e of spell.effects) {
     if (e.type === 'damage') score += (e.min + e.max) / 2;
     if (e.type === 'debuff_pm') score += (e.value || 0) * 3;
+    if (e.type === 'debuff_pa') score += (e.value || 0) * 4;
     if (e.type === 'dot') score += ((e.min + e.max) / 2) * (e.duration || 1);
   }
   return score;

@@ -45,11 +45,9 @@ export class HpBar3D {
     roundRect(ctx, 2, 2, w - 4, h - 4, 6);
     ctx.stroke();
 
-    // Barre remplie
+    // Barre remplie : toujours rouge, conformement a la demande joueur.
     const ratio = Math.max(0, this.hp / this.maxHp);
-    const fillColor =
-      ratio > 0.5 ? '#2ecc71' : ratio > 0.25 ? '#f39c12' : '#e74c3c';
-    ctx.fillStyle = fillColor;
+    ctx.fillStyle = '#e74c3c';
     roundRect(ctx, 4, 4, (w - 8) * ratio, h - 8, 4);
     ctx.fill();
 
