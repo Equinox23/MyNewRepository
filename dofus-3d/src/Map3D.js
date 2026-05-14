@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { buildTree } from './models/tree.js';
+import { buildRock } from './models/rock.js';
 
 export const MAP_SIZE = 15;
 export const TILE_SIZE = 1;
 
-// 0 = sol, 1 = mur
+// 0 = sol (herbe), 1 = mur (arbre ou rocher)
 const MAP_DATA = (() => {
   const grid = [];
   for (let r = 0; r < MAP_SIZE; r++) grid.push(new Array(MAP_SIZE).fill(0));
@@ -23,15 +25,18 @@ export class Map3D {
     this.walls = [];
     this.tileGroup = new THREE.Group();
     this.scene.add(this.tileGroup);
-    this.buildBase();
+    this.buildGround();
     this.buildTiles();
+    this.buildBackgroundForest();
   }
 
-  buildBase() {
-    // Sous-sol sombre : les espaces entre cases laissent voir une fine
-    // ligne noire = limites de cases bien marquees.
-    const baseGeom = new THREE.PlaneGeometry(MAP_SIZE + 4, MAP_SIZE + 4);
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x0a1018, roughness: 1 });
+  // Vaste plan vert sombre qui s etend au-dela de la grille : remplit
+  // la zone exterieure au plateau (plus de cadre noir vide autour).
+  buildGround() {
+    const baseGeom = new THREE.PlaneGeometry(100, 100);
+    const baseMat = new THREE.MeshStandardMaterial({
+      color: 0x244018, roughness: 1,
+    });
     const base = new THREE.Mesh(baseGeom, baseMat);
     base.rotation.x = -Math.PI / 2;
     base.position.set((MAP_SIZE - 1) / 2, -0.06, (MAP_SIZE - 1) / 2);
@@ -40,18 +45,26 @@ export class Map3D {
   }
 
   buildTiles() {
-    const tileW = 0.94;
+    const tileW = 0.96;
     const tileH = 0.1;
     const tileGeom = new THREE.BoxGeometry(tileW, tileH, tileW);
-    const lightMat = new THREE.MeshStandardMaterial({ color: 0x9eb5d0, roughness: 0.8 });
-    const darkMat = new THREE.MeshStandardMaterial({ color: 0x5d7396, roughness: 0.8 });
-    const wallMat = new THREE.MeshStandardMaterial({ color: 0x7a5a3a, roughness: 0.9, flatShading: true });
 
+    // Plusieurs nuances d herbe pour varier ; deterministe par case.
+    const grassColors = [0x6a9540, 0x5a8838, 0x4a7a30, 0x5d8e3a, 0x4f7d31];
+    const grassMats = grassColors.map(c =>
+      new THREE.MeshStandardMaterial({ color: c, roughness: 0.95 })
+    );
+    const wallTileMat = new THREE.MeshStandardMaterial({
+      color: 0x3a2818, roughness: 0.95,
+    });
+
+    let wallIdx = 0;
     for (let r = 0; r < MAP_SIZE; r++) {
       const row = [];
       for (let c = 0; c < MAP_SIZE; c++) {
         const isWall = MAP_DATA[r][c] === 1;
-        const mat = (c + r) % 2 === 0 ? lightMat : darkMat;
+        const hash = ((c * 2654435761) ^ (r * 2246822519)) >>> 0;
+        const mat = isWall ? wallTileMat : grassMats[hash % grassMats.length];
         const tile = new THREE.Mesh(tileGeom, mat);
         tile.position.set(c, 0, r);
         tile.receiveShadow = true;
@@ -60,24 +73,56 @@ export class Map3D {
         row.push(tile);
 
         if (isWall) {
-          const wallGeom = new THREE.BoxGeometry(0.9, 1.0, 0.9);
-          const wall = new THREE.Mesh(wallGeom, wallMat);
-          wall.position.set(c, 0.55, r);
-          wall.castShadow = true;
-          wall.receiveShadow = true;
-          wall.userData = { c, r, isWall: true };
-          this.tileGroup.add(wall);
-          // Petite pierre sur le mur pour rompre la silhouette
-          const stoneGeom = new THREE.DodecahedronGeometry(0.18, 0);
-          const stoneMat = new THREE.MeshStandardMaterial({ color: 0x8a6a45, roughness: 0.95, flatShading: true });
-          const stone = new THREE.Mesh(stoneGeom, stoneMat);
-          stone.position.set(c + 0.15, 1.18, r - 0.1);
-          stone.castShadow = true;
-          this.tileGroup.add(stone);
-          this.walls.push(wall);
+          // Alternance tree/rock + variations procedurales.
+          const isTree = (wallIdx % 3) !== 0;
+          const seed = (c + 1) * 113 + (r + 1) * 271 + wallIdx * 31;
+          const model = isTree ? buildTree(seed) : buildRock(seed);
+          model.position.set(c, 0.05, r);
+          const s = 0.85 + ((seed % 100) / 100) * 0.35;
+          model.scale.setScalar(s);
+          model.rotation.y = (seed % 360) * Math.PI / 180;
+          this.tileGroup.add(model);
+          this.walls.push(model);
+          wallIdx++;
         }
       }
       this.tiles.push(row);
+    }
+  }
+
+  // Bordure d arbres autour du plateau : remplit le hors-jeu pour
+  // qu on ait l impression d etre dans une vraie clairiere de foret.
+  buildBackgroundForest() {
+    const rngBase = mulberry32(424242);
+    const center = (MAP_SIZE - 1) / 2;
+    const minDist = MAP_SIZE / 2 + 1.5; // exclure la zone jouable
+    const maxDist = MAP_SIZE / 2 + 14;  // limite outer du bois
+
+    let placed = 0;
+    let attempts = 0;
+    while (placed < 130 && attempts < 800) {
+      attempts++;
+      const angle = rngBase() * Math.PI * 2;
+      const dist = minDist + rngBase() * (maxDist - minDist);
+      const x = center + Math.cos(angle) * dist;
+      const z = center + Math.sin(angle) * dist;
+      // Petit jitter
+      const jx = x + (rngBase() - 0.5) * 1.5;
+      const jz = z + (rngBase() - 0.5) * 1.5;
+
+      // Empeche les chevauchements brut (carre 0.8 autour de la souche)
+      // -- en pratique on accepte un peu d entrelacement (foret dense).
+      const seed = Math.floor(rngBase() * 1e7);
+      const tree = buildTree(seed);
+      tree.position.set(jx, 0, jz);
+      const s = 0.9 + rngBase() * 0.9;
+      tree.scale.setScalar(s);
+      tree.rotation.y = rngBase() * Math.PI * 2;
+      // Les arbres lointains ne projettent pas d ombre (perf), mais
+      // recoivent l ombrage ambient.
+      tree.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+      this.scene.add(tree);
+      placed++;
     }
   }
 
@@ -98,4 +143,14 @@ export class Map3D {
   getData() {
     return MAP_DATA;
   }
+}
+
+function mulberry32(seed) {
+  let s = seed | 0;
+  return function() {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), s | 1);
+    t = (t + Math.imul(t ^ (t >>> 7), t | 61)) ^ t;
+    return (((t ^ (t >>> 14)) >>> 0) / 4294967296);
+  };
 }

@@ -8,8 +8,9 @@ import { MAP_SIZE } from './Map3D.js';
 export class Scene3D {
   constructor() {
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x141a26);
-    this.scene.fog = new THREE.Fog(0x141a26, 30, 70);
+    // Tonalite foret diurne : ciel chaud verdatre derriere les arbres.
+    this.scene.background = new THREE.Color(0x88b07d);
+    this.scene.fog = new THREE.Fog(0x88b07d, 22, 50);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -31,9 +32,9 @@ export class Scene3D {
     this.polar = 0.91;           // ~52 deg du zenith
     this.updateCamera();
 
-    // Lumieres
-    this.scene.add(new THREE.AmbientLight(0xbecfe8, 0.45));
-    this.scene.add(new THREE.HemisphereLight(0xb4d4ff, 0x7a5a3a, 0.35));
+    // Lumieres adaptees a la foret (ciel chaud, sol vert).
+    this.scene.add(new THREE.AmbientLight(0xeaf3d0, 0.45));
+    this.scene.add(new THREE.HemisphereLight(0xfff7c8, 0x3d5a25, 0.40));
 
     const dir = new THREE.DirectionalLight(0xfff0d8, 1.1);
     dir.position.set(this.target.x + 8, 22, this.target.z + 4);

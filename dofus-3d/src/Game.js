@@ -255,7 +255,9 @@ export class Game {
     }
   }
 
-  // Affiche les cases dans la portee du sort selectionne (bleu).
+  // Affiche les cases dans la portee du sort selectionne, peintes a la
+  // couleur du sort lui-meme (ainsi chaque sort a sa propre identite
+  // visuelle quand on le selectionne).
   refreshRangeOverlay() {
     this.rangeOverlay.clear();
     if (this.mode !== 'spell' || !this.selectedSpellId) return;
@@ -274,7 +276,8 @@ export class Game {
         tiles.push({ c, r });
       }
     }
-    this.rangeOverlay.paint(tiles, 0x3498db, 0.30);
+    const color = parseInt(spell.color.replace('#', ''), 16);
+    this.rangeOverlay.paint(tiles, color, 0.33);
   }
 
   // ---------- IA ----------

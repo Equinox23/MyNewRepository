@@ -1,8 +1,9 @@
+import { spellEffectLines } from './Spells.js';
+
 // HUD DOM : panneau bas avec stats + barre de sorts.
-// Chaque slot affiche le numero de touche (haut-gauche), un mini libelle
-// (au centre) et le cout en PA (bas-droite). L emplacement actif est
-// surligne en jaune. Les sorts qu on ne peut pas lancer (PA insuffisants)
-// sont grises.
+// Chaque slot affiche le numero de touche (haut-gauche), une icone SVG
+// dessinee (centre, en blanc sur l accent de couleur du sort) et le
+// cout en PA (bas-droite). Tooltip riche au survol de la souris.
 export class Hud {
   constructor() {
     this.callbacks = {};
@@ -98,25 +99,50 @@ export class Hud {
       .spell .accent {
         position: absolute; inset: 4px;
         border-radius: 5px;
-        opacity: 0.7;
+        opacity: 0.85;
       }
       .spell .key {
         position: absolute; top: 2px; left: 5px;
         font-size: 10px; font-weight: bold; color: #fff;
         text-shadow: 1px 1px 2px #000;
-        z-index: 2;
+        z-index: 3;
       }
-      .spell .short {
+      .spell .icon {
         position: relative; z-index: 2;
-        font-size: 22px; font-weight: bold;
-        text-shadow: 1px 1px 2px #000;
+        width: 70%; height: 70%;
+        color: #fff;
+        filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.6));
       }
+      .spell .icon svg { width: 100%; height: 100%; }
       .spell .cost {
         position: absolute; bottom: 2px; right: 5px;
-        font-size: 12px; font-weight: bold; color: #f1c40f;
+        font-size: 12px; font-weight: bold; color: #fff;
         text-shadow: 1px 1px 2px #000;
-        z-index: 2;
+        z-index: 3;
       }
+
+      #spell-tooltip {
+        position: fixed;
+        background: rgba(8, 10, 18, 0.95);
+        color: #fff;
+        border: 2px solid #f1c40f;
+        border-radius: 10px;
+        padding: 10px 14px;
+        font-family: "Trebuchet MS", sans-serif;
+        font-size: 13px;
+        max-width: 260px;
+        pointer-events: none;
+        z-index: 50;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+        opacity: 0;
+        transition: opacity 0.12s ease-out;
+      }
+      #spell-tooltip.show { opacity: 1; }
+      #spell-tooltip .tip-name { font-size: 16px; font-weight: bold; margin-bottom: 4px; }
+      #spell-tooltip .tip-desc { color: #ddd; margin-bottom: 8px; font-style: italic; }
+      #spell-tooltip .tip-row { margin: 2px 0; }
+      #spell-tooltip .tip-row .lbl { color: #f1c40f; margin-right: 4px; }
+      #spell-tooltip .tip-effects .eff { color: #ff9bbd; font-weight: bold; }
 
       #end-overlay {
         position: fixed; inset: 0;
@@ -365,21 +391,68 @@ export class Hud {
       const btn = document.createElement('button');
       btn.className = 'spell';
       btn.dataset.slot = String(idx);
-      btn.title = `${spell.name}\n${spell.desc}\nPortee ${spell.range.min}-${spell.range.max}`;
-      // Le numero de touche : 1..9 puis 0 pour slot 9.
+      // Numero de touche : 1..9 puis 0, sinon ^N pour les futurs Ctrl+N.
       const keyLabel = idx < 9 ? String(idx + 1) : (idx === 9 ? '0' : `^${idx - 9}`);
       btn.innerHTML = `
         <div class="accent" style="background: ${spell.color};"></div>
         <div class="key">${keyLabel}</div>
-        <div class="short">${spell.short}</div>
+        <div class="icon">${spell.icon || ''}</div>
         <div class="cost">${spell.apCost} PA</div>
       `;
       btn.addEventListener('click', () => {
         this.callbacks.onSpellSlot && this.callbacks.onSpellSlot(idx);
       });
+      // Tooltip riche au survol souris (pas sur touch, qui ne fait pas hover).
+      btn.addEventListener('pointerenter', (e) => {
+        if (e.pointerType !== 'mouse') return;
+        this.showTooltip(spell, btn);
+      });
+      btn.addEventListener('pointerleave', () => this.hideTooltip());
       this.spellBar.appendChild(btn);
       this.spellSlots.push({ btn, spell });
     });
+  }
+
+  ensureTooltip() {
+    if (this.tooltipEl) return this.tooltipEl;
+    const el = document.createElement('div');
+    el.id = 'spell-tooltip';
+    document.body.appendChild(el);
+    this.tooltipEl = el;
+    return el;
+  }
+
+  showTooltip(spell, anchorEl) {
+    const el = this.ensureTooltip();
+    const effectLines = spellEffectLines(spell);
+    const losTxt = spell.needsLOS ? 'Requiert une ligne de vue' : 'Pas de vue requise';
+    const rangeTxt = spell.range.min === spell.range.max
+      ? `${spell.range.min} case${spell.range.min > 1 ? 's' : ''}`
+      : `${spell.range.min} a ${spell.range.max} cases`;
+    el.innerHTML = `
+      <div class="tip-name" style="color: ${spell.color};">${spell.name}</div>
+      <div class="tip-desc">${spell.desc}</div>
+      <div class="tip-row tip-effects">${effectLines.map(l => `<div class="eff">${l}</div>`).join('')}</div>
+      <div class="tip-row"><span class="lbl">Cout :</span> ${spell.apCost} PA</div>
+      <div class="tip-row"><span class="lbl">Portee :</span> ${rangeTxt}</div>
+      <div class="tip-row"><span class="lbl">Vue :</span> ${losTxt}</div>
+    `;
+    el.classList.add('show');
+    // Position au-dessus du bouton avec un peu de marge.
+    const rect = anchorEl.getBoundingClientRect();
+    // Forcer un layout pour pouvoir mesurer
+    el.style.left = '0px'; el.style.top = '0px';
+    const tipRect = el.getBoundingClientRect();
+    let x = rect.left + rect.width / 2 - tipRect.width / 2;
+    x = Math.max(8, Math.min(window.innerWidth - tipRect.width - 8, x));
+    let y = rect.top - tipRect.height - 10;
+    if (y < 8) y = rect.bottom + 10; // bascule en bas si pas la place en haut
+    el.style.left = x + 'px';
+    el.style.top = y + 'px';
+  }
+
+  hideTooltip() {
+    if (this.tooltipEl) this.tooltipEl.classList.remove('show');
   }
 
   update(fighter, mode, selectedSpellId) {
