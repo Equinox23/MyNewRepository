@@ -985,15 +985,55 @@ export class Hud {
         <div class="cost">${spell.apCost} PA</div>
         <div class="cd-overlay"></div>
       `;
-      btn.addEventListener('click', () => {
+      // Long-press tactile : affiche l infobulle apres 450ms.
+      // En cas de long-press, on supprime le clic suivant (l utilisateur
+      // demandait juste l info, pas la selection du sort).
+      let lpTimer = null;
+      let lpFired = false;
+      const cancelLp = () => { if (lpTimer) { clearTimeout(lpTimer); lpTimer = null; } };
+
+      btn.addEventListener('click', (e) => {
+        if (lpFired) {
+          lpFired = false;
+          e.preventDefault();
+          return;
+        }
         this.callbacks.onSpellSlot && this.callbacks.onSpellSlot(idx);
       });
-      // Tooltip riche au survol souris (pas sur touch, qui ne fait pas hover).
+      // Souris : tooltip immediat au survol.
       btn.addEventListener('pointerenter', (e) => {
         if (e.pointerType !== 'mouse') return;
         this.showTooltip(spell, btn);
       });
-      btn.addEventListener('pointerleave', () => this.hideTooltip());
+      btn.addEventListener('pointerleave', (e) => {
+        if (e.pointerType === 'mouse') this.hideTooltip();
+      });
+      // Tactile : long-press 450ms.
+      btn.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse') return;
+        lpFired = false;
+        cancelLp();
+        lpTimer = setTimeout(() => {
+          lpFired = true;
+          this.showTooltip(spell, btn);
+        }, 450);
+      });
+      btn.addEventListener('pointermove', (e) => {
+        if (e.pointerType === 'mouse') return;
+        cancelLp();
+      });
+      btn.addEventListener('pointerup', (e) => {
+        if (e.pointerType === 'mouse') return;
+        cancelLp();
+        if (lpFired) {
+          // Laisse l infobulle un instant puis la masque.
+          setTimeout(() => this.hideTooltip(), 1500);
+        }
+      });
+      btn.addEventListener('pointercancel', () => {
+        cancelLp();
+        if (lpFired) this.hideTooltip();
+      });
       this.spellBar.appendChild(btn);
       this.spellSlots.push({ btn, spell });
     });
