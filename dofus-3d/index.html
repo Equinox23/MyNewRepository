@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <title>Dofus 3D - Proto</title>
+  <style>
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%;
+      background: #0c0c14; color: #eee;
+      font-family: "Trebuchet MS", "Helvetica Neue", sans-serif;
+      overflow: hidden;
+      touch-action: none;
+      -webkit-user-select: none; user-select: none;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+    canvas { display: block; }
+    #hud {
+      position: fixed; top: 12px; left: 12px;
+      pointer-events: none;
+      font-size: 14px; line-height: 1.4;
+      color: #f1c40f;
+      text-shadow: 1px 1px 2px #000, 0 0 4px #000;
+    }
+    #hud .row { margin-bottom: 2px; }
+    #hud #title { font-size: 20px; font-weight: bold; }
+    #hud #tip { font-style: italic; font-size: 12px; color: #ccc; }
+    #hud #info { color: #fff; }
+    #loader {
+      position: fixed; inset: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: #0c0c14;
+      color: #f1c40f;
+      font-size: 18px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div id="loader">Chargement de la 3D...</div>
+  <div id="hud">
+    <div class="row" id="title">DOFUS 3D — PROTO</div>
+    <div class="row" id="tip">Tape une case pour bouger.  Roulette ou pinch pour zoomer.</div>
+    <div class="row" id="info"></div>
+  </div>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
