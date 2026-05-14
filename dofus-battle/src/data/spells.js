@@ -174,10 +174,10 @@ export const SPELLS = {
   ronceMultiple: {
     id: 'ronceMultiple', name: 'Ronce Multiple', short: 'RM',
     apCost: 4, range: { min: 1, max: 4 }, needsLOS: true, inLine: false,
-    target: 'enemy', area: { type: 'cross', size: 1 },
+    target: 'tile', area: { type: 'cross', size: 1 },
     effects: [{ type: 'damage', min: 10, max: 14, element: 'terre' }],
     color: 0x16a085,
-    desc: '10-14 degats en zone croix.',
+    desc: '10-14 degats en zone croix (touche tout le monde dans la zone).',
   },
   arbreVivant: {
     id: 'arbreVivant', name: 'Arbre Vivant', short: 'AV',

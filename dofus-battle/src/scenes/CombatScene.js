@@ -683,7 +683,12 @@ export class CombatScene extends Phaser.Scene {
     if (spell.target === 'self' && (t.c !== caster.c || t.r !== caster.r)) return false;
     if (spell.target === 'tile') {
       if (this.state.map.tiles[t.r][t.c] === 1) return false;
-      if (target) return false;
+      // Pour un piege ou une teleportation, la case visee doit etre libre.
+      // Pour les autres sorts ciblant une case (AOE), la case peut etre
+      // occupee : le sort detonera dessus et touchera tout le monde
+      // dans la zone d effet.
+      const needsEmpty = spell.effects.some(e => e.type === 'trap' || e.type === 'teleport');
+      if (needsEmpty && target) return false;
     }
     return true;
   }
@@ -703,9 +708,25 @@ export class CombatScene extends Phaser.Scene {
       const range = computeReachableRange(cur, spell, this.state.map.tiles);
       for (const t of range) this.fillTile(g, t.c, t.r, 0x3498db, 0.25);
       if (this.hover) {
-        if (this.spellTargetValid(cur, spell, this.hover)) {
+        // On veut toujours visualiser la zone d effet si la case survolee
+        // est atteignable (distance + alignement + pas un mur), meme si la
+        // cible n est pas un combattant valide. Cela aide a comprendre les
+        // sorts a aire d effet.
+        const from = { c: cur.c, r: cur.r };
+        const dist = manhattan(from, this.hover);
+        const distOk = dist >= spell.range.min && dist <= spell.range.max;
+        const lineOk = !spell.inLine || inLine(from, this.hover);
+        const notWall = this.state.map.tiles[this.hover.r][this.hover.c] !== 1;
+        if (distOk && lineOk && notWall) {
+          const valid = this.spellTargetValid(cur, spell, this.hover);
           const area = tilesInArea(spell.area || { type: 'single' }, this.hover);
-          for (const t of area) this.fillTile(g, t.c, t.r, 0xf1c40f, 0.55);
+          const color = valid ? 0xf1c40f : 0xe67e22;
+          const alpha = valid ? 0.6 : 0.4;
+          for (const t of area) {
+            if (this.state.map.tiles[t.r][t.c] === 1) continue;
+            this.fillTile(g, t.c, t.r, color, alpha);
+          }
+          if (!valid) this.fillTile(g, this.hover.c, this.hover.r, 0xe74c3c, 0.35);
         } else {
           this.fillTile(g, this.hover.c, this.hover.r, 0xe74c3c, 0.45);
         }
@@ -775,8 +796,39 @@ export class CombatScene extends Phaser.Scene {
     this.log(`${caster.name} lance ${spell.name}.`);
     const events = applySpell(this.state, caster, spell, target);
     this.consumeEvents(events);
-    this.refreshAllFighters();
-    this.time.delayedCall(500, () => onDone && onDone());
+    this.syncFighterPositions(() => {
+      this.refreshAllFighters();
+      this.time.delayedCall(300, () => onDone && onDone());
+    });
+  }
+
+  // Pour tout combattant dont la position logique (c, r) a change suite a
+  // un push, une teleportation ou autre, anime le sprite vers la nouvelle
+  // case. Resout en parallele tous les mouvements puis appelle onDone.
+  syncFighterPositions(onDone) {
+    const movers = [];
+    for (const f of this.state.fighters) {
+      const p = tileToScreen(f.c, f.r);
+      const ty = p.y + TILE_H / 2;
+      if (Math.abs(f.gfx.cont.x - p.x) > 0.5 || Math.abs(f.gfx.cont.y - ty) > 0.5) {
+        movers.push({ f, x: p.x, y: ty });
+      }
+    }
+    if (!movers.length) { onDone && onDone(); return; }
+    let done = 0;
+    for (const m of movers) {
+      this.updateFighterDepth(m.f);
+      this.tweens.add({
+        targets: m.f.gfx.cont,
+        x: m.x, y: m.y,
+        duration: 260,
+        ease: 'Sine.easeInOut',
+        onComplete: () => {
+          this.updateFighterDepth(m.f);
+          if (++done === movers.length) onDone && onDone();
+        },
+      });
+    }
   }
 
   spellAnim(caster, target, spell) {
@@ -830,13 +882,17 @@ export class CombatScene extends Phaser.Scene {
   }
 
   popText(fighter, text, color) {
-    const p = tileToScreen(fighter.c, fighter.r);
-    const t = this.add.text(p.x, p.y - 20, text, {
+    // Position visuelle (pas logique) du combattant pour que le popup
+    // apparaisse la ou se trouve actuellement le sprite, meme si la
+    // position logique a deja avance (ex: pendant un push).
+    const ox = fighter.gfx.cont.x;
+    const oy = fighter.gfx.cont.y - 40;
+    const t = this.add.text(ox, oy, text, {
       fontFamily: 'Trebuchet MS', fontSize: '22px', color, fontStyle: 'bold',
       stroke: '#000000', strokeThickness: 4,
     }).setOrigin(0.5).setDepth(999999);
     this.addWorld(t);
-    this.tweens.add({ targets: t, y: p.y - 70, alpha: 0, duration: 800, onComplete: () => t.destroy() });
+    this.tweens.add({ targets: t, y: oy - 50, alpha: 0, duration: 800, onComplete: () => t.destroy() });
   }
 
   shakeFighter(f) {
