@@ -8,6 +8,7 @@ import {
 } from '../systems/Grid.js';
 import { applySpell, triggerTrapsOn } from '../systems/Combat.js';
 import { planTurn } from '../systems/AI.js';
+import { toggleFullscreen, isStandalone } from '../systems/Fullscreen.js';
 
 const VIEW_W = 1280;
 const VIEW_H = 720;
@@ -93,6 +94,7 @@ export class CombatScene extends Phaser.Scene {
 
     this.input.keyboard.on('keydown-ESC', () => this.cancelAction());
     this.input.keyboard.on('keydown-SPACE', () => { if (!this.busy && this.turn.current().team === 'player') this.endTurn(); });
+    this.input.keyboard.on('keydown-F', () => toggleFullscreen(this));
 
     this.log('Combat lance !');
     this.startTurn();
@@ -411,10 +413,13 @@ export class CombatScene extends Phaser.Scene {
       bg.on('pointerout', () => bg.setStrokeStyle(2, 0x444466));
       y += h + 8;
     };
+    // Bouton plein ecran (cache si on est deja en mode standalone)
+    if (!isStandalone()) {
+      mk('[ ]', () => toggleFullscreen(this));
+    }
     mk('+', () => this.setZoom(this.mainCam.zoom + 0.2));
     mk('-', () => this.setZoom(this.mainCam.zoom - 0.2));
     mk('o', () => this.resetCamera());
-    // legende
     this.addUi(this.add.text(x, y + 4, 'ZOOM', {
       fontFamily: 'Trebuchet MS', fontSize: '10px', color: '#888899',
     }).setOrigin(0.5));

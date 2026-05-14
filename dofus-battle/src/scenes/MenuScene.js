@@ -1,6 +1,7 @@
 import { CLASS_LIST } from '../data/classes.js';
 import { MAP_LIST } from '../data/maps.js';
 import { SPELLS } from '../data/spells.js';
+import { toggleFullscreen, isStandalone, isIosDevice } from '../systems/Fullscreen.js';
 
 export class MenuScene extends Phaser.Scene {
   constructor() { super('MenuScene'); }
@@ -27,6 +28,31 @@ export class MenuScene extends Phaser.Scene {
     this.drawAiPreview();
     this.drawStartButton();
     this.drawSpellTooltipArea();
+    this.drawFullscreenButton();
+
+    this.input.keyboard.on('keydown-F', () => toggleFullscreen(this));
+  }
+
+  drawFullscreenButton() {
+    if (isStandalone()) return; // deja en plein ecran via l ecran d accueil
+    const x = 1230, y = 40;
+    const bg = this.add.rectangle(x, y, 60, 40, 0x222230).setStrokeStyle(2, 0x444466).setInteractive();
+    const label = this.add.text(x, y, '[ ]', {
+      fontFamily: 'Trebuchet MS', fontSize: '16px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    const hint = this.add.text(x, y + 28, 'plein ecran', {
+      fontFamily: 'Trebuchet MS', fontSize: '10px', color: '#888899',
+    }).setOrigin(0.5);
+    bg.on('pointerdown', () => toggleFullscreen(this));
+    bg.on('pointerover', () => bg.setStrokeStyle(2, 0xf1c40f));
+    bg.on('pointerout', () => bg.setStrokeStyle(2, 0x444466));
+
+    // Conseil pour iPhone (Safari ne fait pas de vrai plein ecran).
+    if (isIosDevice()) {
+      this.add.text(640, 700, "Astuce iPhone : ajoute le jeu a l ecran d accueil pour un vrai plein ecran (Partager > Sur l ecran d accueil).", {
+        fontFamily: 'Trebuchet MS', fontSize: '11px', color: '#9aa1c4', fontStyle: 'italic',
+      }).setOrigin(0.5);
+    }
   }
 
   drawClassCards() {
