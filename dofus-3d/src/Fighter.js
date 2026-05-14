@@ -26,7 +26,7 @@ export const DEFS = {
   bouftouRoyal: {
     name: 'Bouftou Royal',
     role: 'Chef de meute',
-    hp: 400, pa: 7, pm: 3, initiative: 9,
+    hp: 400, pa: 7, pm: 5, initiative: 9,
     spellIds: ['morsureRoyale', 'soinAnimal'],
     ai: 'aggressive',
   },

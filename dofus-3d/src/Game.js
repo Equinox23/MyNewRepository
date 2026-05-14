@@ -893,47 +893,46 @@ export class Game {
   async aiApproach(ai, target, range) {
     const occ = this.computeOccupied(ai);
     const blocked = (c, r) => this.map3d.isBlockedFor(c, r, ai);
-    const result = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, 999, blocked);
-    const goals = [];
-    for (let dc = -range; dc <= range; dc++) {
-      for (let dr = -range; dr <= range; dr++) {
-        if (dc === 0 && dr === 0) continue;
-        if (Math.abs(dc) + Math.abs(dr) > range) continue;
-        goals.push({ c: target.c + dc, r: target.r + dr });
-      }
-    }
-    let bestGoal = null, bestDist = Infinity;
-    for (const g of goals) {
-      const k = `${g.c},${g.r}`;
-      if (!result.dist.has(k)) continue;
-      const d = result.dist.get(k);
-      if (d < bestDist) { bestDist = d; bestGoal = g; }
-    }
-    // Si aucune case dans la portee de la cible n est atteignable, on
-    // se rabat sur la case accessible la plus proche de la cible (en
-    // distance Manhattan). Ca permet aux bouftous de continuer a avancer
-    // meme quand la cible est coincee derriere des obstacles.
-    if (!bestGoal) {
-      let bestManhattan = Infinity;
-      let bestKey = null;
-      for (const [key, d] of result.dist.entries()) {
-        if (d === 0) continue;
-        const [c, r] = key.split(',').map(Number);
-        const m = Math.abs(c - target.c) + Math.abs(r - target.r);
-        // On veut minimiser la distance a la cible, et en cas d egalite
-        // privilegier les chemins plus courts (moins de PM consommes).
-        if (m < bestManhattan || (m === bestManhattan && d < result.dist.get(bestKey))) {
-          bestManhattan = m;
-          bestKey = key;
+    // 1. BFS depuis l IA (toutes contraintes : terrain + allies/ennemis).
+    const myResult = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, 999, blocked);
+    // 2. BFS depuis la cible avec UNIQUEMENT les contraintes de terrain
+    //    (pas les autres combattants). Donne la distance topologique
+    //    "ideale" : pour la carte cascade, ça force le passage par le
+    //    pont meme si les goals immediats sont bloques par des allies.
+    const emptyOcc = new Set();
+    const tResult = bfs(this.map3d.getData(), emptyOcc, { c: target.c, r: target.r }, 999, blocked);
+
+    // 3. Choix de la case cible :
+    //    a) En priorite, une case dans la portee d attaque (Manhattan)
+    //       avec la distance ai la plus courte.
+    //    b) Sinon, la case atteignable qui minimise la distance
+    //       topologique a la cible (sans la traversee des autres
+    //       combattants) -> ça force le passage par le pont sur Cascade
+    //       au lieu d aller dans des culs-de-sac est/ouest.
+    let inRangeGoal = null;
+    let inRangeMyDist = Infinity;
+    let approachGoal = null;
+    let approachTDist = Infinity;
+    let approachMyDist = Infinity;
+    for (const [key, d] of myResult.dist.entries()) {
+      if (d === 0) continue;
+      const [c, r] = key.split(',').map(Number);
+      const manhattan = Math.abs(c - target.c) + Math.abs(r - target.r);
+      const td = tResult.dist.has(key) ? tResult.dist.get(key) : Infinity;
+      if (manhattan <= range) {
+        if (d < inRangeMyDist) {
+          inRangeMyDist = d;
+          inRangeGoal = { c, r };
         }
-      }
-      if (bestKey) {
-        const [c, r] = bestKey.split(',').map(Number);
-        bestGoal = { c, r };
+      } else if (td !== Infinity && (td < approachTDist || (td === approachTDist && d < approachMyDist))) {
+        approachTDist = td;
+        approachMyDist = d;
+        approachGoal = { c, r };
       }
     }
+    const bestGoal = inRangeGoal || approachGoal;
     if (!bestGoal) return false;
-    const fullPath = pathTo(result, bestGoal);
+    const fullPath = pathTo(myResult, bestGoal);
     if (!fullPath || fullPath.length <= 1) return false;
     const maxSteps = Math.min(ai.pm, fullPath.length - 1);
     if (maxSteps === 0) return false;
