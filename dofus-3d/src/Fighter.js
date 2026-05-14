@@ -33,7 +33,7 @@ export const DEFS = {
   craqueleur: {
     name: 'Craqueleur',
     role: 'Invocation',
-    hp: 80, pa: 5, pm: 3, initiative: 8,
+    hp: 80, pa: 6, pm: 3, initiative: 8,
     spellIds: ['frappeCraqueleur', 'lancerRocher'],
     ai: 'aggressive',
   },

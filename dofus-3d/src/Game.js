@@ -740,12 +740,17 @@ export class Game {
       (s.target === 'enemy' || s.target === 'tile')
     );
     if (attackSpells.length === 0) return;
-    const longestRange = attackSpells.reduce((m, s) => Math.max(m, s.range.max), 0);
+    // Preference corps-a-corps : on cherche d abord a se placer dans la
+    // portee la plus courte (typiquement 1 case pour un melee). Si on
+    // n y arrive pas, aiApproach moves the AI as far as possible along
+    // the path, then the attack loop will pick the best usable spell
+    // (incluant les sorts a distance comme Lancer Rocher).
+    const shortestRange = attackSpells.reduce((m, s) => Math.min(m, s.range.max), Infinity);
 
     if (ai.pm > 0) {
       const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
-      if (dist > longestRange) {
-        await this.aiApproach(ai, target, longestRange);
+      if (dist > shortestRange) {
+        await this.aiApproach(ai, target, shortestRange);
         await this.aiPause(500);
       }
     }

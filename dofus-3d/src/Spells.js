@@ -249,18 +249,21 @@ export const SPELLS = {
   frappeCraqueleur: {
     id: 'frappeCraqueleur', name: 'Frappe du Craqueleur', short: 'FC', icon: ICON_CROSS_PUNCH,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
+    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'tile', area: { type: 'cross', size: 1 },
-    effects: [{ type: 'damage', min: 10, max: 14 }],
-    desc: 'Frappe en croix : la case ciblee + ses 4 voisines.',
+    effects: [{ type: 'damage', min: 30, max: 40 }],
+    desc: 'Frappe en croix au corps a corps : la case ciblee + ses 4 voisines.',
   },
   lancerRocher: {
     id: 'lancerRocher', name: 'Lancer de Rocher', short: 'LR', icon: ICON_ROCK_THROW,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'debuff_pm', value: 2 }],
-    desc: 'Jette un rocher : la cible perd 2 PM.',
+    effects: [
+      { type: 'damage', min: 20, max: 30 },
+      { type: 'debuff_pm', value: 2 },
+    ],
+    desc: 'Jette un rocher : degats + la cible perd 2 PM.',
   },
 
   // ---------- CRAPAUD ----------
