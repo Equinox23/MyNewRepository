@@ -398,6 +398,8 @@ export class Game {
           cells = this.lineCells(caster, target, spell.area.length, !!spell.area.piercing);
         } else if (spell.area && spell.area.type === 'cross') {
           cells = this.crossCells(target.c, target.r, spell.area.size);
+        } else if (spell.area && spell.area.type === 'circle') {
+          cells = this.circleCells(target.c, target.r, spell.area.radius);
         } else {
           cells = [{ c: target.c, r: target.r }];
         }
@@ -405,7 +407,8 @@ export class Game {
         const dist = Math.abs(caster.c - firstCell.c) + Math.abs(caster.r - firstCell.r);
         const isLine = spell.area && spell.area.type === 'line';
         const isCross = spell.area && spell.area.type === 'cross';
-        const isRanged = dist > 1 && !isLine;
+        const isCircle = spell.area && spell.area.type === 'circle';
+        const isRanged = dist > 1 && !isLine && !isCircle;
 
         // VFX d entree selon le pattern du sort.
         let lunge = null;
@@ -416,11 +419,22 @@ export class Game {
           // Le temps que la lame se forme, attendre un peu avant les impacts.
           await new Promise(r => setTimeout(r, 200));
         } else if (isCross) {
-          // Frappe craqueleur : onde de choc + lunge leger.
+          // Frappe craqueleur (legacy croix) : onde de choc + lunge leger.
           lunge = caster.character.lungeTo(firstCell.c, firstCell.r, 280);
           this.vfx && this.vfx.shockwave(target.c, target.r, { color: 0xb88455, radius: 1.8 });
           this.vfx && this.vfx.punchImpact({ c: target.c, r: target.r });
           await new Promise(r => setTimeout(r, 180));
+        } else if (isCircle) {
+          // Frappe sismique en zone : le craqueleur plonge sur la case
+          // cible (corps a corps) puis une grosse onde de choc se
+          // propage tout autour.
+          lunge = caster.character.lungeTo(firstCell.c, firstCell.r, 300);
+          const radius = (spell.area && spell.area.radius) || 2;
+          this.vfx && this.vfx.shockwave(target.c, target.r, {
+            color: 0xb88455, radius: radius + 0.8, duration: 0.7,
+          });
+          this.vfx && this.vfx.punchImpact({ c: target.c, r: target.r });
+          await new Promise(r => setTimeout(r, 220));
         } else if (isRanged) {
           // Projectile selon le sort (crachat = vert, generique = orange).
           caster.character.faceToward(target.c, target.r);
@@ -839,6 +853,19 @@ export class Game {
       cells.push({ c: centerC - i, r: centerR });
       cells.push({ c: centerC, r: centerR + i });
       cells.push({ c: centerC, r: centerR - i });
+    }
+    return cells.filter(c => this.map3d.inBounds(c.c, c.r) && !this.map3d.isWall(c.c, c.r));
+  }
+
+  // Cercle / disque (distance Manhattan <= radius) autour d une case.
+  // Pour radius=2 ça donne 13 cases.
+  circleCells(centerC, centerR, radius) {
+    const cells = [];
+    for (let dc = -radius; dc <= radius; dc++) {
+      for (let dr = -radius; dr <= radius; dr++) {
+        if (Math.abs(dc) + Math.abs(dr) > radius) continue;
+        cells.push({ c: centerC + dc, r: centerR + dr });
+      }
     }
     return cells.filter(c => this.map3d.inBounds(c.c, c.r) && !this.map3d.isWall(c.c, c.r));
   }

@@ -312,11 +312,10 @@ export const SPELLS = {
     id: 'frappeCraqueleur', name: 'Frappe du Craqueleur', short: 'FC', icon: ICON_CROSS_PUNCH,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 5, range: { min: 1, max: 1 }, needsLOS: false,
-    // Ligne de 2 cases devant le craqueleur (la case ciblee + la
-    // suivante dans la meme direction). Pas perçant.
-    target: 'tile', area: { type: 'line', length: 2 },
+    // Zone circulaire de rayon 2 (Manhattan) autour de la case ciblee.
+    target: 'tile', area: { type: 'circle', radius: 2 },
     effects: [{ type: 'damage', min: 30, max: 40 }],
-    desc: 'Frappe en ligne sur 2 cases devant le Craqueleur. Au corps a corps.',
+    desc: 'Frappe sismique sur une case adjacente : touche tout dans un rayon de 2 cases autour de la cible.',
   },
   lancerRocher: {
     id: 'lancerRocher', name: 'Lancer de Rocher', short: 'LR', icon: ICON_ROCK_THROW,
@@ -377,6 +376,9 @@ export function spellEffectLines(spell) {
         }
         if (spell.area && spell.area.type === 'cross') {
           lines.push(`(croix de ${spell.area.size})`);
+        }
+        if (spell.area && spell.area.type === 'circle') {
+          lines.push(`(zone rayon ${spell.area.radius})`);
         }
         break;
       case 'heal':
