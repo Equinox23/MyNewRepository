@@ -270,9 +270,11 @@ export class CombatScene extends Phaser.Scene {
       ring.strokeEllipse(0, 4, 44, 18);
       ring.fillEllipse(0, 4, 44, 18);
 
-      // Sprite portrait
+      // Sprite portrait. Les ennemis sont retournes horizontalement pour
+      // regarder vers le joueur (qui spawn a gauche).
       const sprite = this.add.image(0, -16, 'portrait_' + f.classId).setOrigin(0.5, 1);
       sprite.setScale(0.9);
+      if (f.team === 'enemy') sprite.setFlipX(true);
 
       // Barre de vie cadre
       const hpBg = this.add.rectangle(0, 16, 50, 8, 0x111111).setStrokeStyle(1, 0x000000);
@@ -296,6 +298,21 @@ export class CombatScene extends Phaser.Scene {
       this.addWorld(cont);
 
       f.gfx = { cont, ring, turnRing, sprite, hpBg, hpBar, hpText, nameText };
+
+      // Animation idle: petite oscillation verticale du sprite (l anneau au
+      // sol ne bouge pas). Chaque combattant a un decalage de phase aleatoire
+      // pour eviter qu ils respirent tous en synchrone.
+      const baseY = sprite.y;
+      this.tweens.add({
+        targets: sprite,
+        y: baseY - 3,
+        duration: 900 + Math.floor(Math.random() * 400),
+        ease: 'Sine.easeInOut',
+        yoyo: true,
+        repeat: -1,
+        delay: Math.floor(Math.random() * 800),
+      });
+
       this.refreshFighterUi(f);
     }
   }
