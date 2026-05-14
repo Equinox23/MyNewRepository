@@ -16,6 +16,12 @@ export const DEFS = {
     hp: 95, pa: 8, pm: 4, initiative: 11,
     spellIds: ['invocationCraqueleur', 'piqureMotivante', 'protectionCraqueleur', 'soinInvocation'],
   },
+  roublard: {
+    name: 'Roublard',
+    role: 'Assassin',
+    hp: 90, pa: 7, pm: 5, initiative: 13,
+    spellIds: ['coupBas', 'bombeExplosive', 'tirPrecis', 'esquive', 'acceleration'],
+  },
   bouftou: {
     name: 'Bouftou',
     role: 'Meute',

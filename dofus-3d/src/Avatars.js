@@ -6,10 +6,12 @@ import { buildBouftouRoyal } from './models/bouftouRoyal.js';
 import { buildCraqueleur } from './models/craqueleur.js';
 import { buildCrapaud } from './models/crapaud.js';
 import { buildCrapaudChef } from './models/crapaudChef.js';
+import { buildRoublard } from './models/roublard.js';
 
 const BUILDERS = {
   iop: buildIop,
   osamodas: buildOsamodas,
+  roublard: buildRoublard,
   bouftou: buildBouftou,
   bouftouRoyal: buildBouftouRoyal,
   craqueleur: buildCraqueleur,
@@ -22,6 +24,7 @@ const BUILDERS = {
 const FRAME = {
   iop: { y: 0.85, dist: 2.3, height: 1.0 },
   osamodas: { y: 0.85, dist: 2.4, height: 1.0 },
+  roublard: { y: 0.85, dist: 2.3, height: 1.0 },
   bouftou: { y: 0.55, dist: 2.1, height: 0.8 },
   bouftouRoyal: { y: 0.75, dist: 2.6, height: 1.0 },
   craqueleur: { y: 0.55, dist: 2.0, height: 0.8 },

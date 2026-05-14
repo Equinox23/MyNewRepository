@@ -34,6 +34,55 @@ const CLASS_OPTIONS = [
     </svg>`,
   },
   {
+    id: 'roublard',
+    name: 'Roublard',
+    desc: 'Assassin / artificier (7 PA, 5 PM, init 13). Bombes en croix, tirs precis, esquive et acceleration.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="robGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#2a3a55"/>
+          <stop offset="1" stop-color="#0a0e18"/>
+        </linearGradient>
+      </defs>
+      <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
+      <!-- cape sombre derriere -->
+      <path d="M14 36 L10 60 L26 56 L32 36 Z" fill="#0a0e18" stroke="#000" stroke-width="1.5"/>
+      <path d="M50 36 L54 60 L38 56 L32 36 Z" fill="#0a0e18" stroke="#000" stroke-width="1.5"/>
+      <!-- torse cuir noir + plastron bleu -->
+      <rect x="20" y="34" width="24" height="20" rx="3" fill="url(#robGrad)" stroke="#000" stroke-width="2"/>
+      <!-- plastron metallique -->
+      <path d="M22 36 L32 50 L42 36 Z" fill="#4a6080" stroke="#1a2030" stroke-width="1"/>
+      <!-- ceinture + bombe -->
+      <rect x="20" y="46" width="24" height="4" fill="#3a2412"/>
+      <circle cx="46" cy="48" r="3" fill="#18191b" stroke="#000" stroke-width="0.8"/>
+      <line x1="48" y1="46" x2="50" y2="42" stroke="#3a3025" stroke-width="1"/>
+      <circle cx="50" cy="42" r="1.2" fill="#ffd166"/>
+      <!-- fiole verte -->
+      <rect x="16" y="46" width="3" height="6" fill="#6ee07a" opacity="0.85" stroke="#234d18" stroke-width="0.5"/>
+      <!-- tete sombre dans capuche -->
+      <circle cx="32" cy="24" r="13" fill="#eed6b3" stroke="#000" stroke-width="1.5"/>
+      <!-- capuche profonde -->
+      <path d="M18 22 Q18 6 32 4 Q46 6 46 22 L46 30 Q40 22 32 22 Q24 22 18 30 Z" fill="#111623" stroke="#000" stroke-width="2"/>
+      <polygon points="32 -2, 50 8, 32 4 14 8" fill="#111623" stroke="#000" stroke-width="1"/>
+      <!-- ombre sous capuche -->
+      <ellipse cx="32" cy="22" rx="10" ry="6" fill="#000" opacity="0.65"/>
+      <!-- yeux rouges qui brillent -->
+      <circle cx="27" cy="22" r="1.8" fill="#ff5544"/>
+      <circle cx="37" cy="22" r="1.8" fill="#ff5544"/>
+      <circle cx="27" cy="22" r="3" fill="#ff5544" opacity="0.35"/>
+      <circle cx="37" cy="22" r="3" fill="#ff5544" opacity="0.35"/>
+      <!-- masque metal bas du visage -->
+      <path d="M22 28 Q32 36 42 28 L42 32 Q32 40 22 32 Z" fill="#2a3a55" stroke="#000" stroke-width="1"/>
+      <line x1="22" y1="32" x2="42" y2="32" stroke="#c0392b" stroke-width="1"/>
+      <!-- dagues croisees au dos -->
+      <line x1="14" y1="14" x2="22" y2="42" stroke="#c8cdd4" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="50" y1="14" x2="42" y2="42" stroke="#c8cdd4" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="14" cy="14" r="1.5" fill="#b8902a"/>
+      <circle cx="50" cy="14" r="1.5" fill="#b8902a"/>
+    </svg>`,
+  },
+  {
     id: 'osamodas',
     name: 'Osamodas',
     desc: 'Invocateur (8 PA, 4 PM, invoque un Craqueleur)',
@@ -304,6 +353,69 @@ export class Menu {
         transition: transform 0.1s;
       }
       #menu-root #btn-start:hover { transform: scale(1.04); }
+
+      /* Infobulle des options : description complete au survol souris
+         ou au long-press tactile. */
+      .menu-tooltip {
+        position: fixed;
+        background: rgba(8, 10, 18, 0.96);
+        color: #fff;
+        border: 2px solid #f1c40f;
+        border-radius: 10px;
+        padding: 8px 12px;
+        font-family: "Trebuchet MS", sans-serif;
+        font-size: 13px;
+        max-width: 240px;
+        pointer-events: none;
+        z-index: 70;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+        opacity: 0;
+        transition: opacity 0.15s ease-out;
+      }
+      .menu-tooltip.show { opacity: 1; }
+      .menu-tooltip .mt-name { font-size: 14px; font-weight: bold; color: #f1c40f; margin-bottom: 4px; }
+      .menu-tooltip .mt-desc { color: #ddd; line-height: 1.35; font-style: italic; }
+
+      /* ---- ADAPTATIONS MOBILE / TACTILE ---- */
+      @media (pointer: coarse), (max-width: 768px) {
+        #menu-root { padding: 12px 6px; overflow-x: hidden; }
+        #menu-root .menu-title { font-size: 28px; letter-spacing: 2px; margin-bottom: 2px; }
+        #menu-root .menu-subtitle { font-size: 12px; margin-bottom: 12px; }
+        #menu-root .menu-step {
+          width: 100%; box-sizing: border-box;
+          padding: 8px 10px; margin-bottom: 8px;
+        }
+        #menu-root .menu-step h2 {
+          font-size: 13px; margin-bottom: 6px; letter-spacing: 1px;
+        }
+        #menu-root .menu-options {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
+          gap: 6px;
+        }
+        #menu-root .menu-option {
+          min-width: 0; aspect-ratio: 1 / 1;
+          padding: 6px 4px;
+          text-align: center;
+          display: flex; flex-direction: column;
+          align-items: center; justify-content: center;
+        }
+        #menu-root .menu-option .icon {
+          width: 56px; height: 56px;
+          margin: 0 0 4px 0; float: none;
+        }
+        #menu-root .menu-option .opt-name {
+          font-size: 12px; line-height: 1.15;
+        }
+        #menu-root .menu-option .opt-desc { display: none; }
+        #menu-root .menu-option .opt-soon {
+          font-size: 8px; top: 2px; right: 4px;
+        }
+        #menu-root #btn-start {
+          margin-top: 8px; padding: 12px 40px;
+          font-size: 18px; letter-spacing: 2px; border-width: 2px;
+        }
+      }
     `;
     document.head.appendChild(css);
 
@@ -320,23 +432,106 @@ export class Menu {
     document.body.appendChild(root);
     this.root = root;
 
-    // Click handlers
+    // Tooltip : un seul element reutilise pour toutes les options.
+    const tip = document.createElement('div');
+    tip.className = 'menu-tooltip';
+    document.body.appendChild(tip);
+    this.tooltipEl = tip;
+
+    // Click + hover (souris) + long-press (tactile).
     root.querySelectorAll('.menu-option').forEach(btn => {
-      btn.addEventListener('click', () => {
+      let lpTimer = null;
+      let lpFired = false;
+
+      btn.addEventListener('click', (e) => {
+        if (lpFired) {
+          // Le long-press a ete utilise pour afficher l infobulle :
+          // on ne selectionne PAS l option dans ce cas (l utilisateur
+          // demandait juste l info).
+          lpFired = false;
+          e.preventDefault();
+          return;
+        }
         if (btn.disabled) return;
         const key = btn.dataset.key;
         const value = btn.dataset.value;
         this.selection[key] = value;
-        // Mise a jour visuelle dans la meme step.
         root.querySelectorAll(`.menu-option[data-key="${key}"]`).forEach(b => {
           b.classList.toggle('selected', b.dataset.value === value);
         });
+      });
+
+      // Souris : hover -> infobulle immediate.
+      btn.addEventListener('pointerenter', (e) => {
+        if (e.pointerType !== 'mouse') return;
+        this.showOptionTooltip(btn);
+      });
+      btn.addEventListener('pointerleave', (e) => {
+        if (e.pointerType !== 'mouse') return;
+        this.hideOptionTooltip();
+      });
+
+      // Tactile : long-press 450ms.
+      btn.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse') return;
+        lpFired = false;
+        clearTimeout(lpTimer);
+        lpTimer = setTimeout(() => {
+          lpFired = true;
+          this.showOptionTooltip(btn);
+        }, 450);
+      });
+      const cancelLongPress = () => { clearTimeout(lpTimer); lpTimer = null; };
+      btn.addEventListener('pointermove', (e) => {
+        if (e.pointerType === 'mouse') return;
+        cancelLongPress();
+      });
+      btn.addEventListener('pointercancel', () => {
+        cancelLongPress();
+        if (lpFired) this.hideOptionTooltip();
+      });
+      btn.addEventListener('pointerup', (e) => {
+        if (e.pointerType === 'mouse') return;
+        cancelLongPress();
+        if (lpFired) {
+          // Laisse le tooltip un peu visible avant de le masquer.
+          setTimeout(() => this.hideOptionTooltip(), 1500);
+        }
       });
     });
 
     root.querySelector('#btn-start').addEventListener('click', () => {
       this.onStart && this.onStart({ ...this.selection });
     });
+  }
+
+  showOptionTooltip(btn) {
+    const tip = this.tooltipEl;
+    if (!tip) return;
+    const nameEl = btn.querySelector('.opt-name');
+    const descEl = btn.querySelector('.opt-desc');
+    if (!nameEl) return;
+    tip.innerHTML = `
+      <div class="mt-name">${nameEl.textContent}</div>
+      ${descEl ? `<div class="mt-desc">${descEl.textContent}</div>` : ''}
+    `;
+    tip.classList.add('show');
+    // Positionne en haut, recentre, clamp aux bords.
+    tip.style.left = '0px'; tip.style.top = '0px';
+    requestAnimationFrame(() => {
+      const rect = btn.getBoundingClientRect();
+      const tipRect = tip.getBoundingClientRect();
+      let x = rect.left + rect.width / 2 - tipRect.width / 2;
+      let y = rect.top - tipRect.height - 8;
+      x = Math.max(8, Math.min(window.innerWidth - tipRect.width - 8, x));
+      if (y < 8) y = rect.bottom + 8;
+      tip.style.left = x + 'px';
+      tip.style.top = y + 'px';
+    });
+  }
+
+  hideOptionTooltip() {
+    if (this.tooltipEl) this.tooltipEl.classList.remove('show');
   }
 
   renderStep(title, key, options) {

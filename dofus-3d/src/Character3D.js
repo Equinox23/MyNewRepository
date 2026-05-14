@@ -6,11 +6,13 @@ import { buildOsamodas } from './models/osamodas.js';
 import { buildCraqueleur } from './models/craqueleur.js';
 import { buildCrapaud } from './models/crapaud.js';
 import { buildCrapaudChef } from './models/crapaudChef.js';
+import { buildRoublard } from './models/roublard.js';
 import { HpBar3D } from './HpBar3D.js';
 
 const BUILDERS = {
   iop: buildIop,
   osamodas: buildOsamodas,
+  roublard: buildRoublard,
   bouftou: buildBouftou,
   bouftouRoyal: buildBouftouRoyal,
   craqueleur: buildCraqueleur,
@@ -21,6 +23,7 @@ const BUILDERS = {
 const HP_BAR_Y = {
   iop: 1.55,
   osamodas: 1.55,
+  roublard: 1.55,
   bouftou: 1.30,
   bouftouRoyal: 1.95,
   craqueleur: 1.55,

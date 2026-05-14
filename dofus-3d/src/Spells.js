@@ -182,6 +182,53 @@ export const SPELLS = {
     desc: '+30% degats pendant 2 tours. Cumulable.',
   },
 
+  // ---------- ROUBLARD ----------
+  coupBas: {
+    id: 'coupBas', name: 'Coup Bas', short: 'CB', icon: ICON_FIST,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [
+      { type: 'damage', min: 14, max: 20 },
+      { type: 'debuff_pm', value: 1 },
+    ],
+    desc: 'Frappe sournoise au corps a corps : degats + la cible perd 1 PM.',
+  },
+  bombeExplosive: {
+    id: 'bombeExplosive', name: 'Bombe Explosive', short: 'BX', icon: ICON_CROSS_PUNCH,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 5 }, needsLOS: true,
+    target: 'tile', area: { type: 'cross', size: 1 },
+    effects: [{ type: 'damage', min: 18, max: 25 }],
+    desc: 'Lance une bombe sur une case : explose en croix (case + 4 voisines).',
+  },
+  tirPrecis: {
+    id: 'tirPrecis', name: 'Tir Precis', short: 'TP', icon: ICON_LINE,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 2, max: 7 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 13, max: 18 }],
+    desc: 'Tir de precision a longue portee. Doit avoir une vue degagee.',
+  },
+  esquive: {
+    id: 'esquive', name: 'Esquive', short: 'ES', icon: ICON_SHIELD,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
+    target: 'self', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'buff', shield: 0.30, duration: 2 }],
+    desc: 'Position d esquive : -30% degats reçus pendant 2 tours.',
+  },
+  acceleration: {
+    id: 'acceleration', name: 'Acceleration', short: 'AC', icon: ICON_BOOST,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
+    target: 'self', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'buff', bonusPm: 2, duration: 2 }],
+    desc: '+2 PM pendant 2 tours.',
+  },
+
   // ---------- OSAMODAS ----------
   invocationCraqueleur: {
     id: 'invocationCraqueleur', name: 'Invocation du Craqueleur', short: 'IC', icon: ICON_SUMMON,
