@@ -207,6 +207,11 @@ document.addEventListener('keydown', (e) => {
   }
   if (key === 'Escape') {
     e.preventDefault();
+    // Si l aide est ouverte, on la ferme en priorite.
+    if (hud.helpPanelEl && hud.helpPanelEl.classList.contains('show')) {
+      hud.toggleHelp(false);
+      return;
+    }
     game.setMode('move');
     return;
   }
@@ -218,6 +223,11 @@ document.addEventListener('keydown', (e) => {
   if (key === 'm' || key === 'M') {
     e.preventDefault();
     game.setMode('move');
+    return;
+  }
+  if (key === 'h' || key === 'H' || key === '?') {
+    e.preventDefault();
+    hud.toggleHelp();
     return;
   }
 });

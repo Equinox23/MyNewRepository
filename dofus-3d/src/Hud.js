@@ -1,4 +1,5 @@
 import { spellEffectLines } from './Spells.js';
+import { getAvatar } from './Avatars.js';
 
 // HUD DOM : panneau bas avec stats + barre de sorts.
 // Chaque slot affiche le numero de touche (haut-gauche), une icone SVG
@@ -14,67 +15,77 @@ export class Hud {
   build() {
     const css = document.createElement('style');
     css.textContent = `
-      #hud-panel {
-        position: fixed; left: 50%; bottom: 16px;
-        transform: translateX(-50%);
-        display: flex; align-items: center; gap: 14px;
+      /* ----- Panneau STATS (PA / PM / PDV du combattant actif) ----- */
+      #hud-stats {
+        position: fixed; left: 16px; bottom: 16px;
         background: rgba(12, 12, 20, 0.85);
         border: 2px solid #444a66;
         border-radius: 14px;
-        padding: 8px 14px;
+        padding: 12px 16px;
         color: #fff;
         font-family: "Trebuchet MS", sans-serif;
         pointer-events: auto;
         box-shadow: 0 8px 24px rgba(0,0,0,0.6);
-        max-width: 96vw;
         cursor: move;
         user-select: none; -webkit-user-select: none;
         touch-action: none;
       }
-      #hud-panel.dragging {
-        cursor: grabbing;
-        opacity: 0.9;
+      #hud-stats.dragging {
+        cursor: grabbing; opacity: 0.9;
         box-shadow: 0 12px 32px rgba(0,0,0,0.8), 0 0 0 2px #f1c40f;
       }
-      #hud-panel button { cursor: pointer; }
-      #hud-panel.dragging button { pointer-events: none; }
-      #hud-panel .stats { min-width: 180px; }
-      #hud-panel .name { font-size: 16px; color: #f1c40f; font-weight: bold; margin-bottom: 4px; }
-      #hud-panel .stat-row {
-        display: flex; gap: 8px; align-items: center;
+      #hud-stats .name {
+        font-size: 22px; color: #f1c40f; font-weight: bold;
+        margin-bottom: 8px; letter-spacing: 0.5px;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.7);
       }
-      #hud-panel .stat-icon {
+      #hud-stats .stat-row {
+        display: flex; gap: 12px; align-items: center;
+      }
+      #hud-stats .stat-icon {
         position: relative;
-        width: 46px; height: 46px;
+        width: 80px; height: 80px;
         flex-shrink: 0;
       }
-      #hud-panel .stat-icon svg {
+      #hud-stats .stat-icon svg {
         width: 100%; height: 100%; display: block;
-        filter: drop-shadow(0 2px 3px rgba(0,0,0,0.45));
+        filter: drop-shadow(0 3px 5px rgba(0,0,0,0.55));
       }
-      #hud-panel .stat-icon .value {
+      #hud-stats .stat-icon .value {
         position: absolute; inset: 0;
         display: flex; align-items: center; justify-content: center;
-        font: bold 12px "Trebuchet MS", sans-serif;
+        font: bold 22px "Trebuchet MS", sans-serif;
         color: #fff;
-        text-shadow: 1px 1px 2px #000, 0 0 3px #000, 0 0 4px rgba(0,0,0,0.7);
+        text-shadow: 1px 1px 3px #000, 0 0 4px #000, 0 0 6px rgba(0,0,0,0.7);
         pointer-events: none;
         line-height: 1;
       }
-      #hud-panel .stat-icon.stat-pm .value { transform: translateX(-3px); }
-      #hud-panel .buffs { font-size: 12px; margin-top: 4px; line-height: 1.4; }
-      #hud-panel .buff { color: #d6a3f0; font-style: italic; }
-      #hud-panel .actions { display: flex; gap: 6px; align-items: center; }
-      #hud-panel .btn {
-        background: #2c3e50; border: 2px solid #6a7090; color: #fff;
-        padding: 8px 12px; font-size: 13px; font-family: inherit;
-        font-weight: bold; border-radius: 8px;
-        cursor: pointer; touch-action: manipulation;
-        -webkit-tap-highlight-color: transparent;
+      #hud-stats .stat-icon.stat-pm .value { transform: translateX(-5px); }
+      #hud-stats .buffs { font-size: 13px; margin-top: 8px; line-height: 1.4; max-width: 280px; }
+      #hud-stats .buff { color: #d6a3f0; font-style: italic; }
+
+      /* ----- Panneau SORTS (barre de sorts) ----- */
+      #hud-spells {
+        position: fixed; left: 50%; bottom: 16px;
+        transform: translateX(-50%);
+        background: rgba(12, 12, 20, 0.85);
+        border: 2px solid #444a66;
+        border-radius: 14px;
+        padding: 10px 12px;
+        color: #fff;
+        font-family: "Trebuchet MS", sans-serif;
+        pointer-events: auto;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+        cursor: move;
+        user-select: none; -webkit-user-select: none;
+        touch-action: none;
       }
-      #hud-panel .btn.active { background: #f1c40f; color: #14182a; border-color: #f1c40f; }
-      #hud-panel .btn:disabled { opacity: 0.4; cursor: default; }
-      #hud-panel .btn.end { background: #c0392b; border-color: #7c1f17; }
+      #hud-spells.dragging {
+        cursor: grabbing; opacity: 0.9;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.8), 0 0 0 2px #f1c40f;
+      }
+      #hud-spells button { cursor: pointer; }
+      #hud-spells.dragging button { pointer-events: none; }
 
       .spell-bar { display: flex; gap: 5px; }
       .spell {
@@ -243,17 +254,30 @@ export class Hud {
       }
       #turn-order .to-list { display: flex; gap: 6px; align-items: center; }
       .to-slot {
-        position: relative; width: 46px; height: 56px;
-        border-radius: 6px; background: #1f2335;
+        position: relative; width: 58px; height: 76px;
+        border-radius: 8px; background: #1f2335;
         border: 2px solid #444a66;
         display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
-        padding: 4px 2px 2px; box-sizing: border-box;
+        padding: 2px 2px 2px; box-sizing: border-box;
         transition: border-color 0.15s, transform 0.15s;
       }
-      .to-slot.active { border-color: #f1c40f; box-shadow: 0 0 10px #f1c40f; transform: translateY(-2px); }
+      .to-slot.active { border-color: #f1c40f; box-shadow: 0 0 12px #f1c40f; transform: translateY(-3px); }
       .to-slot.dead { opacity: 0.32; filter: grayscale(1); }
-      .to-slot .to-letter {
-        font-size: 22px; font-weight: bold; line-height: 1;
+      .to-slot .to-avatar {
+        width: 50px; height: 50px;
+        background: radial-gradient(circle at 35% 30%, #3a4060 0%, #1a1d2c 80%);
+        border-radius: 6px;
+        margin-top: 2px;
+        display: flex; align-items: flex-end; justify-content: center;
+        overflow: hidden;
+      }
+      .to-slot .to-avatar img {
+        width: 100%; height: 100%; object-fit: contain;
+        image-rendering: -webkit-optimize-contrast;
+        filter: drop-shadow(0 2px 2px rgba(0,0,0,0.5));
+      }
+      .to-slot .to-avatar.fallback {
+        font-size: 26px; font-weight: bold;
         text-shadow: 1px 1px 2px #000, 0 0 3px #000;
       }
       .to-slot .to-name {
@@ -269,8 +293,8 @@ export class Hud {
       }
       .to-slot .to-team-dot {
         position: absolute; top: 2px; right: 2px;
-        width: 6px; height: 6px; border-radius: 50%;
-        border: 1px solid rgba(0,0,0,0.4);
+        width: 8px; height: 8px; border-radius: 50%;
+        border: 1px solid rgba(0,0,0,0.4); z-index: 2;
       }
 
       /* ----- Journal de combat ----- */
@@ -339,6 +363,60 @@ export class Hud {
       #fighter-info .fi-row .val.pa { color: #5dade2; }
       #fighter-info .fi-row .val.pm { color: #6ee7b6; }
       #fighter-info .fi-buffs { font-size: 11px; color: #d6a3f0; margin-top: 4px; font-style: italic; line-height: 1.3; }
+
+      /* ----- Bouton helper + panneau d aide ----- */
+      #help-btn {
+        position: fixed; top: 16px; right: 80px;
+        width: 52px; height: 52px;
+        border-radius: 50%;
+        background: rgba(12, 12, 20, 0.78);
+        border: 3px solid #f1c40f;
+        color: #f1c40f;
+        cursor: pointer; pointer-events: auto;
+        user-select: none; -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        z-index: 5;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+        transition: background 0.15s, transform 0.1s;
+        font: bold 26px "Trebuchet MS", sans-serif;
+      }
+      #help-btn:hover { background: rgba(241, 196, 15, 0.18); }
+      #help-btn:active { background: #f1c40f; color: #14182a; transform: scale(0.92); }
+      #help-btn.active { background: #f1c40f; color: #14182a; }
+
+      #help-panel {
+        position: fixed; top: 80px; right: 16px;
+        width: 320px;
+        background: rgba(12, 12, 20, 0.95);
+        border: 2px solid #f1c40f;
+        border-radius: 12px;
+        padding: 14px 18px 16px;
+        color: #fff;
+        font-family: "Trebuchet MS", sans-serif;
+        z-index: 6;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.7);
+        display: none;
+        cursor: move; user-select: none; touch-action: none;
+      }
+      #help-panel.show { display: block; }
+      #help-panel.dragging { opacity: 0.9; box-shadow: 0 16px 36px rgba(0,0,0,0.85), 0 0 0 2px #f1c40f; }
+      #help-panel .hp-title {
+        font-size: 18px; font-weight: bold; color: #f1c40f;
+        margin-bottom: 10px; letter-spacing: 1px;
+        border-bottom: 1px solid #444a66; padding-bottom: 6px;
+      }
+      #help-panel .hp-section { font-size: 12px; color: #f1c40f; margin-top: 10px; margin-bottom: 4px; letter-spacing: 1px; }
+      #help-panel .hp-row {
+        display: flex; justify-content: space-between; align-items: center;
+        font-size: 13px; padding: 3px 0; line-height: 1.3;
+      }
+      #help-panel .hp-key {
+        background: #2c3e50; border: 1px solid #6a7090; border-radius: 5px;
+        padding: 2px 8px; font-family: monospace; font-size: 12px; color: #f1c40f;
+        margin-left: 8px; flex-shrink: 0;
+      }
+      #help-panel .hp-desc { color: #ddd; }
     `;
     document.head.appendChild(css);
 
@@ -376,26 +454,27 @@ export class Hud {
                  fill="url(#pm-grad)" stroke="#063820" stroke-width="2" stroke-linejoin="round"/>
       </svg>`;
 
-    const panel = document.createElement('div');
-    panel.id = 'hud-panel';
-    panel.innerHTML = `
-      <div class="stats">
-        <div class="name" id="hud-name">-</div>
-        <div class="stat-row">
-          <div class="stat-icon stat-hp" title="Points de Vie">${heartSvg}<span class="value" id="hud-hp">-</span></div>
-          <div class="stat-icon stat-pa" title="Points d Action">${starSvg}<span class="value" id="hud-pa">-</span></div>
-          <div class="stat-icon stat-pm" title="Points de Mouvement">${arrowSvg}<span class="value" id="hud-pm">-</span></div>
-        </div>
-        <div class="buffs" id="hud-buffs"></div>
+    // Panneau STATS (grand) : nom + HP / PA / PM + buffs.
+    const stats = document.createElement('div');
+    stats.id = 'hud-stats';
+    stats.innerHTML = `
+      <div class="name" id="hud-name">-</div>
+      <div class="stat-row">
+        <div class="stat-icon stat-hp" title="Points de Vie">${heartSvg}<span class="value" id="hud-hp">-</span></div>
+        <div class="stat-icon stat-pa" title="Points d Action">${starSvg}<span class="value" id="hud-pa">-</span></div>
+        <div class="stat-icon stat-pm" title="Points de Mouvement">${arrowSvg}<span class="value" id="hud-pm">-</span></div>
       </div>
-      <div class="actions">
-        <button class="btn" id="btn-move">Deplacer (M)</button>
-        <div class="spell-bar" id="spell-bar"></div>
-        <button class="btn end" id="btn-end">Fin de tour (Esp)</button>
-      </div>
+      <div class="buffs" id="hud-buffs"></div>
     `;
-    document.body.appendChild(panel);
-    this.panel = panel;
+    document.body.appendChild(stats);
+    this.statsEl = stats;
+
+    // Panneau SORTS : juste la barre de sorts (plus de boutons Move / End).
+    const spells = document.createElement('div');
+    spells.id = 'hud-spells';
+    spells.innerHTML = `<div class="spell-bar" id="spell-bar"></div>`;
+    document.body.appendChild(spells);
+    this.spellsEl = spells;
 
     const flash = document.createElement('div');
     flash.id = 'flash';
@@ -407,23 +486,71 @@ export class Hud {
     this.paEl = document.getElementById('hud-pa');
     this.pmEl = document.getElementById('hud-pm');
     this.buffsEl = document.getElementById('hud-buffs');
-    this.btnMove = document.getElementById('btn-move');
-    this.btnEnd = document.getElementById('btn-end');
     this.spellBar = document.getElementById('spell-bar');
-
-    this.btnMove.addEventListener('click', () => this.callbacks.onMove && this.callbacks.onMove());
-    this.btnEnd.addEventListener('click', () => this.callbacks.onEnd && this.callbacks.onEnd());
 
     this.buildTurnOrder();
     this.buildCombatLog();
     this.buildFighterInfo();
     this.buildRotationButtons();
-    this.makeDraggable(this.panel, 'dofus3d.hudPos');
+    this.buildHelpPanel();
+    this.makeDraggable(this.statsEl, 'dofus3d.statsPos');
+    this.makeDraggable(this.spellsEl, 'dofus3d.spellsPos');
     this.makeDraggable(this.turnOrderEl, 'dofus3d.turnPos');
     this.makeDraggable(this.combatLogEl, 'dofus3d.logPos', {
       ignoreSelector: '.cl-body',
     });
     this.makeDraggable(this.fighterInfoEl, 'dofus3d.infoPos');
+    this.makeDraggable(this.helpPanelEl, 'dofus3d.helpPos');
+  }
+
+  buildHelpPanel() {
+    const btn = document.createElement('button');
+    btn.id = 'help-btn';
+    btn.textContent = '?';
+    btn.title = 'Aide / raccourcis (H)';
+    document.body.appendChild(btn);
+    this.helpBtnEl = btn;
+
+    const panel = document.createElement('div');
+    panel.id = 'help-panel';
+    panel.innerHTML = `
+      <div class="hp-title">CONTROLES</div>
+
+      <div class="hp-section">SORTS</div>
+      <div class="hp-row"><span class="hp-desc">Sort 1 a 9</span><span class="hp-key">1 - 9</span></div>
+      <div class="hp-row"><span class="hp-desc">Sort 10</span><span class="hp-key">0</span></div>
+      <div class="hp-row"><span class="hp-desc">Sort 11 a 19 (2e ligne)</span><span class="hp-key">Ctrl + 1-9</span></div>
+
+      <div class="hp-section">ACTIONS</div>
+      <div class="hp-row"><span class="hp-desc">Mode deplacement</span><span class="hp-key">M</span></div>
+      <div class="hp-row"><span class="hp-desc">Annuler / retour deplacement</span><span class="hp-key">Clic droit</span></div>
+      <div class="hp-row"><span class="hp-desc">Annuler la selection</span><span class="hp-key">Echap</span></div>
+      <div class="hp-row"><span class="hp-desc">Fin de tour</span><span class="hp-key">Espace</span></div>
+
+      <div class="hp-section">CAMERA</div>
+      <div class="hp-row"><span class="hp-desc">Zoom</span><span class="hp-key">Molette</span></div>
+      <div class="hp-row"><span class="hp-desc">Rotation libre</span><span class="hp-key">Clic droit + drag</span></div>
+      <div class="hp-row"><span class="hp-desc">Rotation 1/4</span><span class="hp-key">Boutons G/D</span></div>
+      <div class="hp-row"><span class="hp-desc">Recentrer la camera</span><span class="hp-key">Bouton bleu</span></div>
+
+      <div class="hp-section">INTERFACE</div>
+      <div class="hp-row"><span class="hp-desc">Tous les panneaux sont</span><span class="hp-key">deplaçables</span></div>
+      <div class="hp-row"><span class="hp-desc">Plein ecran</span><span class="hp-key">F</span></div>
+      <div class="hp-row"><span class="hp-desc">Fermer cette aide</span><span class="hp-key">H / Echap</span></div>
+    `;
+    document.body.appendChild(panel);
+    this.helpPanelEl = panel;
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleHelp();
+    });
+  }
+
+  toggleHelp(force) {
+    const show = force === undefined ? !this.helpPanelEl.classList.contains('show') : force;
+    this.helpPanelEl.classList.toggle('show', show);
+    this.helpBtnEl.classList.toggle('active', show);
   }
 
   buildTurnOrder() {
@@ -698,10 +825,6 @@ export class Hud {
     // Un combattant avec un profil IA (Craqueleur invocation par ex.)
     // joue tout seul : le joueur ne peut pas le controler.
     const isAutonomous = !!fighter.def.ai;
-    const canControl = isPlayer && !isAutonomous;
-    this.btnMove.disabled = !canControl;
-    this.btnEnd.disabled = !canControl;
-    this.btnMove.classList.toggle('active', mode === 'move' && canControl);
 
     for (const slot of this.spellSlots) {
       const cd = (fighter.spellCooldowns && fighter.spellCooldowns[slot.spell.id]) || 0;
@@ -756,13 +879,23 @@ export class Hud {
       slot.className = 'to-slot';
       if (!f.alive) slot.classList.add('dead');
       if (f === current) slot.classList.add('active');
-      const color = this.fighterColor(f);
       const teamColor = f.team === 'player' ? '#27ae60' : '#c0392b';
       const ratio = Math.max(0, Math.min(1, f.hp / f.maxHp));
       const shortName = f.name.replace(/\s*\(Invoc\.\)\s*/, '');
+      // Avatar 3D : snapshot du modele rendu en PNG (memoise).
+      let avatarHtml;
+      const dataUrl = (() => {
+        try { return getAvatar(f.classId); } catch (_) { return null; }
+      })();
+      if (dataUrl) {
+        avatarHtml = `<div class="to-avatar"><img src="${dataUrl}" alt="${shortName}"/></div>`;
+      } else {
+        const color = this.fighterColor(f);
+        avatarHtml = `<div class="to-avatar fallback" style="color: ${color};">${shortName.charAt(0).toUpperCase()}</div>`;
+      }
       slot.innerHTML = `
         <div class="to-team-dot" style="background: ${teamColor};"></div>
-        <div class="to-letter" style="color: ${color};">${shortName.charAt(0).toUpperCase()}</div>
+        ${avatarHtml}
         <div class="to-name">${shortName}</div>
         <div class="to-hp"><div class="to-hp-fill" style="width: ${ratio * 100}%;"></div></div>
       `;
