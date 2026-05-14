@@ -4,27 +4,16 @@ import { TurnManager } from './TurnManager.js';
 import { bfs, pathTo, hasLOS } from './Path.js';
 import { SPELLS } from './Spells.js';
 
-// Configurations de combats predefinis. Chacun decrit la composition
-// ennemie ; les spawns sont calcules a la setup.
 export const COMBATS = {
   bouftou: {
     name: 'Meute de Bouftous',
-    enemyComposition: [
-      'bouftou', 'bouftou', 'bouftou', 'bouftouRoyal',
-    ],
+    enemyComposition: ['bouftou', 'bouftou', 'bouftou', 'bouftouRoyal'],
   },
 };
 
-// Spawns par defaut (gauche pour le joueur, droite pour les ennemis).
-const PLAYER_SPAWNS = [
-  { c: 3, r: 7 }, { c: 2, r: 5 }, { c: 2, r: 9 },
-];
-const ENEMY_SPAWNS = [
-  { c: 11, r: 7 }, { c: 12, r: 5 }, { c: 12, r: 9 }, { c: 13, r: 7 },
-];
+const PLAYER_SPAWNS = [{ c: 3, r: 7 }, { c: 2, r: 5 }, { c: 2, r: 9 }];
+const ENEMY_SPAWNS  = [{ c: 11, r: 7 }, { c: 12, r: 5 }, { c: 12, r: 9 }, { c: 13, r: 7 }];
 
-// Orchestrateur de combat. Prend une config (classes joueur + combat)
-// et gere : spawn, tour par tour, inputs joueur, IA, fin de partie.
 export class Game {
   constructor({ scene3d, map3d, picker, hud, rangeOverlay }) {
     this.scene3d = scene3d;
@@ -59,14 +48,12 @@ export class Game {
       || (COMBATS[config.combatId] && COMBATS[config.combatId].enemyComposition)
       || ['bouftou'];
 
-    // Spawn joueur(s)
     playerClasses.forEach((cls, i) => {
       const pos = PLAYER_SPAWNS[i % PLAYER_SPAWNS.length];
       const f = new Fighter(cls, 'player', pos.c, pos.r);
       f.character = new Character3D(this.scene3d.scene, cls, 'player', pos.c, pos.r);
       this.fighters.push(f);
     });
-    // Spawn ennemis
     enemyComposition.forEach((cls, i) => {
       const pos = ENEMY_SPAWNS[i % ENEMY_SPAWNS.length];
       const f = new Fighter(cls, 'enemy', pos.c, pos.r);
@@ -74,7 +61,6 @@ export class Game {
       this.fighters.push(f);
     });
 
-    // Orienter chacun vers l ennemi le plus proche
     for (const f of this.fighters) {
       const other = this.fighters.find(o => o.alive && o.team !== f.team);
       if (other) f.character.faceToward(other.c, other.r);
@@ -109,7 +95,9 @@ export class Game {
     this.hud.update(cur, this.mode, null);
     this.hud.flash(`Tour ${this.turn.round}  -  ${cur.name}`, 1200);
     this.refreshRangeOverlay();
-    if (cur.team === 'enemy') {
+    // Tout combattant avec un profil IA joue tout seul : enemis ET
+    // invocations cote joueur (Craqueleur, etc.).
+    if (cur.def.ai) {
       this.busy = true;
       setTimeout(() => this.runAI(), 700);
     } else {
@@ -131,7 +119,7 @@ export class Game {
   setMode(mode) {
     if (this.busy) return;
     const cur = this.turn.current();
-    if (cur.team !== 'player') return;
+    if (cur.team !== 'player' || cur.def.ai) return;
     this.mode = mode;
     if (mode !== 'spell') this.selectedSpellId = null;
     this.refreshRangeOverlay();
@@ -141,9 +129,13 @@ export class Game {
   selectSpellSlot(slot) {
     if (this.busy) return;
     const cur = this.turn.current();
-    if (cur.team !== 'player') return;
+    if (cur.team !== 'player' || cur.def.ai) return;
     const spell = cur.spells[slot];
     if (!spell) return;
+    if (cur.isOnCooldown(spell.id)) {
+      this.hud.flash(`${spell.name} en recharge (${cur.spellCooldowns[spell.id]} tours)`, 900);
+      return;
+    }
     if (spell.apCost > cur.pa) {
       this.hud.flash('Pas assez de PA pour ' + spell.name, 900);
       return;
@@ -167,6 +159,7 @@ export class Game {
 
   async castSelf(caster, spell) {
     caster.pa -= spell.apCost;
+    if (spell.cooldown) caster.setCooldown(spell.id, spell.cooldown);
     caster.character.popCost(spell.apCost, 'pa');
     this.hud.update(caster, this.mode, this.selectedSpellId);
     await this.applySpellEffects(caster, spell, { c: caster.c, r: caster.r });
@@ -175,13 +168,10 @@ export class Game {
   async onTileTap(c, r) {
     if (this.busy || this.ended) return;
     const cur = this.turn.current();
-    if (cur.team !== 'player') return;
+    if (cur.team !== 'player' || cur.def.ai) return;
     if (this.map3d.isWall(c, r) && this.mode === 'move') return;
-    if (this.mode === 'move') {
-      await this.tryMove(c, r);
-    } else if (this.mode === 'spell') {
-      await this.tryCastSpell(c, r);
-    }
+    if (this.mode === 'move') await this.tryMove(c, r);
+    else if (this.mode === 'spell') await this.tryCastSpell(c, r);
   }
 
   async tryMove(c, r) {
@@ -219,6 +209,7 @@ export class Game {
     const reason = this.validateSpellTarget(cur, spell, c, r);
     if (reason) { this.hud.flash(reason, 900); return; }
     cur.pa -= spell.apCost;
+    if (spell.cooldown) cur.setCooldown(spell.id, spell.cooldown);
     cur.character.popCost(spell.apCost, 'pa');
     this.hud.update(cur, this.mode, this.selectedSpellId);
     this.busy = true;
@@ -237,10 +228,7 @@ export class Game {
     const dist = Math.abs(caster.c - c) + Math.abs(caster.r - r);
     if (dist < spell.range.min || dist > spell.range.max) return 'Hors de portee';
     if (this.map3d.isWall(c, r)) return 'Mur';
-    if (spell.needsLOS && !hasLOS(this.map3d.getData(), caster.c, caster.r, c, r)) {
-      return 'Pas de vue';
-    }
-    // Sort en ligne droite : la cible doit etre orthogonale au lanceur.
+    if (spell.needsLOS && !hasLOS(this.map3d.getData(), caster.c, caster.r, c, r)) return 'Pas de vue';
     if (spell.area && spell.area.type === 'line') {
       const dc = c - caster.c, dr = r - caster.r;
       if (dc !== 0 && dr !== 0) return 'Doit etre en ligne droite';
@@ -250,7 +238,9 @@ export class Game {
     if (spell.target === 'enemy' && (!targetFighter || targetFighter.team === caster.team)) return 'Pas d ennemi';
     if (spell.target === 'ally' && (!targetFighter || targetFighter.team !== caster.team)) return 'Pas d allie';
     if (spell.target === 'tile') {
-      const needsEmpty = spell.effects.some(e => e.type === 'teleport');
+      const needsEmpty = spell.effects.some(e =>
+        e.type === 'teleport' || e.type === 'summon'
+      );
       if (needsEmpty && targetFighter) return 'Case occupee';
     }
     return null;
@@ -266,27 +256,26 @@ export class Game {
   async applyEffect(effect, caster, spell, target) {
     switch (effect.type) {
       case 'damage': {
-        // Calcule les cases affectees (ligne pour AOE line, sinon
-        // unique tile cible).
         let cells;
         if (spell.area && spell.area.type === 'line') {
           cells = this.lineCells(caster, target, spell.area.length);
+        } else if (spell.area && spell.area.type === 'cross') {
+          cells = this.crossCells(target.c, target.r, spell.area.size);
         } else {
           cells = [{ c: target.c, r: target.r }];
         }
-        // Lunge vers la 1ere case visee (direction).
         const firstCell = cells[0] || target;
         const lunge = caster.character.lungeTo(firstCell.c, firstCell.r, 320);
         await new Promise(r => setTimeout(r, 180));
-        // Applique les degats a chaque combattant present dans la zone.
         const dying = [];
         for (const cell of cells) {
           const tf = this.fighters.find(f => f.alive && f.c === cell.c && f.r === cell.r);
           if (!tf) continue;
+          if (tf === caster) continue;
           const base = effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1));
           const dmg = Math.round(base * caster.damageMultiplier());
-          tf.takeDamage(dmg);
-          tf.character.popDamage(dmg);
+          const actual = tf.takeDamage(dmg);
+          tf.character.popDamage(actual);
           tf.character.hpBar.setHp(tf.hp, tf.maxHp);
           if (!tf.alive) dying.push(tf);
         }
@@ -305,6 +294,17 @@ export class Game {
         await new Promise(r => setTimeout(r, 500));
         return;
       }
+      case 'heal_percent': {
+        const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
+        if (!tf) return;
+        const amt = Math.round(tf.maxHp * (effect.percent || 0));
+        const healed = tf.heal(amt);
+        tf.character.popHeal(healed);
+        tf.character.hpBar.setHp(tf.hp, tf.maxHp);
+        tf.character.flashGlow(0xe91e63, 700);
+        await new Promise(r => setTimeout(r, 500));
+        return;
+      }
       case 'teleport': {
         await caster.character.teleportTo(target.c, target.r);
         caster.c = target.c;
@@ -312,16 +312,76 @@ export class Game {
         return;
       }
       case 'buff': {
-        caster.buffs.push({ stat: effect.stat, value: effect.value, duration: effect.duration + 1 });
-        caster.character.flashGlow(parseInt(spell.color.slice(1), 16), 900);
-        this.hud.flash(`${spell.name} : +${Math.round(effect.value * 100)}% ${effect.stat} pendant ${effect.duration} tours (cumule)`, 1400);
+        const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
+        if (!tf) return;
+        const buff = {
+          duration: (effect.duration || 1) + 1,
+          damageMult: effect.damageMult,
+          bonusPa: effect.bonusPa,
+          bonusPm: effect.bonusPm,
+          shield: effect.shield,
+        };
+        tf.buffs.push(buff);
+        // Application immediate des bonus PA/PM pour le tour en cours.
+        if (effect.bonusPa) tf.pa += effect.bonusPa;
+        if (effect.bonusPm) tf.pm += effect.bonusPm;
+        tf.character.flashGlow(parseInt(spell.color.slice(1), 16), 900);
+        this.hud.flash(`${spell.name} appliquee a ${tf.name}`, 1200);
+        if (this.turn.current() === tf) this.hud.update(tf, this.mode, this.selectedSpellId);
         await new Promise(r => setTimeout(r, 400));
+        return;
+      }
+      case 'debuff_pm': {
+        const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
+        if (!tf) return;
+        const before = tf.pm;
+        tf.pm = Math.max(0, tf.pm - (effect.value || 0));
+        const lost = before - tf.pm;
+        if (lost > 0) {
+          tf.character.popText('-' + lost, '#74e69b', {
+            fontSize: 22, dx: -0.42, yStart: 1.35,
+          });
+          tf.character.flashGlow(0x7a6b5a, 500);
+        }
+        if (this.turn.current() === tf) this.hud.update(tf, this.mode, this.selectedSpellId);
+        await new Promise(r => setTimeout(r, 400));
+        return;
+      }
+      case 'summon': {
+        const occupied = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
+        if (occupied) return;
+        if (this.map3d.isWall(target.c, target.r)) return;
+        const summon = new Fighter(effect.creatureId, caster.team, target.c, target.r);
+        summon.character = new Character3D(this.scene3d.scene, effect.creatureId, caster.team, target.c, target.r);
+        // Oriente vers l ennemi le plus proche
+        const closestEnemy = this.fighters
+          .filter(f => f.alive && f.team !== caster.team)
+          .sort((a, b) =>
+            (Math.abs(a.c - target.c) + Math.abs(a.r - target.r)) -
+            (Math.abs(b.c - target.c) + Math.abs(b.r - target.r))
+          )[0];
+        if (closestEnemy) summon.character.faceToward(closestEnemy.c, closestEnemy.r);
+        this.fighters.push(summon);
+        this.turn.addFighter(summon);
+        // Animation d apparition: scale 0 -> 1
+        summon.character.group.scale.setScalar(0.01);
+        await new Promise(resolve => {
+          const start = performance.now();
+          const tick = (now) => {
+            const t = Math.min(1, (now - start) / 450);
+            const e = t * t;
+            summon.character.group.scale.setScalar(0.01 + 0.99 * e);
+            if (t < 1) requestAnimationFrame(tick);
+            else { summon.character.group.scale.setScalar(1); resolve(); }
+          };
+          requestAnimationFrame(tick);
+        });
+        caster.character.flashGlow(parseInt(spell.color.slice(1), 16), 900);
         return;
       }
     }
   }
 
-  // Cases d une ligne droite depuis caster en direction de target.
   lineCells(caster, target, length) {
     const dc = Math.sign(target.c - caster.c);
     const dr = Math.sign(target.r - caster.r);
@@ -331,21 +391,30 @@ export class Game {
       const cc = caster.c + dc * i;
       const cr = caster.r + dr * i;
       if (!this.map3d.inBounds(cc, cr)) break;
-      if (this.map3d.isWall(cc, cr)) break; // mur stoppe la ligne
+      if (this.map3d.isWall(cc, cr)) break;
       cells.push({ c: cc, r: cr });
     }
     return cells;
   }
 
-  // Surlignage des cases : portee de mouvement OU portee de sort.
+  crossCells(centerC, centerR, size) {
+    const cells = [{ c: centerC, r: centerR }];
+    for (let i = 1; i <= size; i++) {
+      cells.push({ c: centerC + i, r: centerR });
+      cells.push({ c: centerC - i, r: centerR });
+      cells.push({ c: centerC, r: centerR + i });
+      cells.push({ c: centerC, r: centerR - i });
+    }
+    return cells.filter(c => this.map3d.inBounds(c.c, c.r) && !this.map3d.isWall(c.c, c.r));
+  }
+
   refreshRangeOverlay() {
     this.rangeOverlay.clear();
     if (!this.turn || this.busy) return;
     const cur = this.turn.current();
-    if (!cur || cur.team !== 'player') return;
+    if (!cur || cur.team !== 'player' || cur.def.ai) return;
 
     if (this.mode === 'move') {
-      // Affiche les cases atteignables avec les PM restants (BFS).
       const occ = this.computeOccupied(cur);
       const result = bfs(this.map3d.getData(), occ, { c: cur.c, r: cur.r }, cur.pm);
       const tiles = [];
@@ -363,8 +432,6 @@ export class Game {
       if (!spell) return;
       const tiles = [];
       if (spell.area && spell.area.type === 'line') {
-        // Pour un sort en ligne, surligne uniquement les 4 axes
-        // orthogonaux jusqu a la portee max.
         for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           for (let i = 1; i <= spell.range.max; i++) {
             const c = cur.c + dc * i;
@@ -375,7 +442,6 @@ export class Game {
           }
         }
       } else {
-        // Portee manhattan standard.
         for (let dc = -spell.range.max; dc <= spell.range.max; dc++) {
           for (let dr = -spell.range.max; dr <= spell.range.max; dr++) {
             const d = Math.abs(dc) + Math.abs(dr);
@@ -398,49 +464,46 @@ export class Game {
     if (this.ended) return;
     const ai = this.turn.current();
     const profile = ai.def.ai || 'aggressive';
-    if (profile === 'aggressive') {
-      await this.runAggressive(ai);
-    }
+    if (profile === 'aggressive') await this.runAggressive(ai);
     if (this.ended) return;
     this.busy = false;
     this._advanceTurn();
   }
 
   async runAggressive(ai) {
-    // 1. Si le combattant a un sort de soin, soigne un allie blesse a portee.
-    if (ai.spells.some(s => s.effects.some(e => e.type === 'heal'))) {
+    if (ai.spells.some(s => s.effects.some(e => e.type === 'heal' || e.type === 'heal_percent'))) {
       await this.aiTryHeal(ai);
       if (this.ended) return;
     }
 
     const target = this.pickWeakestTarget(ai);
     if (!target) return;
-    const damageSpells = ai.spells.filter(s =>
-      s.effects.some(e => e.type === 'damage') &&
+    const attackSpells = ai.spells.filter(s =>
+      !ai.isOnCooldown(s.id) &&
+      s.effects.some(e => e.type === 'damage' || e.type === 'debuff_pm' || e.type === 'dot') &&
       (s.target === 'enemy' || s.target === 'tile')
     );
-    if (damageSpells.length === 0) return;
-    const longestRange = damageSpells.reduce((m, s) => Math.max(m, s.range.max), 0);
+    if (attackSpells.length === 0) return;
+    const longestRange = attackSpells.reduce((m, s) => Math.max(m, s.range.max), 0);
 
     if (ai.pm > 0) {
       const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
-      if (dist > longestRange) {
-        await this.aiApproach(ai, target, longestRange);
-      }
+      if (dist > longestRange) await this.aiApproach(ai, target, longestRange);
     }
     if (this.ended) return;
 
     while (ai.alive && target.alive) {
-      const usable = damageSpells.filter(s => s.apCost <= ai.pa).filter(s => {
+      const usable = attackSpells.filter(s => s.apCost <= ai.pa).filter(s => {
         const d = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
         if (d < s.range.min || d > s.range.max) return false;
         if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r)) return false;
         return true;
       });
       if (usable.length === 0) break;
-      usable.sort((a, b) => avgDmg(b) - avgDmg(a));
+      usable.sort((a, b) => spellScore(b) - spellScore(a));
       const spell = usable[0];
       ai.pa -= spell.apCost;
+      if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
       ai.character.popCost(spell.apCost, 'pa');
       this.hud.update(ai, this.mode, this.selectedSpellId);
       await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
@@ -448,17 +511,17 @@ export class Game {
     }
   }
 
-  // Soigne l allie le plus blesse (sous 70% PV) a portee, une fois par tour.
   async aiTryHeal(ai) {
     const healSpells = ai.spells.filter(s =>
-      s.effects.some(e => e.type === 'heal') && s.target === 'ally'
+      !ai.isOnCooldown(s.id) &&
+      s.effects.some(e => e.type === 'heal' || e.type === 'heal_percent') &&
+      s.target === 'ally'
     );
     if (healSpells.length === 0) return;
     const wounded = this.fighters.filter(f =>
       f.alive && f.team === ai.team && f !== ai && f.hp < f.maxHp * 0.7
     ).sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
     if (wounded.length === 0) return;
-
     for (const target of wounded) {
       for (const spell of healSpells) {
         if (ai.pa < spell.apCost) continue;
@@ -466,10 +529,11 @@ export class Game {
         if (dist < spell.range.min || dist > spell.range.max) continue;
         if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r)) continue;
         ai.pa -= spell.apCost;
+        if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
         ai.character.popCost(spell.apCost, 'pa');
         this.hud.update(ai, this.mode, this.selectedSpellId);
         await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
-        return; // un seul soin par tour
+        return;
       }
     }
   }
@@ -497,8 +561,7 @@ export class Game {
         goals.push({ c: target.c + dc, r: target.r + dr });
       }
     }
-    let bestGoal = null;
-    let bestDist = Infinity;
+    let bestGoal = null, bestDist = Infinity;
     for (const g of goals) {
       const k = `${g.c},${g.r}`;
       if (!result.dist.has(k)) continue;
@@ -521,7 +584,6 @@ export class Game {
     }
   }
 
-  // ---------- HELPERS ----------
   computeOccupied(exclude) {
     const occ = new Set();
     for (const f of this.fighters) {
@@ -533,9 +595,7 @@ export class Game {
   }
 
   refreshHpBars() {
-    for (const f of this.fighters) {
-      f.character.hpBar.setHp(f.hp, f.maxHp);
-    }
+    for (const f of this.fighters) f.character.hpBar.setHp(f.hp, f.maxHp);
   }
 
   checkEnd() {
@@ -552,8 +612,13 @@ export class Game {
   }
 }
 
-function avgDmg(spell) {
-  return spell.effects
-    .filter(e => e.type === 'damage')
-    .reduce((s, e) => s + (e.min + e.max) / 2, 0);
+// Score d un sort pour l IA : combine degats moyens + utility (debuff PM).
+function spellScore(spell) {
+  let score = 0;
+  for (const e of spell.effects) {
+    if (e.type === 'damage') score += (e.min + e.max) / 2;
+    if (e.type === 'debuff_pm') score += (e.value || 0) * 3;
+    if (e.type === 'dot') score += ((e.min + e.max) / 2) * (e.duration || 1);
+  }
+  return score;
 }

@@ -31,4 +31,15 @@ export class TurnManager {
     if (enemies === 0) return 'player';
     return null;
   }
+
+  // Insertion dynamique d un combattant (invocation) dans l ordre
+  // d initiative. Ajuste l index courant si on insere avant.
+  addFighter(fighter) {
+    let idx = 0;
+    while (idx < this.order.length && this.order[idx].initiative > fighter.initiative) {
+      idx++;
+    }
+    this.order.splice(idx, 0, fighter);
+    if (idx <= this.index) this.index++;
+  }
 }

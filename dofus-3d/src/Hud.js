@@ -96,6 +96,19 @@ export class Hud {
       .spell.active { border-color: #f1c40f; border-width: 3px; box-shadow: 0 0 12px #f1c40f; }
       .spell:disabled { opacity: 0.45; cursor: default; }
       .spell:disabled:hover { border-color: #444a66; }
+      .spell.cooldown { opacity: 0.5; cursor: default; }
+      .spell.cooldown .icon { opacity: 0.2; }
+      .spell.cooldown .cost { opacity: 0.2; }
+      .spell .cd-overlay {
+        position: absolute; inset: 0;
+        display: none;
+        align-items: center; justify-content: center;
+        font-size: 26px; font-weight: bold;
+        color: #fff;
+        text-shadow: 1px 1px 3px #000, 0 0 4px #000;
+        z-index: 4;
+      }
+      .spell.cooldown .cd-overlay { display: flex; }
       .spell .accent {
         position: absolute; inset: 4px;
         border-radius: 5px;
@@ -189,6 +202,25 @@ export class Hud {
       .rot-btn:active { background: #f1c40f; color: #14182a; transform: translateY(-50%) scale(0.92); }
       #rot-left { left: 16px; }
       #rot-right { right: 16px; }
+      #rot-recenter {
+        position: fixed;
+        top: 16px; right: 16px;
+        width: 52px; height: 52px;
+        border-radius: 50%;
+        background: rgba(12, 12, 20, 0.78);
+        border: 3px solid #3498db;
+        color: #5dade2;
+        cursor: pointer; pointer-events: auto;
+        user-select: none; -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        z-index: 5;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+        transition: background 0.15s, transform 0.1s;
+      }
+      #rot-recenter:hover { background: rgba(52, 152, 219, 0.2); }
+      #rot-recenter:active { background: #3498db; color: #14182a; transform: scale(0.92); }
+      #rot-recenter svg { width: 30px; height: 30px; display: block; }
       .rot-btn svg { width: 34px; height: 34px; display: block; }
     `;
     document.head.appendChild(css);
@@ -376,6 +408,22 @@ export class Hud {
     right.title = 'Tourner la map (1/4 de tour a droite)';
     right.addEventListener('click', () => this.callbacks.onRotateRight && this.callbacks.onRotateRight());
     document.body.appendChild(right);
+
+    // Bouton recentrer : recadre la camera + angle/zoom d origine.
+    const svgCenter = `
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="16" cy="16" r="9"/>
+        <line x1="16" y1="3" x2="16" y2="8"/>
+        <line x1="16" y1="24" x2="16" y2="29"/>
+        <line x1="3" y1="16" x2="8" y2="16"/>
+        <line x1="24" y1="16" x2="29" y2="16"/>
+        <circle cx="16" cy="16" r="2" fill="currentColor"/>
+      </svg>`;
+    const center = document.createElement('button');
+    center.id = 'rot-recenter'; center.innerHTML = svgCenter;
+    center.title = 'Recentrer la camera (angle / zoom par defaut)';
+    center.addEventListener('click', () => this.callbacks.onResetCamera && this.callbacks.onResetCamera());
+    document.body.appendChild(center);
   }
 
   on(eventName, cb) {
@@ -398,6 +446,7 @@ export class Hud {
         <div class="key">${keyLabel}</div>
         <div class="icon">${spell.icon || ''}</div>
         <div class="cost">${spell.apCost} PA</div>
+        <div class="cd-overlay"></div>
       `;
       btn.addEventListener('click', () => {
         this.callbacks.onSpellSlot && this.callbacks.onSpellSlot(idx);
@@ -429,6 +478,8 @@ export class Hud {
     const rangeTxt = spell.range.min === spell.range.max
       ? `${spell.range.min} case${spell.range.min > 1 ? 's' : ''}`
       : `${spell.range.min} a ${spell.range.max} cases`;
+    const cdLine = spell.cooldown
+      ? `<div class="tip-row"><span class="lbl">Recharge :</span> ${spell.cooldown} tours</div>` : '';
     el.innerHTML = `
       <div class="tip-name" style="color: ${spell.color};">${spell.name}</div>
       <div class="tip-desc">${spell.desc}</div>
@@ -436,6 +487,7 @@ export class Hud {
       <div class="tip-row"><span class="lbl">Cout :</span> ${spell.apCost} PA</div>
       <div class="tip-row"><span class="lbl">Portee :</span> ${rangeTxt}</div>
       <div class="tip-row"><span class="lbl">Vue :</span> ${losTxt}</div>
+      ${cdLine}
     `;
     el.classList.add('show');
     // Position au-dessus du bouton avec un peu de marge.
@@ -467,29 +519,43 @@ export class Hud {
     this.paEl.textContent = `${fighter.pa}/${fighter.maxPa}`;
     this.pmEl.textContent = `${fighter.pm}/${fighter.maxPm}`;
 
-    // Affichage des buffs actifs. b.duration inclut le tour de cast :
-    // on affiche b.duration - 1 pour montrer ce qu il reste APRES ce
-    // tour-ci (coherent avec la promesse du sort "pendant N tours").
+    // Affichage des buffs actifs. duration inclut le tour de cast : on
+    // affiche duration - 1 pour le restant apres le tour en cours.
     if (fighter.buffs && fighter.buffs.length) {
       this.buffsEl.innerHTML = fighter.buffs.map(b => {
         const remaining = Math.max(0, b.duration - 1);
-        return `<span class="buff">+${Math.round((b.value || 0) * 100)}% ${b.stat} (${remaining}t restants)</span>`;
+        const parts = [];
+        if (b.damageMult) parts.push(`+${Math.round(b.damageMult * 100)}% degats`);
+        if (b.bonusPa) parts.push(`+${b.bonusPa} PA`);
+        if (b.bonusPm) parts.push(`+${b.bonusPm} PM`);
+        if (b.shield) parts.push(`-${Math.round(b.shield * 100)}% degats reçus`);
+        return `<span class="buff">${parts.join(', ')} (${remaining}t)</span>`;
       }).join('  ');
     } else {
       this.buffsEl.innerHTML = '';
     }
 
     const isPlayer = fighter.team === 'player';
-    this.btnMove.disabled = !isPlayer;
-    this.btnEnd.disabled = !isPlayer;
-    this.btnMove.classList.toggle('active', mode === 'move' && isPlayer);
+    // Un combattant avec un profil IA (Craqueleur invocation par ex.)
+    // joue tout seul : le joueur ne peut pas le controler.
+    const isAutonomous = !!fighter.def.ai;
+    const canControl = isPlayer && !isAutonomous;
+    this.btnMove.disabled = !canControl;
+    this.btnEnd.disabled = !canControl;
+    this.btnMove.classList.toggle('active', mode === 'move' && canControl);
 
     for (const slot of this.spellSlots) {
-      const usable = isPlayer && fighter.pa >= slot.spell.apCost;
+      const cd = (fighter.spellCooldowns && fighter.spellCooldowns[slot.spell.id]) || 0;
+      const isAutonomous = !!fighter.def.ai;
+      const usable = isPlayer && !isAutonomous && cd === 0 && fighter.pa >= slot.spell.apCost;
       slot.btn.disabled = !usable;
+      slot.btn.classList.toggle('cooldown', cd > 0);
       slot.btn.classList.toggle('active',
         isPlayer && mode === 'spell' && selectedSpellId === slot.spell.id
       );
+      // Affiche le compteur sur le slot.
+      const cdEl = slot.btn.querySelector('.cd-overlay');
+      if (cdEl) cdEl.textContent = cd > 0 ? String(cd) : '';
     }
   }
 

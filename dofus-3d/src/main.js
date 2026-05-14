@@ -38,6 +38,7 @@ if (loader) loader.remove();
 
 hud.on('onRotateLeft', () => scene3d.snapRotate(-1));
 hud.on('onRotateRight', () => scene3d.snapRotate(1));
+hud.on('onResetCamera', () => scene3d.resetCamera());
 
 // --- MENU PRE-COMBAT ---
 // Au demarrage, on affiche le menu de selection. La scene 3D

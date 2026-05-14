@@ -1,13 +1,20 @@
 import { SPELLS } from './Spells.js';
 
-// Definitions des classes / creatures. spellIds liste les sorts dispo.
-// `ai` decrit le caractere d un monstre (cf Game.runAI).
+// Definitions des classes / creatures.
+// `ai` decrit le caractere autonome (cf Game.runAI). Un Craqueleur (invocation)
+// est sur l equipe 'player' mais a ai='aggressive' : il joue tout seul.
 export const DEFS = {
   iop: {
     name: 'Iop',
     role: 'Guerrier',
     hp: 100, pa: 8, pm: 4, initiative: 12,
     spellIds: ['pression', 'bond', 'epeeDivine', 'concentration'],
+  },
+  osamodas: {
+    name: 'Osamodas',
+    role: 'Invocateur',
+    hp: 95, pa: 8, pm: 4, initiative: 11,
+    spellIds: ['invocationCraqueleur', 'piqureMotivante', 'protectionCraqueleur', 'soinInvocation'],
   },
   bouftou: {
     name: 'Bouftou',
@@ -23,6 +30,13 @@ export const DEFS = {
     spellIds: ['morsureRoyale', 'soinAnimal'],
     ai: 'aggressive',
   },
+  craqueleur: {
+    name: 'Craqueleur',
+    role: 'Invocation',
+    hp: 80, pa: 5, pm: 3, initiative: 8,
+    spellIds: ['frappeCraqueleur', 'lancerRocher'],
+    ai: 'aggressive',
+  },
 };
 
 export class Fighter {
@@ -34,7 +48,10 @@ export class Fighter {
     this.team = team;
     this.c = c;
     this.r = r;
-    this.name = def.name + (team === 'enemy' ? ' (E)' : '');
+    // Marque les invocations (Craqueleur) avec un suffixe lisible.
+    this.isSummon = def.role === 'Invocation';
+    this.name = def.name
+      + (team === 'enemy' ? ' (E)' : (this.isSummon ? ' (Invoc.)' : ''));
     this.maxHp = def.hp;
     this.hp = def.hp;
     this.maxPa = def.pa;
@@ -44,8 +61,10 @@ export class Fighter {
     this.initiative = def.initiative + Math.random();
     this.alive = true;
     this.character = null;
-    // Buffs actifs : { stat, value, duration } -- cumulables.
+    // Buffs : { duration, damageMult?, bonusPa?, bonusPm?, shield? }
     this.buffs = [];
+    // Cooldown des sorts : { [spellId]: tours restants }
+    this.spellCooldowns = {};
   }
 
   get spells() {
@@ -59,12 +78,27 @@ export class Fighter {
     this.buffs = this.buffs
       .map(b => ({ ...b, duration: b.duration - 1 }))
       .filter(b => b.duration > 0);
+    // Applique les bonus PA / PM des buffs encore actifs.
+    for (const b of this.buffs) {
+      if (b.bonusPa) this.pa += b.bonusPa;
+      if (b.bonusPm) this.pm += b.bonusPm;
+    }
+    // Decremente les cooldowns des sorts.
+    for (const id in this.spellCooldowns) {
+      this.spellCooldowns[id] = Math.max(0, this.spellCooldowns[id] - 1);
+    }
   }
 
   takeDamage(amount) {
-    this.hp = Math.max(0, this.hp - amount);
+    let dmg = amount;
+    // Reductions cumulatives multiplicatives des boucliers actifs.
+    for (const b of this.buffs) {
+      if (b.shield) dmg *= (1 - b.shield);
+    }
+    dmg = Math.max(0, Math.round(dmg));
+    this.hp = Math.max(0, this.hp - dmg);
     if (this.hp <= 0) this.alive = false;
-    return amount;
+    return dmg;
   }
 
   heal(amount) {
@@ -76,12 +110,16 @@ export class Fighter {
   damageMultiplier() {
     let mult = 1;
     for (const b of this.buffs) {
-      if (b.stat === 'damage') mult += b.value;
+      if (b.damageMult) mult += b.damageMult;
     }
     return mult;
   }
 
-  hasBuff(stat) {
-    return this.buffs.some(b => b.stat === stat);
+  isOnCooldown(spellId) {
+    return (this.spellCooldowns[spellId] || 0) > 0;
+  }
+
+  setCooldown(spellId, turns) {
+    if (turns) this.spellCooldowns[spellId] = turns;
   }
 }

@@ -2,8 +2,18 @@
 // sa couleur de categorie (rouge = attaque, rose = soin, jaune = boost,
 // vert = deplacement), et ses effets composables.
 //
-// Types d effets : 'damage', 'heal', 'teleport', 'buff'.
-// Type d aire   : { type: 'single' } | { type: 'line', length: N }.
+// Types d effets :
+//  - 'damage'         { min, max }
+//  - 'heal'           { min, max }
+//  - 'heal_percent'   { percent }  -> % des PV max de la cible
+//  - 'teleport'       deplace le caster
+//  - 'buff'           { duration, damageMult?, bonusPa?, bonusPm?, shield? }
+//  - 'summon'         { creatureId }
+//  - 'debuff_pm'      { value }  -> retire N PM a la cible
+//
+// Aire : { type: 'single' } | { type: 'line', length } | { type: 'cross', size }.
+// Cooldown : nombre de tours entre deux casts (decremente au debut du
+// tour du caster).
 
 const ICON_SWORD = `
   <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -71,6 +81,46 @@ const ICON_HEAL_CROSS = `
     <line x1="11" y1="17" x2="21" y2="17" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
   </svg>`;
 
+const ICON_SUMMON = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="16" cy="26" rx="10" ry="3" stroke-dasharray="2 2"/>
+    <polygon points="16 6, 22 22, 10 22" fill="currentColor"/>
+    <circle cx="16" cy="13" r="3" fill="#fff"/>
+    <line x1="6" y1="6" x2="9" y2="9"/>
+    <line x1="26" y1="6" x2="23" y2="9"/>
+    <circle cx="6" cy="14" r="1" fill="currentColor"/>
+    <circle cx="26" cy="14" r="1" fill="currentColor"/>
+  </svg>`;
+
+const ICON_BOOST = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="8 18, 16 8, 24 18"/>
+    <polyline points="8 24, 16 14, 24 24"/>
+    <circle cx="16" cy="26" r="2" fill="currentColor"/>
+  </svg>`;
+
+const ICON_SHIELD = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+    <path d="M16 4 L26 8 L26 16 Q26 24 16 28 Q6 24 6 16 L6 8 Z" fill="currentColor"/>
+    <path d="M11 16 L15 20 L22 12" stroke="#fff" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  </svg>`;
+
+const ICON_ROCK_THROW = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="14 12, 9 18, 14 24, 22 22, 23 14, 18 10" fill="currentColor"/>
+    <line x1="3" y1="6" x2="9" y2="10" stroke-dasharray="2 2"/>
+    <line x1="3" y1="12" x2="8" y2="14" stroke-dasharray="2 2"/>
+  </svg>`;
+
+const ICON_CROSS_PUNCH = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="13" y="8" width="6" height="6" fill="currentColor"/>
+    <rect x="13" y="18" width="6" height="6" fill="currentColor"/>
+    <rect x="8" y="13" width="6" height="6" fill="currentColor"/>
+    <rect x="18" y="13" width="6" height="6" fill="currentColor"/>
+    <rect x="13" y="13" width="6" height="6" fill="currentColor"/>
+  </svg>`;
+
 // Couleurs canoniques par categorie.
 export const SPELL_CATEGORY_COLOR = {
   attack: '#c0392b',
@@ -110,8 +160,45 @@ export const SPELLS = {
     category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
-    effects: [{ type: 'buff', stat: 'damage', value: 0.3, duration: 2 }],
+    effects: [{ type: 'buff', damageMult: 0.3, duration: 2 }],
     desc: '+30% degats pendant 2 tours. Cumulable.',
+  },
+
+  // ---------- OSAMODAS ----------
+  invocationCraqueleur: {
+    id: 'invocationCraqueleur', name: 'Invocation du Craqueleur', short: 'IC', icon: ICON_SUMMON,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 6, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'tile', area: { type: 'single' },
+    cooldown: 4,
+    effects: [{ type: 'summon', creatureId: 'craqueleur' }],
+    desc: 'Invoque un Craqueleur sur une case adjacente libre.',
+  },
+  piqureMotivante: {
+    id: 'piqureMotivante', name: 'Piqure Motivante', short: 'PI', icon: ICON_BOOST,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 3, range: { min: 1, max: 5 }, needsLOS: true,
+    target: 'ally', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'buff', bonusPa: 3, bonusPm: 4, duration: 5 }],
+    desc: 'Donne +3 PA et +4 PM a une invocation alliee pendant 5 tours.',
+  },
+  protectionCraqueleur: {
+    id: 'protectionCraqueleur', name: 'Protection du Craqueleur', short: 'PC', icon: ICON_SHIELD,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 3, range: { min: 1, max: 4 }, needsLOS: true,
+    target: 'ally', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'buff', shield: 0.5, duration: 2 }],
+    desc: 'Bouclier : -50% degats reçus pendant 2 tours.',
+  },
+  soinInvocation: {
+    id: 'soinInvocation', name: 'Soin de l Invocation', short: 'SI', icon: ICON_HEAL_CROSS,
+    category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
+    apCost: 4, range: { min: 1, max: 4 }, needsLOS: true,
+    target: 'ally', area: { type: 'single' },
+    effects: [{ type: 'heal_percent', percent: 0.30 }],
+    desc: 'Soigne 30% des PV max de l invocation alliee.',
   },
 
   // ---------- BOUFTOU ----------
@@ -123,8 +210,6 @@ export const SPELLS = {
     effects: [{ type: 'damage', min: 6, max: 9 }],
     desc: 'Morsure brutale au corps a corps.',
   },
-
-  // ---------- BOUFTOU ROYAL ----------
   morsureRoyale: {
     id: 'morsureRoyale', name: 'Morsure Royale', short: 'MR', icon: ICON_BITE_ROYAL,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
@@ -141,6 +226,24 @@ export const SPELLS = {
     effects: [{ type: 'heal', min: 14, max: 20 }],
     desc: 'Soigne un Bouftou allie de la meute.',
   },
+
+  // ---------- CRAQUELEUR (invocation Osamodas) ----------
+  frappeCraqueleur: {
+    id: 'frappeCraqueleur', name: 'Frappe du Craqueleur', short: 'FC', icon: ICON_CROSS_PUNCH,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'tile', area: { type: 'cross', size: 1 },
+    effects: [{ type: 'damage', min: 10, max: 14 }],
+    desc: 'Frappe en croix : la case ciblee + ses 4 voisines.',
+  },
+  lancerRocher: {
+    id: 'lancerRocher', name: 'Lancer de Rocher', short: 'LR', icon: ICON_ROCK_THROW,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'debuff_pm', value: 2 }],
+    desc: 'Jette un rocher : la cible perd 2 PM.',
+  },
 };
 
 // Helpers pour fabriquer le contenu du tooltip a partir d un spell.
@@ -153,15 +256,33 @@ export function spellEffectLines(spell) {
         if (spell.area && spell.area.type === 'line') {
           lines.push(`(ligne de ${spell.area.length} cases)`);
         }
+        if (spell.area && spell.area.type === 'cross') {
+          lines.push(`(croix de ${spell.area.size})`);
+        }
         break;
       case 'heal':
         lines.push(`Soins : ${eff.min}-${eff.max}`);
         break;
+      case 'heal_percent':
+        lines.push(`Soins : ${Math.round(eff.percent * 100)}% des PV max`);
+        break;
       case 'teleport':
         lines.push('Teleporte le lanceur');
         break;
-      case 'buff':
-        lines.push(`+${Math.round(eff.value * 100)}% ${eff.stat} pendant ${eff.duration} tours (cumulable)`);
+      case 'buff': {
+        const parts = [];
+        if (eff.damageMult) parts.push(`+${Math.round(eff.damageMult * 100)}% degats`);
+        if (eff.bonusPa) parts.push(`+${eff.bonusPa} PA`);
+        if (eff.bonusPm) parts.push(`+${eff.bonusPm} PM`);
+        if (eff.shield) parts.push(`-${Math.round(eff.shield * 100)}% degats reçus`);
+        lines.push(`${parts.join(', ')} pendant ${eff.duration} tours${eff.damageMult ? ' (cumulable)' : ''}`);
+        break;
+      }
+      case 'summon':
+        lines.push(`Invoque : ${eff.creatureId}`);
+        break;
+      case 'debuff_pm':
+        lines.push(`Cible perd ${eff.value} PM`);
         break;
     }
   }

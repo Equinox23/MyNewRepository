@@ -15,30 +15,71 @@ const CLASS_OPTIONS = [
           <stop offset="1" stop-color="#7c1f17"/>
         </linearGradient>
       </defs>
-      <!-- shadow -->
       <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
-      <!-- cape -->
       <path d="M16 36 L14 56 L22 52 L32 36 Z" fill="#7c1f17" stroke="#3a0e09" stroke-width="1.5"/>
       <path d="M48 36 L50 56 L42 52 L32 36 Z" fill="#7c1f17" stroke="#3a0e09" stroke-width="1.5"/>
-      <!-- body -->
       <rect x="20" y="34" width="24" height="20" rx="3" fill="url(#iopGrad)" stroke="#3a0e09" stroke-width="2"/>
-      <!-- belt -->
       <rect x="20" y="46" width="24" height="4" fill="#5a3a1a"/>
       <circle cx="32" cy="48" r="1.5" fill="#f1c40f"/>
-      <!-- head -->
       <circle cx="32" cy="24" r="13" fill="#f4d3a5" stroke="#3a0e09" stroke-width="2"/>
-      <!-- helmet -->
       <path d="M20 22 Q20 8 32 6 Q44 8 44 22 L44 28 Q38 22 32 22 Q26 22 20 28 Z" fill="url(#iopGrad)" stroke="#3a0e09" stroke-width="2"/>
       <polygon points="29 6, 35 6, 33 -2, 31 -2" fill="#f1c40f" stroke="#7a5d0a" stroke-width="1"/>
-      <!-- eyes -->
       <circle cx="27" cy="26" r="2.5" fill="#fff" stroke="#3a0e09" stroke-width="1"/>
       <circle cx="37" cy="26" r="2.5" fill="#fff" stroke="#3a0e09" stroke-width="1"/>
       <circle cx="27" cy="27" r="1.4" fill="#1a2530"/>
       <circle cx="37" cy="27" r="1.4" fill="#1a2530"/>
-      <!-- sword -->
       <rect x="50" y="14" width="3" height="28" fill="#ecf0f1" stroke="#37474f" stroke-width="1"/>
       <rect x="47" y="40" width="9" height="3" fill="#8a6d3b"/>
       <polygon points="50 14, 53 14, 51.5 9" fill="#ecf0f1" stroke="#37474f" stroke-width="0.8"/>
+    </svg>`,
+  },
+  {
+    id: 'osamodas',
+    name: 'Osamodas',
+    desc: 'Invocateur (8 PA, 4 PM, invoque un Craqueleur)',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="osaGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#6aa548"/>
+          <stop offset="1" stop-color="#234d18"/>
+        </linearGradient>
+        <radialGradient id="osaOrb" cx="50%" cy="50%" r="50%">
+          <stop offset="0" stop-color="#a4e8b5"/>
+          <stop offset="1" stop-color="#1a6e3a"/>
+        </radialGradient>
+      </defs>
+      <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
+      <!-- cape brune fourrure -->
+      <path d="M14 36 L12 58 L24 54 L32 36 Z" fill="#7a4f1e" stroke="#3a2310" stroke-width="1.5"/>
+      <path d="M50 36 L52 58 L40 54 L32 36 Z" fill="#7a4f1e" stroke="#3a2310" stroke-width="1.5"/>
+      <!-- tunique verte -->
+      <rect x="20" y="34" width="24" height="20" rx="3" fill="url(#osaGrad)" stroke="#1a3d10" stroke-width="2"/>
+      <!-- ceinture -->
+      <rect x="20" y="46" width="24" height="4" fill="#5a3a1a"/>
+      <rect x="30" y="44" width="4" height="8" fill="#d4a017"/>
+      <!-- V doré sur torse -->
+      <path d="M26 36 L32 44 L38 36" stroke="#d4a017" stroke-width="2" fill="none"/>
+      <!-- col fourrure -->
+      <ellipse cx="32" cy="33" rx="13" ry="3.5" fill="#cfa970" stroke="#7a4f1e" stroke-width="1"/>
+      <!-- head -->
+      <circle cx="32" cy="24" r="13" fill="#e5b88c" stroke="#3a2310" stroke-width="2"/>
+      <!-- capuche brune avec oreilles -->
+      <path d="M20 22 Q20 8 32 6 Q44 8 44 22 L44 28 Q38 22 32 22 Q26 22 20 28 Z" fill="#7a4f1e" stroke="#3a2310" stroke-width="2"/>
+      <polygon points="22 4, 26 10, 17 9" fill="#7a4f1e" stroke="#3a2310" stroke-width="1.5"/>
+      <polygon points="42 4, 38 10, 47 9" fill="#7a4f1e" stroke="#3a2310" stroke-width="1.5"/>
+      <polygon points="22 6, 24 9, 20 9" fill="#cfa970"/>
+      <polygon points="42 6, 40 9, 44 9" fill="#cfa970"/>
+      <!-- yeux verts -->
+      <circle cx="27" cy="26" r="2.5" fill="#fff" stroke="#3a2310" stroke-width="1"/>
+      <circle cx="37" cy="26" r="2.5" fill="#fff" stroke="#3a2310" stroke-width="1"/>
+      <circle cx="27" cy="27" r="1.4" fill="#2ecc71"/>
+      <circle cx="37" cy="27" r="1.4" fill="#2ecc71"/>
+      <!-- baton avec orbe vert -->
+      <line x1="50" y1="48" x2="50" y2="10" stroke="#6a4a2a" stroke-width="2.5"/>
+      <circle cx="50" cy="8" r="4" fill="url(#osaOrb)" stroke="#1a6e3a" stroke-width="1"/>
+      <circle cx="48" cy="6" r="1.2" fill="#fff" opacity="0.7"/>
+      <circle cx="50" cy="12" r="2" fill="#d4a017"/>
     </svg>`,
   },
 ];
