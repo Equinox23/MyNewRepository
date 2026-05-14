@@ -67,7 +67,10 @@ export class CombatScene extends Phaser.Scene {
     // ---- Couches monde ----
     this.floorGfx = this.addWorld(this.add.graphics().setDepth(0));
     this.highlightGfx = this.addWorld(this.add.graphics().setDepth(100));
-    this.hoverGfx = this.addWorld(this.add.graphics().setDepth(110));
+    // Le hover doit etre visible au-dessus de tous les combattants et murs
+    // (depth max sur 15x15 = ~28k), pour que le contour ne soit jamais
+    // masque par un sprite ou un mur en avant.
+    this.hoverGfx = this.addWorld(this.add.graphics().setDepth(50000));
     this.trapMarkers = []; // visuels de pieges allies
 
     this.drawFloor();
@@ -126,14 +129,18 @@ export class CombatScene extends Phaser.Scene {
     for (let r = 0; r < MAP_ROWS; r++) {
       for (let c = 0; c < MAP_COLS; c++) {
         if (this.state.map.tiles[r][c] === 1) continue;
-        this.drawTileDiamond(g, c, r, ((c + r) % 2 === 0 ? 0x2a3458 : 0x232b48), 0x141826);
+        // Damier plus contraste + contour clair pour bien delimiter
+        // chaque case (la transition d une case a l autre se voit
+        // immediatement, indispensable pour le ciblage).
+        const fill = (c + r) % 2 === 0 ? 0x4a5d7c : 0x344762;
+        this.drawTileDiamond(g, c, r, fill, 0x86a0c0);
       }
     }
   }
 
   drawTileDiamond(g, c, r, fill, stroke, alpha = 1) {
     const p = tileToScreen(c, r);
-    g.lineStyle(1, stroke, alpha);
+    // Remplissage
     g.fillStyle(fill, alpha);
     g.beginPath();
     g.moveTo(p.x, p.y);
@@ -142,6 +149,15 @@ export class CombatScene extends Phaser.Scene {
     g.lineTo(p.x - TILE_W / 2, p.y + TILE_H / 2);
     g.closePath();
     g.fillPath();
+    // Contour clair (limite de la case bien visible)
+    g.lineStyle(1.5, stroke, 0.9);
+    g.strokePath();
+    // Liseré ombre sur l arête basse pour un soupçon de relief.
+    g.lineStyle(1, 0x101828, 0.6);
+    g.beginPath();
+    g.moveTo(p.x - TILE_W / 2, p.y + TILE_H / 2);
+    g.lineTo(p.x, p.y + TILE_H);
+    g.lineTo(p.x + TILE_W / 2, p.y + TILE_H / 2);
     g.strokePath();
   }
 
@@ -260,36 +276,43 @@ export class CombatScene extends Phaser.Scene {
   createFighterSprites() {
     for (const f of this.state.fighters) {
       const p = tileToScreen(f.c, f.r);
+      // Container place au centre du losange (p.y + TILE_H/2).
+      // Tous les enfants sont positionnes en coords locales par rapport
+      // a ce centre, en gardant a l esprit que le losange s etend de
+      // y=-16 (sommet) a y=+16 (pointe basse) en local.
       const cont = this.add.container(p.x, p.y + TILE_H / 2);
 
-      // Anneau d equipe au sol
+      // Anneau d equipe au sol (legerement sous le centre du losange).
       const ringColor = f.team === 'player' ? 0x2ecc71 : 0xe74c3c;
       const ring = this.add.graphics();
-      ring.lineStyle(3, ringColor, 0.85);
-      ring.fillStyle(ringColor, 0.18);
-      ring.strokeEllipse(0, 4, 44, 18);
-      ring.fillEllipse(0, 4, 44, 18);
+      ring.lineStyle(3, ringColor, 0.9);
+      ring.fillStyle(ringColor, 0.22);
+      ring.strokeEllipse(0, 8, 46, 18);
+      ring.fillEllipse(0, 8, 46, 18);
 
-      // Sprite portrait. Les ennemis sont retournes horizontalement pour
-      // regarder vers le joueur (qui spawn a gauche).
-      const sprite = this.add.image(0, -16, 'portrait_' + f.classId).setOrigin(0.5, 1);
+      // Sprite portrait : les pieds (origine 0.5, 1) reposent au centre-bas
+      // du losange. Local y = +8 donne sprite bottom = world p.y + 24,
+      // donc le perso a vraiment ses pieds dans la case.
+      const sprite = this.add.image(0, 8, 'portrait_' + f.classId).setOrigin(0.5, 1);
       sprite.setScale(0.9);
       if (f.team === 'enemy') sprite.setFlipX(true);
 
-      // Barre de vie cadre
-      const hpBg = this.add.rectangle(0, 16, 50, 8, 0x111111).setStrokeStyle(1, 0x000000);
-      const hpBar = this.add.rectangle(-25, 16, 50, 6, 0x2ecc71).setOrigin(0, 0.5);
-      const hpText = this.add.text(0, 16, '', {
+      // Barre de vie : au-dessus de la tete du sprite.
+      // Hauteur sprite ~96 * 0.9 = 86 ; top sprite a local y = 8 - 86 = -78.
+      const hpY = -90;
+      const hpBg = this.add.rectangle(0, hpY, 52, 9, 0x111111).setStrokeStyle(1, 0x000000);
+      const hpBar = this.add.rectangle(-26, hpY, 52, 7, 0x2ecc71).setOrigin(0, 0.5);
+      const hpText = this.add.text(0, hpY, '', {
         fontFamily: 'Trebuchet MS', fontSize: '9px', color: '#ffffff', fontStyle: 'bold',
       }).setOrigin(0.5);
 
-      // Nom
-      const nameText = this.add.text(0, 26, f.name, {
+      // Nom : au-dessus de la barre de vie.
+      const nameText = this.add.text(0, hpY - 12, f.name, {
         fontFamily: 'Trebuchet MS', fontSize: '11px', color: '#ffffff',
         stroke: '#000000', strokeThickness: 2,
       }).setOrigin(0.5);
 
-      // Indicateur tour actif (anneau jaune autour du sprite)
+      // Indicateur tour actif : anneau jaune autour des pieds.
       const turnRing = this.add.graphics();
       turnRing.setVisible(false);
 
@@ -299,9 +322,7 @@ export class CombatScene extends Phaser.Scene {
 
       f.gfx = { cont, ring, turnRing, sprite, hpBg, hpBar, hpText, nameText };
 
-      // Animation idle: petite oscillation verticale du sprite (l anneau au
-      // sol ne bouge pas). Chaque combattant a un decalage de phase aleatoire
-      // pour eviter qu ils respirent tous en synchrone.
+      // Animation idle : oscillation verticale subtile, phase aleatoire.
       const baseY = sprite.y;
       this.tweens.add({
         targets: sprite,
@@ -319,7 +340,7 @@ export class CombatScene extends Phaser.Scene {
 
   refreshFighterUi(f) {
     const ratio = Math.max(0, f.hp / f.maxHp);
-    f.gfx.hpBar.width = 50 * ratio;
+    f.gfx.hpBar.width = 52 * ratio;
     f.gfx.hpBar.fillColor = ratio > 0.5 ? 0x2ecc71 : (ratio > 0.25 ? 0xf39c12 : 0xe74c3c);
     f.gfx.hpText.setText(`${f.hp}/${f.maxHp}`);
     f.gfx.cont.setAlpha(f.alive ? 1 : 0.3);
@@ -329,7 +350,7 @@ export class CombatScene extends Phaser.Scene {
     f.gfx.turnRing.clear();
     if (active) {
       f.gfx.turnRing.lineStyle(3, 0xf1c40f, 1);
-      f.gfx.turnRing.strokeEllipse(0, 4, 50, 22);
+      f.gfx.turnRing.strokeEllipse(0, 8, 52, 22);
       f.gfx.turnRing.setVisible(true);
     } else {
       f.gfx.turnRing.setVisible(false);
