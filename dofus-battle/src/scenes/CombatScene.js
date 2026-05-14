@@ -50,6 +50,9 @@ export class CombatScene extends Phaser.Scene {
     this.hover = null;
     this.busy = false; // pendant les animations / IA
     this.logs = [];
+    // mode tactile: tap-preview puis tap-confirm sur la meme case
+    this.touchMode = false;
+    this.pendingTile = null;
 
     this.layers = {
       grid: this.add.graphics(),
@@ -182,6 +185,12 @@ export class CombatScene extends Phaser.Scene {
       bg.on('pointerout', () => this.hideSpellTooltip());
     }
 
+    // Bouton annuler (selection de sort / tile en attente)
+    const cx = 870, cy = 660;
+    const cancelBtn = this.add.rectangle(cx, cy, 110, 60, 0x34495e).setStrokeStyle(2, 0x111111).setInteractive();
+    this.add.text(cx, cy, 'ANNULER', { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
+    cancelBtn.on('pointerdown', () => { if (!this.busy) this.cancelAction(); });
+
     // Bouton fin de tour
     const ex = 1100, ey = 660;
     const endBtn = this.add.rectangle(ex, ey, 140, 60, 0xc0392b).setStrokeStyle(2, 0x111111).setInteractive();
@@ -260,6 +269,9 @@ export class CombatScene extends Phaser.Scene {
   // --- INTERACTIONS ---
 
   onPointerMove(p) {
+    // Sur tactile, le pointermove est emis lors du touch sans valeur ajoutee:
+    // on ignore pour eviter de melanger avec le mode tap-confirm.
+    if (this.isTouchPointer(p)) return;
     const t = screenToTile(p.x, p.y);
     if (!inBounds(t.c, t.r)) { this.hover = null; this.refreshHighlights(); return; }
     if (!this.hover || this.hover.c !== t.c || this.hover.r !== t.r) {
@@ -268,25 +280,55 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
+  isTouchPointer(p) {
+    const ev = p && p.event;
+    if (!ev) return false;
+    if (ev.pointerType === 'touch') return true;
+    if (typeof ev.type === 'string' && ev.type.startsWith('touch')) return true;
+    return false;
+  }
+
   onPointerDown(p) {
     if (this.busy) return;
+    if (this.isTouchPointer(p)) this.touchMode = true;
     const cur = this.turn.current();
     if (cur.team !== 'player') return;
     const t = screenToTile(p.x, p.y);
     if (!inBounds(t.c, t.r)) return;
 
-    if (p.button === 2 || p.rightButtonDown()) {
-      this.selectedSpell = null;
-      this.refreshHud();
+    // Clic droit (souris uniquement) = annuler la selection
+    if (!this.touchMode && (p.button === 2 || p.rightButtonDown())) {
+      this.cancelAction();
+      return;
+    }
+
+    if (this.touchMode) {
+      // Mode tactile: 1er tap = preview ; 2e tap meme case = confirmer.
+      if (this.pendingTile && this.pendingTile.c === t.c && this.pendingTile.r === t.r) {
+        const target = t;
+        this.pendingTile = null;
+        this.hover = null;
+        if (this.selectedSpell) this.tryCastAt(target);
+        else this.tryMoveTo(target);
+        return;
+      }
+      // Sinon: mettre cette case en preview (pseudo-hover)
+      this.pendingTile = t;
+      this.hover = t;
       this.refreshHighlights();
       return;
     }
 
-    if (this.selectedSpell) {
-      this.tryCastAt(t);
-    } else {
-      this.tryMoveTo(t);
-    }
+    // Souris: action immediate
+    if (this.selectedSpell) this.tryCastAt(t);
+    else this.tryMoveTo(t);
+  }
+
+  cancelAction() {
+    this.selectedSpell = null;
+    this.pendingTile = null;
+    this.refreshHud();
+    this.refreshHighlights();
   }
 
   onSpellButtonClick(i) {
@@ -297,6 +339,7 @@ export class CombatScene extends Phaser.Scene {
     if (!spell) return;
     if (cur.pa < spell.apCost) return;
     this.selectedSpell = (this.selectedSpell === spell) ? null : spell;
+    this.pendingTile = null;
     this.refreshHud();
     this.refreshHighlights();
   }

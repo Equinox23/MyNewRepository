@@ -2,6 +2,10 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <title>Dofus Battle</title>
   <style>
     html, body {
@@ -11,18 +15,36 @@
       color: #eee;
       font-family: "Trebuchet MS", sans-serif;
       overflow: hidden;
+      width: 100%;
+      height: 100%;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+      overscroll-behavior: none;
     }
     #game {
-      display: flex;
-      justify-content: center;
-      align-items: center;
       width: 100vw;
       height: 100vh;
+    }
+    canvas { display: block; touch-action: none; }
+    #orient-warn {
+      display: none;
+      position: fixed; inset: 0;
+      background: #0c0c14; color: #f1c40f;
+      font-size: 18px; text-align: center;
+      align-items: center; justify-content: center;
+      padding: 32px; z-index: 9999;
+    }
+    @media (orientation: portrait) and (max-width: 900px) {
+      #orient-warn { display: flex; }
     }
   </style>
 </head>
 <body>
   <div id="game"></div>
+  <div id="orient-warn">Tourne ton telephone en mode paysage pour jouer.</div>
   <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
   <script type="module" src="./src/main.js"></script>
 </body>

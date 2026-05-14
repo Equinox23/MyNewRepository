@@ -19,6 +19,31 @@ ou avec node :
 npx serve .
 ```
 
+### Sur iPhone / iPad (via GitHub Pages)
+
+Le jeu est responsive et tactile. Pour le publier en ligne :
+
+1. Sur GitHub, va dans **Settings -> Pages**.
+2. **Source** : "Deploy from a branch".
+3. **Branch** : `claude/dofus-battle-game-WozFS` (ou la branche qui contient
+   ce code), **dossier** : `/ (root)`. Sauvegarde.
+4. Apres ~1 minute, l URL est :
+   `https://<ton-user>.github.io/<ton-repo>/dofus-battle/`
+   (la racine du repo redirige automatiquement vers `/dofus-battle/`).
+5. Ouvre l URL dans **Safari** sur iPhone, **mode paysage**, et c est jouable.
+
+### Sur iPhone via Wi-Fi local
+
+Si tu prefereres rester sans publication :
+
+```bash
+cd dofus-battle && python3 -m http.server 8080
+# puis sur l iPhone, dans Safari : http://<ip-locale-de-ton-ordi>:8080/
+```
+
+(Trouve ton IP avec `ifconfig` / `ip addr`. iPhone et ordi doivent etre
+sur le meme Wi-Fi.)
+
 ## Comment jouer
 
 1. Au menu, choisis 3 personnages (clic sur les cartes), une carte, et une
@@ -26,8 +51,10 @@ npx serve .
 2. En combat :
    - **Clic gauche** sur une case verte = se deplacer (path + cout PM).
    - **Clic** sur un sort en bas, puis sur une case = lancer le sort.
-   - **Clic droit** ou **ECHAP** = annuler la selection de sort.
+   - **Clic droit** ou **ECHAP** ou bouton "ANNULER" = annuler la selection.
    - **ESPACE** ou bouton "FIN DE TOUR" = passer son tour.
+   - **Tactile** (iPhone/iPad) : 1er tap = previsualiser (chemin ou zone),
+     2e tap sur la meme case = confirmer. Bouton "ANNULER" pour revenir.
 3. Le bandeau du haut montre l'ordre d'initiative ; le combattant actif est
    entoure en jaune.
 4. La premiere equipe a perdre tous ses combattants perd la partie.
