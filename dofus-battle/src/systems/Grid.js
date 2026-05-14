@@ -19,9 +19,13 @@ export function tileToScreen(c, r) {
 }
 
 // Inversion ecran -> case (approximation losange).
+// tileToScreen(c, r) renvoie le SOMMET HAUT du losange ; le CENTRE est
+// donc decale de (0, TH/2). Pour que la math inverse fonctionne, on prend
+// le centre du losange (0, 0) comme origine de reference, sinon tout clic
+// dans l interieur d une case est arrondi 1 case trop loin en diagonale.
 export function screenToTile(sx, sy) {
   const dx = sx - ORIGIN_X;
-  const dy = sy - ORIGIN_Y;
+  const dy = sy - ORIGIN_Y - TILE_H / 2;
   const c = Math.round((dx / (TILE_W / 2) + dy / (TILE_H / 2)) / 2);
   const r = Math.round((dy / (TILE_H / 2) - dx / (TILE_W / 2)) / 2);
   return { c, r };
