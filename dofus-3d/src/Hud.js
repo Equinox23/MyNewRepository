@@ -222,6 +222,123 @@ export class Hud {
       #rot-recenter:active { background: #3498db; color: #14182a; transform: scale(0.92); }
       #rot-recenter svg { width: 30px; height: 30px; display: block; }
       .rot-btn svg { width: 34px; height: 34px; display: block; }
+
+      /* ----- Barre d ordre de jeu ----- */
+      #turn-order {
+        position: fixed; left: 50%; top: 16px; transform: translateX(-50%);
+        display: flex; align-items: center; gap: 6px;
+        background: rgba(12, 12, 20, 0.85);
+        border: 2px solid #444a66; border-radius: 12px;
+        padding: 8px 12px;
+        font-family: "Trebuchet MS", sans-serif;
+        color: #fff; z-index: 6;
+        cursor: move; user-select: none; touch-action: none;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+        pointer-events: auto;
+      }
+      #turn-order.dragging { opacity: 0.9; box-shadow: 0 12px 32px rgba(0,0,0,0.8), 0 0 0 2px #f1c40f; }
+      #turn-order .to-title {
+        font-size: 11px; color: #aaa; padding-right: 6px; border-right: 1px solid #444a66;
+        margin-right: 4px; letter-spacing: 1px;
+      }
+      #turn-order .to-list { display: flex; gap: 6px; align-items: center; }
+      .to-slot {
+        position: relative; width: 46px; height: 56px;
+        border-radius: 6px; background: #1f2335;
+        border: 2px solid #444a66;
+        display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+        padding: 4px 2px 2px; box-sizing: border-box;
+        transition: border-color 0.15s, transform 0.15s;
+      }
+      .to-slot.active { border-color: #f1c40f; box-shadow: 0 0 10px #f1c40f; transform: translateY(-2px); }
+      .to-slot.dead { opacity: 0.32; filter: grayscale(1); }
+      .to-slot .to-letter {
+        font-size: 22px; font-weight: bold; line-height: 1;
+        text-shadow: 1px 1px 2px #000, 0 0 3px #000;
+      }
+      .to-slot .to-name {
+        font-size: 9px; color: #ddd; margin-top: 2px;
+        max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+      .to-slot .to-hp {
+        position: absolute; bottom: 2px; left: 3px; right: 3px;
+        height: 4px; background: #3a0e09; border-radius: 2px; overflow: hidden;
+      }
+      .to-slot .to-hp .to-hp-fill {
+        height: 100%; background: #e74c3c; transition: width 0.25s;
+      }
+      .to-slot .to-team-dot {
+        position: absolute; top: 2px; right: 2px;
+        width: 6px; height: 6px; border-radius: 50%;
+        border: 1px solid rgba(0,0,0,0.4);
+      }
+
+      /* ----- Journal de combat ----- */
+      #combat-log {
+        position: fixed; right: 16px; bottom: 16px;
+        width: 280px; max-height: 220px;
+        background: rgba(12, 12, 20, 0.86);
+        border: 2px solid #444a66; border-radius: 10px;
+        padding: 8px 10px 10px;
+        font-family: "Trebuchet MS", sans-serif;
+        color: #fff; z-index: 4;
+        cursor: move; user-select: none; touch-action: none;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+        display: flex; flex-direction: column;
+        pointer-events: auto;
+      }
+      #combat-log.dragging { opacity: 0.9; box-shadow: 0 12px 32px rgba(0,0,0,0.8), 0 0 0 2px #f1c40f; }
+      #combat-log .cl-title {
+        font-size: 11px; color: #aaa; letter-spacing: 1px;
+        border-bottom: 1px solid #444a66; padding-bottom: 4px; margin-bottom: 4px;
+      }
+      #combat-log .cl-body {
+        flex: 1; overflow-y: auto; cursor: default;
+        font-size: 12px; line-height: 1.35;
+        padding-right: 4px;
+        scrollbar-width: thin; scrollbar-color: #444a66 transparent;
+      }
+      #combat-log .cl-body::-webkit-scrollbar { width: 6px; }
+      #combat-log .cl-body::-webkit-scrollbar-thumb { background: #444a66; border-radius: 3px; }
+      .cl-entry { margin-bottom: 1px; }
+      .cl-entry.cast { color: #fff; }
+      .cl-entry.attack { color: #ff8a73; }
+      .cl-entry.heal { color: #f4a8c8; }
+      .cl-entry.buff { color: #f1c40f; }
+      .cl-entry.summon { color: #f39c12; }
+      .cl-entry.death { color: #e74c3c; font-weight: bold; }
+      .cl-entry.info { color: #9ec8ff; font-style: italic; }
+
+      /* ----- Infobulle combattant (au survol) ----- */
+      #fighter-info {
+        position: fixed; left: 16px; top: 16px;
+        width: 220px;
+        background: rgba(12, 12, 20, 0.88);
+        border: 2px solid #444a66; border-radius: 10px;
+        padding: 8px 12px 10px;
+        font-family: "Trebuchet MS", sans-serif;
+        color: #fff; z-index: 6;
+        cursor: move; user-select: none; touch-action: none;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.55);
+        pointer-events: auto;
+      }
+      #fighter-info.dragging { opacity: 0.9; box-shadow: 0 12px 32px rgba(0,0,0,0.8), 0 0 0 2px #f1c40f; }
+      #fighter-info.empty .fi-body { color: #777; font-style: italic; }
+      #fighter-info .fi-title {
+        font-size: 11px; color: #aaa; letter-spacing: 1px;
+        border-bottom: 1px solid #444a66; padding-bottom: 3px; margin-bottom: 4px;
+      }
+      #fighter-info .fi-name { font-size: 15px; font-weight: bold; color: #f1c40f; margin-bottom: 4px; }
+      #fighter-info .fi-team { font-size: 11px; color: #aaa; margin-bottom: 6px; }
+      #fighter-info .fi-team.enemy { color: #ff8a73; }
+      #fighter-info .fi-team.player { color: #6ee7b6; }
+      #fighter-info .fi-row { display: flex; justify-content: space-between; font-size: 12px; margin: 2px 0; }
+      #fighter-info .fi-row .lbl { color: #bbb; }
+      #fighter-info .fi-row .val { font-weight: bold; }
+      #fighter-info .fi-row .val.hp { color: #e74c3c; }
+      #fighter-info .fi-row .val.pa { color: #5dade2; }
+      #fighter-info .fi-row .val.pm { color: #6ee7b6; }
+      #fighter-info .fi-buffs { font-size: 11px; color: #d6a3f0; margin-top: 4px; font-style: italic; line-height: 1.3; }
     `;
     document.head.appendChild(css);
 
@@ -297,21 +414,67 @@ export class Hud {
     this.btnMove.addEventListener('click', () => this.callbacks.onMove && this.callbacks.onMove());
     this.btnEnd.addEventListener('click', () => this.callbacks.onEnd && this.callbacks.onEnd());
 
+    this.buildTurnOrder();
+    this.buildCombatLog();
+    this.buildFighterInfo();
     this.buildRotationButtons();
-    this.makePanelDraggable();
-    this.restorePanelPosition();
+    this.makeDraggable(this.panel, 'dofus3d.hudPos');
+    this.makeDraggable(this.turnOrderEl, 'dofus3d.turnPos');
+    this.makeDraggable(this.combatLogEl, 'dofus3d.logPos', {
+      ignoreSelector: '.cl-body',
+    });
+    this.makeDraggable(this.fighterInfoEl, 'dofus3d.infoPos');
   }
 
-  // Permet de saisir le HUD sur une zone non-bouton et de le glisser
-  // ou on veut. La position est sauvegardee dans localStorage.
-  makePanelDraggable() {
-    const panel = this.panel;
+  buildTurnOrder() {
+    const el = document.createElement('div');
+    el.id = 'turn-order';
+    el.innerHTML = `
+      <div class="to-title">TOUR</div>
+      <div class="to-list" id="to-list"></div>
+    `;
+    document.body.appendChild(el);
+    this.turnOrderEl = el;
+    this.turnOrderListEl = el.querySelector('.to-list');
+  }
+
+  buildCombatLog() {
+    const el = document.createElement('div');
+    el.id = 'combat-log';
+    el.innerHTML = `
+      <div class="cl-title">JOURNAL</div>
+      <div class="cl-body" id="cl-body"></div>
+    `;
+    document.body.appendChild(el);
+    this.combatLogEl = el;
+    this.combatLogBodyEl = el.querySelector('#cl-body');
+    this._logEntries = [];
+  }
+
+  buildFighterInfo() {
+    const el = document.createElement('div');
+    el.id = 'fighter-info';
+    el.classList.add('empty');
+    el.innerHTML = `
+      <div class="fi-title">INFO</div>
+      <div class="fi-body">Survole un combattant.</div>
+    `;
+    document.body.appendChild(el);
+    this.fighterInfoEl = el;
+  }
+
+  // Generic drag helper for any panel. Drag starts on any pointerdown
+  // inside the panel except on a button, an input, or an explicitly
+  // ignored selector (used by the combat log to keep its body scrollable).
+  makeDraggable(panel, storageKey, opts = {}) {
+    if (!panel) return;
+    const ignoreSelector = opts.ignoreSelector || null;
     let drag = null;
 
     const onDown = (e) => {
-      // Si on commence sur un bouton (ou un de ses enfants), on laisse
-      // le bouton recevoir le click normalement.
       if (e.target.closest('button')) return;
+      if (e.target.closest('input,textarea,select')) return;
+      if (ignoreSelector && e.target.closest(ignoreSelector)) return;
       e.preventDefault();
       const rect = panel.getBoundingClientRect();
       drag = {
@@ -328,13 +491,10 @@ export class Hud {
       let x = e.clientX - drag.offsetX;
       let y = e.clientY - drag.offsetY;
       const w = panel.offsetWidth;
-      const h = panel.offsetHeight;
-      // Clamp : on laisse depasser legerement mais on garde toujours
-      // le coeur du HUD dans le viewport (sinon plus moyen de le ratraper).
-      const margin = 80;
+      const margin = 60;
       x = Math.max(margin - w, Math.min(window.innerWidth - margin, x));
       y = Math.max(0, Math.min(window.innerHeight - 30, y));
-      this.setPanelPos(x, y);
+      this.setPanelPos(panel, x, y);
     };
 
     const onEnd = (e) => {
@@ -343,9 +503,7 @@ export class Hud {
       panel.classList.remove('dragging');
       const rect = panel.getBoundingClientRect();
       try {
-        localStorage.setItem('dofus3d.hudPos', JSON.stringify({
-          x: rect.left, y: rect.top,
-        }));
+        localStorage.setItem(storageKey, JSON.stringify({ x: rect.left, y: rect.top }));
       } catch (_) {}
     };
 
@@ -354,33 +512,32 @@ export class Hud {
     document.addEventListener('pointerup', onEnd);
     document.addEventListener('pointercancel', onEnd);
     window.addEventListener('blur', () => { drag = null; panel.classList.remove('dragging'); });
+
+    this.restorePanelPosition(panel, storageKey);
   }
 
-  setPanelPos(x, y) {
-    const p = this.panel;
-    p.style.left = x + 'px';
-    p.style.top = y + 'px';
-    p.style.bottom = 'auto';
-    p.style.transform = 'none';
+  setPanelPos(panel, x, y) {
+    panel.style.left = x + 'px';
+    panel.style.top = y + 'px';
+    panel.style.bottom = 'auto';
+    panel.style.right = 'auto';
+    panel.style.transform = 'none';
   }
 
-  restorePanelPosition() {
+  restorePanelPosition(panel, storageKey) {
     let raw;
-    try { raw = localStorage.getItem('dofus3d.hudPos'); } catch (_) { return; }
+    try { raw = localStorage.getItem(storageKey); } catch (_) { return; }
     if (!raw) return;
     let pos;
     try { pos = JSON.parse(raw); } catch (_) { return; }
     if (typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
-    // On differe l application au prochain frame parce que le panel doit
-    // d abord etre mesure (apres le 1er update -> rebuildSpellBar).
     const apply = () => {
-      const w = this.panel.offsetWidth;
-      const h = this.panel.offsetHeight;
-      if (w === 0) return; // pas encore mesure, on reessaye au prochain frame
-      const margin = 80;
+      const w = panel.offsetWidth;
+      if (w === 0) return;
+      const margin = 60;
       const x = Math.max(margin - w, Math.min(window.innerWidth - margin, pos.x));
       const y = Math.max(0, Math.min(window.innerHeight - 30, pos.y));
-      this.setPanelPos(x, y);
+      this.setPanelPos(panel, x, y);
     };
     apply();
     requestAnimationFrame(apply);
@@ -559,6 +716,10 @@ export class Hud {
       const cdEl = slot.btn.querySelector('.cd-overlay');
       if (cdEl) cdEl.textContent = cd > 0 ? String(cd) : '';
     }
+
+    // Si l infobulle pointe vers le combattant actif, on rafraichit
+    // ses stats en direct (PA/PM debites au fil des actions).
+    if (this._infoFighter === fighter) this.renderFighterInfo();
   }
 
   showEnd(winner, onReplay) {
@@ -584,5 +745,110 @@ export class Hud {
     this.flashEl.classList.add('show');
     clearTimeout(this._flashTimer);
     this._flashTimer = setTimeout(() => this.flashEl.classList.remove('show'), durationMs);
+  }
+
+  // ----- Ordre de jeu -----
+  setTurnOrder(order, current) {
+    if (!this.turnOrderListEl) return;
+    this.turnOrderListEl.innerHTML = '';
+    for (const f of order) {
+      const slot = document.createElement('div');
+      slot.className = 'to-slot';
+      if (!f.alive) slot.classList.add('dead');
+      if (f === current) slot.classList.add('active');
+      const color = this.fighterColor(f);
+      const teamColor = f.team === 'player' ? '#27ae60' : '#c0392b';
+      const ratio = Math.max(0, Math.min(1, f.hp / f.maxHp));
+      const shortName = f.name.replace(/\s*\(Invoc\.\)\s*/, '');
+      slot.innerHTML = `
+        <div class="to-team-dot" style="background: ${teamColor};"></div>
+        <div class="to-letter" style="color: ${color};">${shortName.charAt(0).toUpperCase()}</div>
+        <div class="to-name">${shortName}</div>
+        <div class="to-hp"><div class="to-hp-fill" style="width: ${ratio * 100}%;"></div></div>
+      `;
+      slot.title = `${f.name} - ${f.hp}/${f.maxHp} PV`;
+      this.turnOrderListEl.appendChild(slot);
+    }
+  }
+
+  fighterColor(f) {
+    const map = {
+      iop: '#e67e22',
+      osamodas: '#a569bd',
+      bouftou: '#d35400',
+      bouftouRoyal: '#c0392b',
+      craqueleur: '#a0522d',
+      crapaud: '#5cb85c',
+      crapaudChef: '#2e7d32',
+    };
+    return map[f.classId] || '#cccccc';
+  }
+
+  // ----- Journal de combat -----
+  log(text, kind = 'cast') {
+    if (!this.combatLogBodyEl) return;
+    const entry = document.createElement('div');
+    entry.className = `cl-entry ${kind}`;
+    entry.textContent = text;
+    this.combatLogBodyEl.appendChild(entry);
+    this._logEntries.push(entry);
+    while (this._logEntries.length > 100) {
+      const old = this._logEntries.shift();
+      old.remove();
+    }
+    this.combatLogBodyEl.scrollTop = this.combatLogBodyEl.scrollHeight;
+  }
+
+  clearLog() {
+    if (!this.combatLogBodyEl) return;
+    this.combatLogBodyEl.innerHTML = '';
+    this._logEntries = [];
+  }
+
+  // ----- Infobulle d un combattant survole -----
+  showFighterInfo(fighter) {
+    if (!this.fighterInfoEl) return;
+    this._infoFighter = fighter || null;
+    this.renderFighterInfo();
+  }
+
+  renderFighterInfo() {
+    if (!this.fighterInfoEl) return;
+    const f = this._infoFighter;
+    if (!f || !f.alive) {
+      this.fighterInfoEl.classList.add('empty');
+      this.fighterInfoEl.innerHTML = `
+        <div class="fi-title">INFO</div>
+        <div class="fi-body">Survole un combattant.</div>
+      `;
+      return;
+    }
+    this.fighterInfoEl.classList.remove('empty');
+    const teamLabel = f.team === 'player' ? 'Allie' : 'Ennemi';
+    const teamClass = f.team === 'player' ? 'player' : 'enemy';
+    let buffsHtml = '';
+    if (f.buffs && f.buffs.length) {
+      const parts = f.buffs.map(b => {
+        const bits = [];
+        if (b.damageMult) bits.push(`+${Math.round(b.damageMult * 100)}% dgt`);
+        if (b.bonusPa) bits.push(`+${b.bonusPa} PA`);
+        if (b.bonusPm) bits.push(`+${b.bonusPm} PM`);
+        if (b.shield) bits.push(`-${Math.round(b.shield * 100)}% reçus`);
+        if (b.dot) bits.push(`Poison ${b.dot.min}-${b.dot.max}`);
+        if (!bits.length) return '';
+        const tag = b.permanent ? '(carte)' : `(${Math.max(0, b.duration - 1)}t)`;
+        return bits.join(', ') + ' ' + tag;
+      }).filter(Boolean);
+      if (parts.length) buffsHtml = `<div class="fi-buffs">${parts.join(' / ')}</div>`;
+    }
+    this.fighterInfoEl.innerHTML = `
+      <div class="fi-title">INFO</div>
+      <div class="fi-name">${f.name}</div>
+      <div class="fi-team ${teamClass}">${teamLabel}</div>
+      <div class="fi-row"><span class="lbl">PV</span><span class="val hp">${f.hp} / ${f.maxHp}</span></div>
+      <div class="fi-row"><span class="lbl">PA</span><span class="val pa">${f.pa} / ${f.maxPa}</span></div>
+      <div class="fi-row"><span class="lbl">PM</span><span class="val pm">${f.pm} / ${f.maxPm}</span></div>
+      ${buffsHtml}
+    `;
   }
 }

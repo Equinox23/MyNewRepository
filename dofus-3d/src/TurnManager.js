@@ -32,9 +32,20 @@ export class TurnManager {
     return null;
   }
 
-  // Insertion dynamique d un combattant (invocation) dans l ordre
-  // d initiative. Ajuste l index courant si on insere avant.
-  addFighter(fighter) {
+  // Insertion dynamique d un combattant (invocation) dans l ordre.
+  // Si afterFighter est fourni, on l insere juste apres lui (utile pour
+  // que l invocation joue immediatement apres son invocateur). Sinon,
+  // on l insere selon son initiative. Ajuste l index courant.
+  addFighter(fighter, afterFighter = null) {
+    if (afterFighter) {
+      const i = this.order.indexOf(afterFighter);
+      if (i >= 0) {
+        const insertAt = i + 1;
+        this.order.splice(insertAt, 0, fighter);
+        if (insertAt <= this.index) this.index++;
+        return;
+      }
+    }
     let idx = 0;
     while (idx < this.order.length && this.order[idx].initiative > fighter.initiative) {
       idx++;

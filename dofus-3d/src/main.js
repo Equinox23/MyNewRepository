@@ -142,25 +142,31 @@ canvas.addEventListener('pointercancel', (e) => {
   pinch = null;
 });
 
-canvas.addEventListener('pointerleave', () => picker.setHover(null));
+canvas.addEventListener('pointerleave', () => {
+  picker.setHover(null);
+  hud.showFighterInfo(null);
+});
 
 function handleHover(x, y) {
   if (game.busy) {
     picker.setHover(null);
     canvas.style.cursor = POINTER_CURSOR;
+    hud.showFighterInfo(null);
     return;
   }
   const hit = picker.pick(x, y);
   if (!hit) {
     picker.setHover(null);
     canvas.style.cursor = POINTER_CURSOR;
+    hud.showFighterInfo(null);
     return;
   }
   picker.setHover(hit.c, hit.r, hit.isWall);
-  // Curseur en forme d epee si on survole une case occupee par un ennemi.
-  const enemyHere = game.fighters.some(f =>
-    f.alive && f.team !== 'player' && f.c === hit.c && f.r === hit.r
+  const fighterHere = game.fighters.find(f =>
+    f.alive && f.c === hit.c && f.r === hit.r
   );
+  hud.showFighterInfo(fighterHere || null);
+  const enemyHere = !!(fighterHere && fighterHere.team !== 'player');
   canvas.style.cursor = enemyHere ? SWORD_CURSOR : POINTER_CURSOR;
 }
 

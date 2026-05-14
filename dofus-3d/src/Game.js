@@ -79,6 +79,9 @@ export class Game {
 
     this.turn = new TurnManager(this.fighters);
     this.refreshHpBars();
+    this.hud.clearLog && this.hud.clearLog();
+    this.hud.log && this.hud.log('Le combat commence !', 'info');
+    this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
     this.startTurn();
   }
 
@@ -136,11 +139,14 @@ export class Game {
         fontSize: 26, yStart: 1.6, yRise: 0.9, duration: 900, scaleX: 0.9, scaleY: 0.45,
       });
       cur.character.hpBar.setHp(cur.hp, cur.maxHp);
+      this.hud.log && this.hud.log(`${cur.name} subit ${dotTotal} degats de poison`, 'attack');
     }
     if (!cur.alive) {
       // Le combattant meurt du poison : on declenche son anim et on
       // avance au combattant suivant.
       if (cur.character) cur.character.die();
+      this.hud.log && this.hud.log(`${cur.name} succombe au poison !`, 'death');
+      this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
       this.checkEnd();
       if (this.ended) return;
       this.turn.advance();
@@ -155,6 +161,8 @@ export class Game {
     this.selectedSpellId = null;
     this.hud.update(cur, this.mode, null);
     this.hud.flash(`Tour ${this.turn.round}  -  ${cur.name}`, 1200);
+    this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, cur);
+    this.hud.log && this.hud.log(`Tour de ${cur.name}`, 'info');
     this.refreshRangeOverlay();
     if (cur.def.ai) {
       this.busy = true;
@@ -343,6 +351,7 @@ export class Game {
         const lunge = caster.character.lungeTo(firstCell.c, firstCell.r, 320);
         await new Promise(r => setTimeout(r, 180));
         const dying = [];
+        let touched = 0;
         for (const cell of cells) {
           const tf = this.fighters.find(f => f.alive && f.c === cell.c && f.r === cell.r);
           if (!tf) continue;
@@ -352,10 +361,19 @@ export class Game {
           const actual = tf.takeDamage(dmg);
           tf.character.popDamage(actual);
           tf.character.hpBar.setHp(tf.hp, tf.maxHp);
+          this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} subit ${actual} degats`, 'attack');
           if (!tf.alive) dying.push(tf);
+          touched++;
+        }
+        if (touched === 0) {
+          this.hud.log && this.hud.log(`${caster.name} lance ${spell.name} (sans cible)`, 'cast');
         }
         await lunge;
-        for (const d of dying) await d.character.die();
+        for (const d of dying) {
+          this.hud.log && this.hud.log(`${d.name} est vaincu !`, 'death');
+          await d.character.die();
+        }
+        if (dying.length) this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
         return;
       }
       case 'heal': {
@@ -366,6 +384,7 @@ export class Game {
         tf.character.popHeal(healed);
         tf.character.hpBar.setHp(tf.hp, tf.maxHp);
         tf.character.flashGlow(0xe91e63, 700);
+        this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} regagne ${healed} PV`, 'heal');
         await new Promise(r => setTimeout(r, 500));
         return;
       }
@@ -377,6 +396,7 @@ export class Game {
         tf.character.popHeal(healed);
         tf.character.hpBar.setHp(tf.hp, tf.maxHp);
         tf.character.flashGlow(0xe91e63, 700);
+        this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} regagne ${healed} PV`, 'heal');
         await new Promise(r => setTimeout(r, 500));
         return;
       }
@@ -384,6 +404,7 @@ export class Game {
         await caster.character.teleportTo(target.c, target.r);
         caster.c = target.c;
         caster.r = target.r;
+        this.hud.log && this.hud.log(`${caster.name} se teleporte (${spell.name})`, 'cast');
         return;
       }
       case 'buff': {
@@ -401,6 +422,7 @@ export class Game {
         if (effect.bonusPm) tf.pm += effect.bonusPm;
         tf.character.flashGlow(parseInt(spell.color.slice(1), 16), 900);
         this.hud.flash(`${spell.name} appliquee a ${tf.name}`, 1200);
+        this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} sur ${tf.name}`, 'buff');
         if (this.turn.current() === tf) this.hud.update(tf, this.mode, this.selectedSpellId);
         await new Promise(r => setTimeout(r, 400));
         return;
@@ -416,6 +438,7 @@ export class Game {
             fontSize: 22, dx: -0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42,
           });
           tf.character.flashGlow(0x7a6b5a, 500);
+          this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} perd ${lost} PM`, 'buff');
         }
         if (this.turn.current() === tf) this.hud.update(tf, this.mode, this.selectedSpellId);
         await new Promise(r => setTimeout(r, 400));
@@ -432,6 +455,7 @@ export class Game {
             fontSize: 22, dx: 0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42,
           });
           tf.character.flashGlow(0x2980b9, 500);
+          this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} perd ${lost} PA`, 'buff');
         }
         if (this.turn.current() === tf) this.hud.update(tf, this.mode, this.selectedSpellId);
         await new Promise(r => setTimeout(r, 400));
@@ -448,6 +472,7 @@ export class Game {
           fontSize: 18, yStart: 1.5, yRise: 0.7, scaleX: 1.1, scaleY: 0.4,
         });
         tf.character.flashGlow(0x9b59b6, 700);
+        this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} empoisonne`, 'buff');
         await new Promise(r => setTimeout(r, 400));
         return;
       }
@@ -465,7 +490,8 @@ export class Game {
           )[0];
         if (closestEnemy) summon.character.faceToward(closestEnemy.c, closestEnemy.r);
         this.fighters.push(summon);
-        this.turn.addFighter(summon);
+        // L invocation joue juste apres son invocateur.
+        this.turn.addFighter(summon, caster);
         summon.character.group.scale.setScalar(0.01);
         await new Promise(resolve => {
           const start = performance.now();
@@ -479,6 +505,8 @@ export class Game {
           requestAnimationFrame(tick);
         });
         caster.character.flashGlow(parseInt(spell.color.slice(1), 16), 900);
+        this.hud.log && this.hud.log(`${caster.name} invoque ${summon.name}`, 'summon');
+        this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
         return;
       }
     }
