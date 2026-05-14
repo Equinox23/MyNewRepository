@@ -26,7 +26,17 @@ export class Hud {
         pointer-events: auto;
         box-shadow: 0 8px 24px rgba(0,0,0,0.6);
         max-width: 96vw;
+        cursor: move;
+        user-select: none; -webkit-user-select: none;
+        touch-action: none;
       }
+      #hud-panel.dragging {
+        cursor: grabbing;
+        opacity: 0.9;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.8), 0 0 0 2px #f1c40f;
+      }
+      #hud-panel button { cursor: pointer; }
+      #hud-panel.dragging button { pointer-events: none; }
       #hud-panel .stats { min-width: 160px; }
       #hud-panel .name { font-size: 16px; color: #f1c40f; font-weight: bold; margin-bottom: 4px; }
       #hud-panel .bars { font-size: 12px; line-height: 1.4; }
@@ -158,6 +168,7 @@ export class Hud {
       </div>
     `;
     document.body.appendChild(panel);
+    this.panel = panel;
 
     const flash = document.createElement('div');
     flash.id = 'flash';
@@ -177,6 +188,93 @@ export class Hud {
     this.btnEnd.addEventListener('click', () => this.callbacks.onEnd && this.callbacks.onEnd());
 
     this.buildRotationButtons();
+    this.makePanelDraggable();
+    this.restorePanelPosition();
+  }
+
+  // Permet de saisir le HUD sur une zone non-bouton et de le glisser
+  // ou on veut. La position est sauvegardee dans localStorage.
+  makePanelDraggable() {
+    const panel = this.panel;
+    let drag = null;
+
+    const onDown = (e) => {
+      // Si on commence sur un bouton (ou un de ses enfants), on laisse
+      // le bouton recevoir le click normalement.
+      if (e.target.closest('button')) return;
+      e.preventDefault();
+      const rect = panel.getBoundingClientRect();
+      drag = {
+        pointerId: e.pointerId,
+        offsetX: e.clientX - rect.left,
+        offsetY: e.clientY - rect.top,
+      };
+      panel.classList.add('dragging');
+    };
+
+    const onMove = (e) => {
+      if (!drag || drag.pointerId !== e.pointerId) return;
+      e.preventDefault();
+      let x = e.clientX - drag.offsetX;
+      let y = e.clientY - drag.offsetY;
+      const w = panel.offsetWidth;
+      const h = panel.offsetHeight;
+      // Clamp : on laisse depasser legerement mais on garde toujours
+      // le coeur du HUD dans le viewport (sinon plus moyen de le ratraper).
+      const margin = 80;
+      x = Math.max(margin - w, Math.min(window.innerWidth - margin, x));
+      y = Math.max(0, Math.min(window.innerHeight - 30, y));
+      this.setPanelPos(x, y);
+    };
+
+    const onEnd = (e) => {
+      if (!drag || drag.pointerId !== e.pointerId) return;
+      drag = null;
+      panel.classList.remove('dragging');
+      const rect = panel.getBoundingClientRect();
+      try {
+        localStorage.setItem('dofus3d.hudPos', JSON.stringify({
+          x: rect.left, y: rect.top,
+        }));
+      } catch (_) {}
+    };
+
+    panel.addEventListener('pointerdown', onDown);
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onEnd);
+    document.addEventListener('pointercancel', onEnd);
+    window.addEventListener('blur', () => { drag = null; panel.classList.remove('dragging'); });
+  }
+
+  setPanelPos(x, y) {
+    const p = this.panel;
+    p.style.left = x + 'px';
+    p.style.top = y + 'px';
+    p.style.bottom = 'auto';
+    p.style.transform = 'none';
+  }
+
+  restorePanelPosition() {
+    let raw;
+    try { raw = localStorage.getItem('dofus3d.hudPos'); } catch (_) { return; }
+    if (!raw) return;
+    let pos;
+    try { pos = JSON.parse(raw); } catch (_) { return; }
+    if (typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
+    // On differe l application au prochain frame parce que le panel doit
+    // d abord etre mesure (apres le 1er update -> rebuildSpellBar).
+    const apply = () => {
+      const w = this.panel.offsetWidth;
+      const h = this.panel.offsetHeight;
+      if (w === 0) return; // pas encore mesure, on reessaye au prochain frame
+      const margin = 80;
+      const x = Math.max(margin - w, Math.min(window.innerWidth - margin, pos.x));
+      const y = Math.max(0, Math.min(window.innerHeight - 30, pos.y));
+      this.setPanelPos(x, y);
+    };
+    apply();
+    requestAnimationFrame(apply);
+    setTimeout(apply, 50);
   }
 
   buildRotationButtons() {
