@@ -39,23 +39,32 @@ const FOREST_GRID = (() => {
   return grid;
 })();
 
+// Riviere elargie a 5 cases qui serpente du nord-ouest au sud-est, avec
+// une chute d eau a l extremite nord et un pont au milieu.
 const CASCADE_GRID = gridFromAscii([
-  '....~~~........', // 0
-  '....~~~........', // 1
-  '....~~~........', // 2
-  '.....~~~.......', // 3
-  '......~~~..#...', // 4
-  '......~~~......', // 5
-  '.......~~~.....', // 6
-  '.......===.....', // 7  pont
-  '.......~~~.....', // 8
-  '.......~~~.....', // 9
-  '#.......~~~....', // 10
-  '........~~~....', // 11
-  '.........~~~...', // 12
-  '.........~~~..#', // 13
-  '.........~~~...', // 14
+  '...~~~~~.......', // 0  cols 3-7
+  '...~~~~~.......', // 1
+  '...~~~~~.......', // 2
+  '....~~~~~......', // 3  cols 4-8
+  '.....~~~~~.#...', // 4  cols 5-9 + rocher col 11
+  '.....~~~~~.....', // 5
+  '......~~~~~....', // 6  cols 6-10
+  '......=====....', // 7  pont elargi cols 6-10
+  '......~~~~~....', // 8
+  '......~~~~~....', // 9
+  '#......~~~~~...', // 10 cols 7-11 + rocher col 0
+  '.......~~~~~...', // 11
+  '........~~~~~..', // 12 cols 8-12
+  '........~~~~~.#', // 13 + rocher col 14
+  '........~~~~~..', // 14
 ]);
+
+// Cases qui accueillent un nenuphar (decoratif, sur l eau).
+const CASCADE_LILY_PADS = [
+  { c: 4, r: 1 },
+  { c: 7, r: 5 },
+  { c: 10, r: 11 },
+];
 
 export const MAPS = {
   foret: {
@@ -73,6 +82,8 @@ export const MAPS = {
     hasBackgroundForest: false,
     groundColor: 0x2a3a16,
     bgColor: 0xa4c4cc,
+    waterfall: { c: 5, r: 0 }, // chute d eau a l extremite nord (cols 3-7)
+    lilyPads: CASCADE_LILY_PADS,
   },
 };
 
@@ -119,6 +130,8 @@ export class Map3D {
     this.buildGround(map);
     this.buildTiles(map);
     if (map.hasBackgroundForest) this.buildBackgroundForest();
+    if (map.waterfall) this.buildWaterfall(map.waterfall);
+    if (map.lilyPads) this.buildLilyPads(map.lilyPads);
   }
 
   cleanup() {
@@ -229,9 +242,14 @@ export class Map3D {
   }
 
   buildWaterTile(c, r) {
-    // Plan principal eau, dans un degrade bleu.
+    // Nuances de bleu : on choisit une couleur dans une petite palette,
+    // pseudo-aleatoirement a partir des coordonnees pour avoir un rendu
+    // stable (pas de scintillement entre frames).
+    const palette = [0x1d6f93, 0x2b8aab, 0x3aa1c2, 0x4cb3d1, 0x217fa0];
+    const hash = ((c * 73) ^ (r * 137)) >>> 0;
+    const color = palette[hash % palette.length];
     const waterMat = new THREE.MeshStandardMaterial({
-      color: 0x2b8aab,
+      color,
       transparent: true, opacity: 0.85,
       roughness: 0.2, metalness: 0.45,
     });
@@ -243,10 +261,117 @@ export class Map3D {
     const foamMat = new THREE.MeshBasicMaterial({ color: 0xeaf3f7, transparent: true, opacity: 0.55 });
     const foam = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.06), foamMat);
     foam.rotation.x = -Math.PI / 2;
-    const hash = ((c * 73) ^ (r * 137)) % 1000;
     foam.position.set(c + ((hash % 7) - 3) * 0.04, -0.02, r + ((hash % 5) - 2) * 0.04);
     water.add(foam);
+    // Deuxieme reflet plus petit, orientation differente.
+    if ((hash >> 3) % 3 === 0) {
+      const foam2 = new THREE.Mesh(new THREE.PlaneGeometry(0.20, 0.05), foamMat);
+      foam2.rotation.x = -Math.PI / 2;
+      foam2.rotation.z = Math.PI / 4;
+      foam2.position.set(c + ((hash % 5) - 2) * 0.05, -0.02, r - ((hash % 4) - 2) * 0.05);
+      water.add(foam2);
+    }
     return water;
+  }
+
+  // Petite chute d eau a l extremite nord de la riviere.
+  // Position = case d arrivee (c, r) : on dresse une falaise au nord et on
+  // y plaque un drapeau d eau qui descend vers la riviere.
+  buildWaterfall(pos) {
+    const grp = new THREE.Group();
+    // Falaise rocheuse derriere la cascade : 3 blocs cubiques empiles.
+    const cliffMat = new THREE.MeshStandardMaterial({ color: 0x3d4148, roughness: 1 });
+    for (let i = -2; i <= 2; i++) {
+      const block = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.4, 0.8), cliffMat);
+      block.position.set(pos.c + i, 1.2, pos.r - 1.4);
+      block.rotation.y = (i * 0.07);
+      block.castShadow = true;
+      block.receiveShadow = true;
+      grp.add(block);
+    }
+    // Pic en arriere plan (juste pour le silhouettage).
+    const peak = new THREE.Mesh(new THREE.ConeGeometry(1.6, 3.5, 8), cliffMat);
+    peak.position.set(pos.c, 3.2, pos.r - 2.0);
+    grp.add(peak);
+
+    // Rideau d eau (vertical), legerement courbe par 3 plans superposes.
+    const waterMat = new THREE.MeshStandardMaterial({
+      color: 0x66c0e0, transparent: true, opacity: 0.78,
+      roughness: 0.1, metalness: 0.4, side: THREE.DoubleSide,
+    });
+    const fallWidth = 4.6;
+    const fallHeight = 2.6;
+    for (let i = 0; i < 3; i++) {
+      const w = fallWidth - i * 0.4;
+      const h = fallHeight - i * 0.2;
+      const sheet = new THREE.Mesh(new THREE.PlaneGeometry(w, h), waterMat);
+      sheet.position.set(pos.c, h / 2, pos.r - 1.0 + i * 0.05);
+      grp.add(sheet);
+    }
+
+    // Pied de chute : flaque d ecume au sol (devant la chute).
+    const foamMat = new THREE.MeshStandardMaterial({
+      color: 0xeaf6fb, transparent: true, opacity: 0.85, roughness: 0.3,
+    });
+    const foamGeom = new THREE.CircleGeometry(2.2, 24);
+    const foam = new THREE.Mesh(foamGeom, foamMat);
+    foam.rotation.x = -Math.PI / 2;
+    foam.position.set(pos.c, -0.018, pos.r);
+    grp.add(foam);
+    // Petits jets / projections autour du pied de chute.
+    const splashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.9 });
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const droplet = new THREE.Mesh(new THREE.SphereGeometry(0.08, 8, 6), splashMat);
+      droplet.position.set(
+        pos.c + Math.cos(a) * 1.4,
+        0.20 + Math.sin(i) * 0.10,
+        pos.r + Math.sin(a) * 1.2,
+      );
+      grp.add(droplet);
+    }
+
+    this.scene.add(grp);
+    this.spawned.push(grp);
+  }
+
+  // Nenuphars : disque vert flottant + petite fleur jaune.
+  buildLilyPads(positions) {
+    const padMat = new THREE.MeshStandardMaterial({ color: 0x3b8a3a, roughness: 0.9 });
+    const padMat2 = new THREE.MeshStandardMaterial({ color: 0x2c6f2a, roughness: 0.9 });
+    const flowerMat = new THREE.MeshStandardMaterial({ color: 0xfff4c8, roughness: 0.85 });
+    const heartMat = new THREE.MeshStandardMaterial({ color: 0xf6c761, roughness: 0.7 });
+    for (const p of positions) {
+      // Verifie que c est bien une case d eau ; sinon, on saute.
+      if (this.mapData[p.r][p.c] !== 2) continue;
+      const grp = new THREE.Group();
+      // Disque principal : un cylindre tres aplati.
+      const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.04, 24), padMat);
+      pad.castShadow = true;
+      pad.receiveShadow = true;
+      grp.add(pad);
+      // Petite encoche : un autre disque plus sombre decale.
+      const pad2 = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.045, 18), padMat2);
+      pad2.position.set(0.15, 0.001, -0.10);
+      grp.add(pad2);
+      // Fleur : un noyau jaune avec quelques petales.
+      const heart = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), heartMat);
+      heart.position.set(-0.10, 0.10, 0.05);
+      grp.add(heart);
+      for (let i = 0; i < 6; i++) {
+        const petalGeom = new THREE.SphereGeometry(0.06, 8, 6);
+        const petal = new THREE.Mesh(petalGeom, flowerMat);
+        const a = (i / 6) * Math.PI * 2;
+        petal.position.set(-0.10 + Math.cos(a) * 0.09, 0.09, 0.05 + Math.sin(a) * 0.09);
+        petal.scale.set(1, 0.7, 1);
+        grp.add(petal);
+      }
+      // Place le nenuphar legerement au-dessus de l eau.
+      grp.position.set(p.c, 0.005, p.r);
+      // Petite rotation aleatoire pour varier l aspect.
+      grp.rotation.y = ((p.c * 17 + p.r * 31) % 360) * Math.PI / 180;
+      this.tileGroup.add(grp);
+    }
   }
 
   buildBackgroundForest() {

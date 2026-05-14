@@ -168,9 +168,10 @@ export const SPELLS = {
     id: 'epeeDivine', name: 'Epee Divine', short: 'ED', icon: ICON_LINE,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 5, range: { min: 1, max: 1 }, needsLOS: false,
-    target: 'tile', area: { type: 'line', length: 5, piercing: true },
+    // length: -1 = jusqu au bord de la carte. piercing = traverse murs et combattants.
+    target: 'tile', area: { type: 'line', length: -1, piercing: true },
     effects: [{ type: 'damage', min: 18, max: 24 }],
-    desc: 'Lance sur la case devant soi : la lame divine fonce ensuite tout droit et traverse murs et ennemis sur 5 cases.',
+    desc: 'Lance sur la case devant soi : la lame divine fonce ensuite tout droit jusqu au bord de la carte et traverse murs et ennemis.',
   },
   concentration: {
     id: 'concentration', name: 'Concentration', short: 'CO', icon: ICON_FIST,
@@ -240,8 +241,8 @@ export const SPELLS = {
     category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
     apCost: 3, range: { min: 1, max: 4 }, needsLOS: false,
     target: 'ally', area: { type: 'single' },
-    effects: [{ type: 'heal', min: 14, max: 20 }],
-    desc: 'Soigne un Bouftou allie de la meute.',
+    effects: [{ type: 'heal_percent', percent: 0.30 }],
+    desc: 'Soigne 30% des PV max d un Bouftou allie de la meute.',
   },
 
   // ---------- CRAQUELEUR (invocation Osamodas) ----------
@@ -268,8 +269,11 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'debuff_pa', value: 1 }],
-    desc: 'Crache une mixture acide. La cible perd 1 PA.',
+    effects: [
+      { type: 'damage', min: 8, max: 12 },
+      { type: 'debuff_pa', value: 1 },
+    ],
+    desc: 'Crache une mixture acide : degats + la cible perd 1 PA.',
   },
 
   // ---------- CRAPAUD CHEF ----------
@@ -299,7 +303,10 @@ export function spellEffectLines(spell) {
       case 'damage':
         lines.push(`Degats : ${eff.min}-${eff.max}`);
         if (spell.area && spell.area.type === 'line') {
-          lines.push(`(ligne de ${spell.area.length} cases)`);
+          const lenTxt = spell.area.length < 0
+            ? 'jusqu au bord de la carte'
+            : `de ${spell.area.length} cases`;
+          lines.push(`(ligne ${lenTxt})`);
         }
         if (spell.area && spell.area.type === 'cross') {
           lines.push(`(croix de ${spell.area.size})`);

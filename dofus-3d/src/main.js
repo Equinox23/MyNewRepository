@@ -5,6 +5,7 @@ import { Hud } from './Hud.js';
 import { Game, COMBATS } from './Game.js';
 import { RangeOverlay } from './RangeOverlay.js';
 import { Menu } from './Menu.js';
+import { VFX } from './VFX.js';
 
 // --- CURSEURS PERSONNALISES ---
 // Curseur de base : fleche doree style RPG (hotspot a la pointe = 3,2).
@@ -31,7 +32,8 @@ const map3d = new Map3D(scene3d.scene);
 const picker = new Picker(scene3d, map3d);
 const rangeOverlay = new RangeOverlay(scene3d.scene, MAP_SIZE);
 const hud = new Hud();
-const game = new Game({ scene3d, map3d, picker, hud, rangeOverlay });
+const vfx = new VFX(scene3d.scene);
+const game = new Game({ scene3d, map3d, picker, hud, rangeOverlay, vfx });
 
 const loader = document.getElementById('loader');
 if (loader) loader.remove();
@@ -228,6 +230,7 @@ function loop(now) {
   for (const f of game.fighters) {
     if (f.alive) f.character.update(dt, now / 1000);
   }
+  vfx.update(dt);
   scene3d.render();
   requestAnimationFrame(loop);
 }
