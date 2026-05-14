@@ -1,200 +1,90 @@
 import * as THREE from 'three';
+import { buildIop } from './models/iop.js';
+import { buildBouftou } from './models/bouftou.js';
+import { HpBar3D } from './HpBar3D.js';
 
-// Personnage low-poly procedural facon Iop : corps cylindrique, tete sphere,
-// casque demi-sphere avec liseré dore, bras, cape derriere.
-// Construit comme un Group : on deplace le group sur la grille.
+const BUILDERS = {
+  iop: buildIop,
+  bouftou: buildBouftou,
+};
+
+// Hauteur de la barre de vie au-dessus du sol (par classe).
+const HP_BAR_Y = {
+  iop: 1.55,
+  bouftou: 1.30,
+};
+
 export class Character3D {
-  constructor(scene) {
+  constructor(scene, classId, team, c, r) {
     this.scene = scene;
-    this.group = new THREE.Group();
-    this.scene.add(this.group);
-    this.build();
-    this.c = 7;
-    this.r = 7;
-    this.facing = 0; // angle radian (autour de Y)
-    this.group.position.set(this.c, 0, this.r);
+    this.classId = classId;
+    this.team = team;
+    this.c = c;
+    this.r = r;
+    this.facing = 0;
     this.idleOffset = Math.random() * Math.PI * 2;
+    this.busy = false;
+
+    const builder = BUILDERS[classId] || buildIop;
+    this.group = builder();
+    this.group.position.set(c, 0, r);
+    if (team === 'enemy') this.group.rotation.y = Math.PI; // face the player
+    scene.add(this.group);
+
+    // Anneau d equipe au sol
+    const ringColor = team === 'player' ? 0x2ecc71 : 0xe74c3c;
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: ringColor, transparent: true, opacity: 0.6, depthWrite: false,
+    });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 32), ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.06;
+    this.group.add(ring);
+    this.teamRing = ring;
+
+    // Anneau jaune (visible quand c est son tour)
+    const turnMat = new THREE.MeshBasicMaterial({
+      color: 0xf1c40f, transparent: true, opacity: 0.85, depthWrite: false,
+    });
+    const turn = new THREE.Mesh(new THREE.RingGeometry(0.45, 0.52, 32), turnMat);
+    turn.rotation.x = -Math.PI / 2;
+    turn.position.y = 0.07;
+    turn.visible = false;
+    this.group.add(turn);
+    this.turnRing = turn;
+
+    // Barre de vie au-dessus de la tete
+    this.hpBar = new HpBar3D(team);
+    this.hpBar.sprite.position.y = HP_BAR_Y[classId] || 1.4;
+    this.group.add(this.hpBar.sprite);
   }
 
-  build() {
-    // Couleurs
-    const armorColor = 0xc0392b;
-    const skinColor = 0xf4d3a5;
-    const beltColor = 0x5a3a1a;
-    const goldColor = 0xf1c40f;
-    const capeColor = 0x7c1f17;
-    const pantsColor = 0x3a2a14;
-    const bootColor = 0x1a0d05;
-
-    // Bottes
-    const bootGeom = new THREE.BoxGeometry(0.18, 0.1, 0.24);
-    const bootMat = new THREE.MeshStandardMaterial({ color: bootColor, roughness: 0.9 });
-    const lBoot = new THREE.Mesh(bootGeom, bootMat);
-    lBoot.position.set(-0.12, 0.05, 0.04);
-    lBoot.castShadow = true;
-    const rBoot = new THREE.Mesh(bootGeom, bootMat);
-    rBoot.position.set(0.12, 0.05, 0.04);
-    rBoot.castShadow = true;
-    this.group.add(lBoot, rBoot);
-
-    // Pantalon (deux jambes en cylindres tres courts)
-    const legGeom = new THREE.CylinderGeometry(0.09, 0.09, 0.22, 10);
-    const legMat = new THREE.MeshStandardMaterial({ color: pantsColor, roughness: 0.8 });
-    const lLeg = new THREE.Mesh(legGeom, legMat);
-    lLeg.position.set(-0.12, 0.21, 0);
-    lLeg.castShadow = true;
-    const rLeg = new THREE.Mesh(legGeom, legMat);
-    rLeg.position.set(0.12, 0.21, 0);
-    rLeg.castShadow = true;
-    this.group.add(lLeg, rLeg);
-
-    // Torse (cylindre tronconique : large epaules, taille fine)
-    const torsoGeom = new THREE.CylinderGeometry(0.30, 0.22, 0.42, 14);
-    const torsoMat = new THREE.MeshStandardMaterial({ color: armorColor, roughness: 0.55 });
-    const torso = new THREE.Mesh(torsoGeom, torsoMat);
-    torso.position.y = 0.55;
-    torso.castShadow = true;
-    this.group.add(torso);
-
-    // Ceinture doree
-    const beltGeom = new THREE.CylinderGeometry(0.28, 0.28, 0.06, 14);
-    const beltMat = new THREE.MeshStandardMaterial({ color: beltColor, roughness: 0.8 });
-    const belt = new THREE.Mesh(beltGeom, beltMat);
-    belt.position.y = 0.36;
-    this.group.add(belt);
-    const buckleGeom = new THREE.BoxGeometry(0.12, 0.08, 0.04);
-    const buckleMat = new THREE.MeshStandardMaterial({ color: goldColor, roughness: 0.3, metalness: 0.6 });
-    const buckle = new THREE.Mesh(buckleGeom, buckleMat);
-    buckle.position.set(0, 0.36, 0.30);
-    this.group.add(buckle);
-
-    // Insigne / etoile doree sur le torse
-    const starGeom = new THREE.ConeGeometry(0.10, 0.04, 5);
-    const starMat = new THREE.MeshStandardMaterial({ color: goldColor, roughness: 0.4, metalness: 0.5 });
-    const star = new THREE.Mesh(starGeom, starMat);
-    star.position.set(0, 0.58, 0.28);
-    star.rotation.x = Math.PI / 2;
-    star.rotation.z = Math.PI;
-    this.group.add(star);
-
-    // Bras
-    const armGeom = new THREE.CylinderGeometry(0.08, 0.08, 0.40, 10);
-    const armMat = new THREE.MeshStandardMaterial({ color: armorColor, roughness: 0.55 });
-    const lArm = new THREE.Mesh(armGeom, armMat);
-    lArm.position.set(-0.34, 0.55, 0);
-    lArm.castShadow = true;
-    const rArm = new THREE.Mesh(armGeom, armMat);
-    rArm.position.set(0.34, 0.55, 0);
-    rArm.castShadow = true;
-    this.group.add(lArm, rArm);
-
-    // Mains
-    const handGeom = new THREE.SphereGeometry(0.09, 10, 8);
-    const handMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.7 });
-    const lHand = new THREE.Mesh(handGeom, handMat);
-    lHand.position.set(-0.34, 0.36, 0);
-    lHand.castShadow = true;
-    const rHand = new THREE.Mesh(handGeom, handMat);
-    rHand.position.set(0.34, 0.36, 0);
-    rHand.castShadow = true;
-    this.group.add(lHand, rHand);
-
-    // Cape derriere (plane simple)
-    const capeGeom = new THREE.PlaneGeometry(0.58, 0.66);
-    const capeMat = new THREE.MeshStandardMaterial({
-      color: capeColor, side: THREE.DoubleSide, roughness: 0.75,
-    });
-    const cape = new THREE.Mesh(capeGeom, capeMat);
-    cape.position.set(0, 0.55, -0.24);
-    cape.rotation.x = 0.1;
-    cape.castShadow = true;
-    this.group.add(cape);
-
-    // Tete (sphere skin)
-    const headGeom = new THREE.SphereGeometry(0.24, 18, 14);
-    const headMat = new THREE.MeshStandardMaterial({ color: skinColor, roughness: 0.7 });
-    const head = new THREE.Mesh(headGeom, headMat);
-    head.position.y = 0.95;
-    head.castShadow = true;
-    this.group.add(head);
-
-    // Casque (demi-sphere superieure rouge)
-    const helmGeom = new THREE.SphereGeometry(0.26, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.55);
-    const helmMat = new THREE.MeshStandardMaterial({ color: armorColor, roughness: 0.5 });
-    const helm = new THREE.Mesh(helmGeom, helmMat);
-    helm.position.y = 0.95;
-    helm.castShadow = true;
-    this.group.add(helm);
-
-    // Liseré dore autour du casque
-    const stripeGeom = new THREE.TorusGeometry(0.24, 0.022, 8, 24);
-    const stripeMat = new THREE.MeshStandardMaterial({ color: goldColor, roughness: 0.4, metalness: 0.55 });
-    const stripe = new THREE.Mesh(stripeGeom, stripeMat);
-    stripe.position.y = 0.91;
-    stripe.rotation.x = Math.PI / 2;
-    this.group.add(stripe);
-
-    // Plume / pointe sur le casque
-    const featherGeom = new THREE.ConeGeometry(0.05, 0.18, 8);
-    const featherMat = new THREE.MeshStandardMaterial({ color: goldColor, roughness: 0.5, metalness: 0.4 });
-    const feather = new THREE.Mesh(featherGeom, featherMat);
-    feather.position.set(0, 1.22, 0);
-    feather.rotation.z = 0.2;
-    feather.castShadow = true;
-    this.group.add(feather);
-
-    // Yeux (deux petites spheres noires)
-    const eyeGeom = new THREE.SphereGeometry(0.025, 8, 6);
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-    const lEye = new THREE.Mesh(eyeGeom, eyeMat);
-    lEye.position.set(-0.07, 0.96, 0.22);
-    const rEye = new THREE.Mesh(eyeGeom, eyeMat);
-    rEye.position.set(0.07, 0.96, 0.22);
-    this.group.add(lEye, rEye);
-
-    // Epee posee sur l epaule
-    const swordGroup = new THREE.Group();
-    const bladeGeom = new THREE.BoxGeometry(0.06, 0.7, 0.015);
-    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xdde3e8, roughness: 0.35, metalness: 0.7 });
-    const blade = new THREE.Mesh(bladeGeom, bladeMat);
-    blade.position.y = 0.5;
-    blade.castShadow = true;
-    swordGroup.add(blade);
-    const guardGeom = new THREE.BoxGeometry(0.18, 0.04, 0.05);
-    const guardMat = new THREE.MeshStandardMaterial({ color: goldColor, roughness: 0.4, metalness: 0.6 });
-    const guard = new THREE.Mesh(guardGeom, guardMat);
-    guard.position.y = 0.15;
-    swordGroup.add(guard);
-    const handleGeom = new THREE.CylinderGeometry(0.025, 0.025, 0.12, 8);
-    const handleMat = new THREE.MeshStandardMaterial({ color: 0x5a3a1a, roughness: 0.8 });
-    const handle = new THREE.Mesh(handleGeom, handleMat);
-    handle.position.y = 0.08;
-    swordGroup.add(handle);
-    const pommelGeom = new THREE.SphereGeometry(0.04, 10, 8);
-    const pommel = new THREE.Mesh(pommelGeom, guardMat);
-    pommel.position.y = 0.02;
-    swordGroup.add(pommel);
-    swordGroup.position.set(0.32, 0.72, -0.05);
-    swordGroup.rotation.z = -0.25;
-    this.group.add(swordGroup);
+  setActive(active) {
+    this.turnRing.visible = active;
   }
 
   update(dt, time) {
-    // Idle subtile : oscillation verticale
+    if (this.busy) return;
+    // Idle subtil
     this.group.position.y = Math.sin(time * 1.6 + this.idleOffset) * 0.035;
+    // L anneau du tour pulse
+    if (this.turnRing.visible) {
+      const pulse = 0.85 + Math.sin(time * 3) * 0.15;
+      this.turnRing.material.opacity = pulse;
+    }
   }
 
   setTile(c, r) {
     this.c = c;
     this.r = r;
-    this.group.position.set(c, this.group.position.y, r);
+    this.group.position.x = c;
+    this.group.position.z = r;
   }
 
-  // Tween vers une case adjacente (1 cran) avec ease in-out + rotation
-  // pour faire face a la direction. Retourne une promesse resolue
-  // quand l animation est finie.
+  // Glisse vers une case adjacente.
   moveTo(c, r, duration = 200) {
     return new Promise(resolve => {
+      this.busy = true;
       const sx = this.group.position.x;
       const sz = this.group.position.z;
       const dx = c - sx;
@@ -215,6 +105,112 @@ export class Character3D {
         else {
           this.group.position.x = c;
           this.group.position.z = r;
+          this.busy = false;
+          resolve();
+        }
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  // Animation d attaque : se tourne vers la cible, fait un coup en
+  // avant puis revient. dx, dz = vecteur unitaire vers la cible.
+  lungeTo(targetC, targetR, duration = 350) {
+    return new Promise(resolve => {
+      this.busy = true;
+      const sx = this.group.position.x;
+      const sz = this.group.position.z;
+      const dx = targetC - sx;
+      const dz = targetR - sz;
+      const len = Math.hypot(dx, dz) || 1;
+      const ux = dx / len, uz = dz / len;
+      this.facing = Math.atan2(dx, dz);
+      this.group.rotation.y = this.facing;
+      const lungeDist = 0.45;
+      const start = performance.now();
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / duration);
+        // Aller-retour en sinus
+        const offset = Math.sin(t * Math.PI) * lungeDist;
+        this.group.position.x = sx + ux * offset;
+        this.group.position.z = sz + uz * offset;
+        if (t < 1) requestAnimationFrame(step);
+        else {
+          this.group.position.x = sx;
+          this.group.position.z = sz;
+          this.busy = false;
+          resolve();
+        }
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  // Fait apparaitre un nombre flottant au-dessus du perso.
+  popDamage(value, color = '#ff5577') {
+    const canvas = document.createElement('canvas');
+    canvas.width = 96; canvas.height = 48;
+    const ctx = canvas.getContext('2d');
+    ctx.font = 'bold 32px "Trebuchet MS", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#000';
+    ctx.strokeText('-' + value, 48, 24);
+    ctx.fillStyle = color;
+    ctx.fillText('-' + value, 48, 24);
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(0.9, 0.45, 1);
+    sprite.position.set(this.group.position.x, 1.6, this.group.position.z);
+    sprite.renderOrder = 1000;
+    this.scene.add(sprite);
+    const start = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / 900);
+      sprite.position.y = 1.6 + t * 0.9;
+      sprite.material.opacity = 1 - t;
+      if (t < 1) requestAnimationFrame(tick);
+      else {
+        this.scene.remove(sprite);
+        sprite.material.map.dispose();
+        sprite.material.dispose();
+      }
+    };
+    requestAnimationFrame(tick);
+  }
+
+  // Animation de mort : le perso s effondre (scale.y -> 0) + alpha.
+  die(duration = 600) {
+    return new Promise(resolve => {
+      this.busy = true;
+      this.turnRing.visible = false;
+      const start = performance.now();
+      const startScaleY = this.group.scale.y;
+      // Rendre tous les materiaux transparents pour pouvoir fader.
+      const materials = [];
+      this.group.traverse((obj) => {
+        if (obj.isMesh || obj.isSprite) {
+          const m = obj.material;
+          if (m && !m.transparent) {
+            m.transparent = true;
+            m.depthWrite = false;
+          }
+          if (m) materials.push(m);
+        }
+      });
+      this.hpBar.sprite.visible = false;
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / duration);
+        const e = t * t;
+        this.group.scale.y = startScaleY * (1 - 0.7 * e);
+        for (const m of materials) m.opacity = 1 - t;
+        if (t < 1) requestAnimationFrame(step);
+        else {
+          this.group.visible = false;
+          this.busy = false;
           resolve();
         }
       };
