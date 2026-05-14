@@ -16,6 +16,11 @@ if (loader) loader.remove();
 // On garde le HUD textuel en haut a gauche (titre + tip)
 // car les controles meritent un rappel visible.
 
+// Les fleches de rotation passent par le HUD et appellent snapRotate.
+// direction = -1 -> camera tourne dans le sens des aiguilles, +1 -> trigonometrique.
+hud.on('onRotateLeft', () => scene3d.snapRotate(-1));
+hud.on('onRotateRight', () => scene3d.snapRotate(1));
+
 game.setup();
 
 // --- INPUTS ---

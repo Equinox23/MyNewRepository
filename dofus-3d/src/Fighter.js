@@ -1,5 +1,7 @@
 // Definitions des classes / creatures dispos dans la V2.
 // Stats simples + portee melee (1 case).
+// `ai` decrit le caractere du monstre. Profils dispos :
+//  - 'aggressive' : fonce sur la cible la plus faible et tape au CAC.
 export const DEFS = {
   iop: {
     name: 'Iop',
@@ -12,6 +14,7 @@ export const DEFS = {
     role: 'Boule de laine',
     hp: 65, pa: 6, pm: 3, initiative: 10,
     attack: { name: 'Coup de Corne', apCost: 3, range: 1, dmgMin: 8, dmgMax: 12 },
+    ai: 'aggressive',
   },
 };
 

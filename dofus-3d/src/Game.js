@@ -158,57 +158,98 @@ export class Game {
   async runAI() {
     if (this.ended) return;
     const ai = this.turn.current();
-    const player = this.fighters.find(f => f.alive && f.team !== ai.team);
-    if (!player) { this.checkEnd(); return; }
+    const profile = ai.def.ai || 'aggressive';
+    if (profile === 'aggressive') {
+      await this.runAggressive(ai);
+    }
+    // (futurs profils : 'defensive', 'ranged', 'coward'...)
+    if (this.ended) return;
+    this.busy = false;
+    this._advanceTurn();
+  }
+
+  // Profil 'aggressive' : fonce sur la cible la plus faible (moins de PV)
+  // et frappe au CAC tant qu il a les PA. Avance autant que possible
+  // (PM complets) vers cette cible meme si elle est hors d atteinte ce
+  // tour-ci.
+  async runAggressive(ai) {
+    const target = this.pickWeakestTarget(ai);
+    if (!target) return;
     const atk = ai.def.attack;
 
-    // Approcher la cible si on n est pas en portee.
-    while (ai.alive && ai.pm > 0) {
-      const dist = Math.abs(ai.c - player.c) + Math.abs(ai.r - player.r);
-      if (dist <= atk.range) break;
-      const occ = this.computeOccupied(ai);
-      const result = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, ai.pm);
-      const goals = [
-        { c: player.c + 1, r: player.r },
-        { c: player.c - 1, r: player.r },
-        { c: player.c, r: player.r + 1 },
-        { c: player.c, r: player.r - 1 },
-      ];
-      let best = null;
-      for (const g of goals) {
-        const k = `${g.c},${g.r}`;
-        if (!result.dist.has(k)) continue;
-        const d = result.dist.get(k);
-        if (best === null || d < best.d) best = { g, d };
+    // 1) S approcher pour entrer en portee.
+    if (ai.pm > 0) {
+      const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
+      if (dist > atk.range) {
+        await this.aiApproach(ai, target, atk.range);
       }
-      if (!best) break;
-      const path = pathTo(result, best.g);
-      if (!path || path.length <= 1) break;
-      const steps = path.slice(1, ai.pm + 1);
-      for (const step of steps) {
-        await ai.character.moveTo(step.c, step.r, 170);
-        ai.c = step.c;
-        ai.r = step.r;
-        ai.pm--;
-      }
-      break;
     }
+    if (this.ended) return;
 
-    // Attaquer tant qu on est en portee et qu on a les PA.
-    while (ai.alive) {
-      const dist = Math.abs(ai.c - player.c) + Math.abs(ai.r - player.r);
+    // 2) Cogner tant qu on a les PA et qu on est a portee.
+    while (ai.alive && target.alive) {
+      const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
       if (dist > atk.range) break;
       if (ai.pa < atk.apCost) break;
       ai.pa -= atk.apCost;
-      await this.playAttack(ai, player);
+      await this.playAttack(ai, target);
       if (this.checkEnd()) return;
-      if (!player.alive) break;
+    }
+  }
+
+  // Choisit la cible adverse la plus fragile (PV les plus bas).
+  // Departage ties par distance (la plus proche d abord).
+  pickWeakestTarget(ai) {
+    const enemies = this.fighters.filter(f => f.alive && f.team !== ai.team);
+    if (enemies.length === 0) return null;
+    enemies.sort((a, b) => {
+      if (a.hp !== b.hp) return a.hp - b.hp;
+      const da = Math.abs(ai.c - a.c) + Math.abs(ai.r - a.r);
+      const db = Math.abs(ai.c - b.c) + Math.abs(ai.r - b.r);
+      return da - db;
+    });
+    return enemies[0];
+  }
+
+  // BFS illimite depuis l IA, cherche la case a portee de la cible
+  // (cases voisines pour une attaque CAC) la plus proche, puis avance
+  // d autant de pas que les PM le permettent dans cette direction
+  // (l IA ne reste pas immobile meme si la cible est trop loin).
+  async aiApproach(ai, target, range) {
+    const occ = this.computeOccupied(ai);
+    const result = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, 999);
+
+    // Toutes les cases a distance <= range de la cible, sauf elle-meme.
+    const goals = [];
+    for (let dc = -range; dc <= range; dc++) {
+      for (let dr = -range; dr <= range; dr++) {
+        if (dc === 0 && dr === 0) continue;
+        if (Math.abs(dc) + Math.abs(dr) > range) continue;
+        goals.push({ c: target.c + dc, r: target.r + dr });
+      }
     }
 
-    // L IA a fini ses actions : on libere busy puis on avance le tour
-    // (via la voie interne pour ne pas etre bloque par busy).
-    this.busy = false;
-    this._advanceTurn();
+    let bestGoal = null;
+    let bestDist = Infinity;
+    for (const g of goals) {
+      const k = `${g.c},${g.r}`;
+      if (!result.dist.has(k)) continue;
+      const d = result.dist.get(k);
+      if (d < bestDist) { bestDist = d; bestGoal = g; }
+    }
+    if (!bestGoal) return;
+
+    const fullPath = pathTo(result, bestGoal);
+    if (!fullPath || fullPath.length <= 1) return;
+    // Avance autant que possible, dans la limite des PM.
+    const maxSteps = Math.min(ai.pm, fullPath.length - 1);
+    const steps = fullPath.slice(1, maxSteps + 1);
+    for (const step of steps) {
+      await ai.character.moveTo(step.c, step.r, 170);
+      ai.c = step.c;
+      ai.r = step.r;
+      ai.pm--;
+    }
   }
 
   computeOccupied(exclude) {

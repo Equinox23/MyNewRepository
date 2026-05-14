@@ -74,6 +74,30 @@ export class Hud {
         font-family: "Trebuchet MS", sans-serif;
       }
       #flash.show { opacity: 1; }
+
+      .rot-btn {
+        position: fixed;
+        top: 50%; transform: translateY(-50%);
+        width: 64px; height: 64px;
+        border-radius: 50%;
+        background: rgba(12, 12, 20, 0.78);
+        border: 3px solid #f1c40f;
+        color: #f1c40f;
+        cursor: pointer;
+        pointer-events: auto;
+        user-select: none;
+        -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        z-index: 5;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+        transition: background 0.15s ease-out, transform 0.1s ease-out;
+      }
+      .rot-btn:hover { background: rgba(241, 196, 15, 0.18); }
+      .rot-btn:active { background: #f1c40f; color: #14182a; transform: translateY(-50%) scale(0.92); }
+      #rot-left { left: 16px; }
+      #rot-right { right: 16px; }
+      .rot-btn svg { width: 36px; height: 36px; display: block; }
     `;
     document.head.appendChild(css);
 
@@ -113,6 +137,36 @@ export class Hud {
     this.btnMove.addEventListener('click', () => this.callbacks.onMove && this.callbacks.onMove());
     this.btnAttack.addEventListener('click', () => this.callbacks.onAttack && this.callbacks.onAttack());
     this.btnEnd.addEventListener('click', () => this.callbacks.onEnd && this.callbacks.onEnd());
+
+    this.buildRotationButtons();
+  }
+
+  buildRotationButtons() {
+    // Fleche circulaire SVG, miroir gauche/droite.
+    const svgCcw = `
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M27 16 a11 11 0 1 0 -3.2 7.8"/>
+        <polyline points="27 9 27 16 20 16"/>
+      </svg>`;
+    const svgCw = `
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M5 16 a11 11 0 1 1 3.2 7.8"/>
+        <polyline points="5 9 5 16 12 16"/>
+      </svg>`;
+
+    const left = document.createElement('button');
+    left.id = 'rot-left'; left.className = 'rot-btn';
+    left.title = 'Tourner la map (1/4 de tour a gauche)';
+    left.innerHTML = svgCcw;
+    left.addEventListener('click', () => this.callbacks.onRotateLeft && this.callbacks.onRotateLeft());
+    document.body.appendChild(left);
+
+    const right = document.createElement('button');
+    right.id = 'rot-right'; right.className = 'rot-btn';
+    right.title = 'Tourner la map (1/4 de tour a droite)';
+    right.innerHTML = svgCw;
+    right.addEventListener('click', () => this.callbacks.onRotateRight && this.callbacks.onRotateRight());
+    document.body.appendChild(right);
   }
 
   on(eventName, cb) {

@@ -96,9 +96,40 @@ export class Scene3D {
 
   // Rotation orbitale autour de `target`. deltaAzimuth/Polar en radians.
   rotate(deltaAzimuth, deltaPolar = 0) {
+    if (this._snapping) return; // ignore drag pendant un snap anime
     this.azimuth += deltaAzimuth;
     this.polar = THREE.MathUtils.clamp(this.polar + deltaPolar, 0.25, 1.35);
     this.updateCamera();
+  }
+
+  // Rotation discrete d un quart de tour : snap a l indice 90 deg le
+  // plus proche puis +/- une etape, anime en ~350ms.
+  snapRotate(direction) {
+    if (this._snapping) return;
+    const step = Math.PI / 2;
+    const currentIdx = Math.round(this.azimuth / step);
+    const targetAz = (currentIdx + direction) * step;
+    this._animateAzimuth(targetAz, 350);
+  }
+
+  _animateAzimuth(targetAz, duration) {
+    this._snapping = true;
+    const startAz = this.azimuth;
+    const delta = targetAz - startAz;
+    const startTime = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - startTime) / duration);
+      const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+      this.azimuth = startAz + delta * e;
+      this.updateCamera();
+      if (t < 1) requestAnimationFrame(tick);
+      else {
+        this.azimuth = targetAz;
+        this.updateCamera();
+        this._snapping = false;
+      }
+    };
+    requestAnimationFrame(tick);
   }
 
   // Pan : deplace la cible sur le plan y=0. dx/dz en unites monde.
