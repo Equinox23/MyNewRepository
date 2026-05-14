@@ -1,3 +1,4 @@
+import { PreloaderScene } from './scenes/PreloaderScene.js';
 import { MenuScene } from './scenes/MenuScene.js';
 import { CombatScene } from './scenes/CombatScene.js';
 import { EndScene } from './scenes/EndScene.js';
@@ -14,9 +15,9 @@ const config = {
     height: 720,
   },
   input: {
-    activePointers: 2,
+    activePointers: 3,
   },
-  scene: [MenuScene, CombatScene, EndScene],
+  scene: [PreloaderScene, MenuScene, CombatScene, EndScene],
 };
 
 new Phaser.Game(config);

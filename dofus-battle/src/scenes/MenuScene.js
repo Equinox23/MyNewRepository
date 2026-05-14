@@ -3,25 +3,24 @@ import { MAP_LIST } from '../data/maps.js';
 import { SPELLS } from '../data/spells.js';
 
 export class MenuScene extends Phaser.Scene {
-  constructor() {
-    super('MenuScene');
-  }
+  constructor() { super('MenuScene'); }
 
   create() {
     this.cameras.main.setBackgroundColor('#0c0c14');
 
+    // Bandeau titre
     this.add.text(640, 40, 'DOFUS BATTLE', {
       fontFamily: 'Trebuchet MS', fontSize: '48px', color: '#f1c40f',
+      stroke: '#000', strokeThickness: 4,
     }).setOrigin(0.5);
-    this.add.text(640, 90, 'Composez votre equipe (3 personnages)', {
-      fontFamily: 'Trebuchet MS', fontSize: '20px', color: '#cccccc',
+    this.add.text(640, 84, 'Composez votre equipe de 3 personnages', {
+      fontFamily: 'Trebuchet MS', fontSize: '18px', color: '#cccccc',
     }).setOrigin(0.5);
 
-    this.selection = []; // tableau de classIds
+    this.selection = [];
     this.mapIndex = 0;
-    this.aiClasses = ['iop', 'cra', 'eniripsa']; // composition ennemie par defaut
+    this.aiClasses = ['iop', 'cra', 'eniripsa'];
 
-    this.classCards = [];
     this.drawClassCards();
     this.drawSelectedSlots();
     this.drawMapSelector();
@@ -31,33 +30,45 @@ export class MenuScene extends Phaser.Scene {
   }
 
   drawClassCards() {
-    const startX = 80;
-    const startY = 160;
-    const w = 220;
-    const h = 200;
-    const gap = 18;
+    const startX = 30;
+    const startY = 120;
+    const w = 240;
+    const h = 220;
+    const gap = 10;
 
+    this.classCards = [];
     CLASS_LIST.forEach((cls, i) => {
       const x = startX + i * (w + gap);
       const y = startY;
       const bg = this.add.rectangle(x, y, w, h, 0x1f2335).setOrigin(0).setStrokeStyle(2, 0x444a66).setInteractive();
-      const token = this.add.circle(x + 38, y + 50, 22, cls.color);
-      this.add.text(x + 70, y + 32, cls.name, { fontSize: '22px', color: '#ffffff', fontFamily: 'Trebuchet MS' });
-      this.add.text(x + 70, y + 60, cls.role, { fontSize: '13px', color: '#9aa1c4', fontStyle: 'italic' });
-      this.add.text(x + 12, y + 96, cls.desc, {
-        fontSize: '12px', color: '#cccccc', wordWrap: { width: w - 24 }, fontFamily: 'Trebuchet MS',
+      // portrait
+      this.add.image(x + 55, y + 70, 'portrait_' + cls.id).setOrigin(0.5).setScale(0.95);
+      // titre / role
+      this.add.text(x + 110, y + 32, cls.name, {
+        fontFamily: 'Trebuchet MS', fontSize: '22px', color: '#ffffff', fontStyle: 'bold',
       });
-      this.add.text(x + 12, y + 158, `PV ${cls.hp}  PA ${cls.pa}  PM ${cls.pm}  Ini ${cls.initiative}`, {
-        fontSize: '12px', color: '#f1c40f',
+      this.add.text(x + 110, y + 60, cls.role, {
+        fontFamily: 'Trebuchet MS', fontSize: '12px', color: '#9aa1c4', fontStyle: 'italic',
+      });
+      // stats
+      this.add.text(x + 110, y + 86, `PV ${cls.hp}`, { fontFamily: 'Trebuchet MS', fontSize: '12px', color: '#e74c3c' });
+      this.add.text(x + 110, y + 102, `PA ${cls.pa}`, { fontFamily: 'Trebuchet MS', fontSize: '12px', color: '#3498db' });
+      this.add.text(x + 110, y + 118, `PM ${cls.pm}`, { fontFamily: 'Trebuchet MS', fontSize: '12px', color: '#2ecc71' });
+      // description
+      this.add.text(x + 12, y + 144, cls.desc, {
+        fontFamily: 'Trebuchet MS', fontSize: '11px', color: '#cccccc', wordWrap: { width: w - 24 },
+      });
+      // mini icones de sorts
+      cls.spellIds.forEach((spId, j) => {
+        const ix = x + 12 + j * 50;
+        const iy = y + 188;
+        this.add.image(ix + 22, iy + 14, 'spell_' + spId).setOrigin(0.5).setScale(0.45);
       });
 
-      bg.on('pointerover', () => {
-        bg.setStrokeStyle(2, 0xf1c40f);
-        this.showSpellTooltip(cls);
-      });
-      bg.on('pointerout', () => bg.setStrokeStyle(2, 0x444a66));
+      bg.on('pointerover', () => { bg.setStrokeStyle(2, 0xf1c40f); this.showSpellTooltip(cls); });
+      bg.on('pointerout', () => { bg.setStrokeStyle(2, this.selection.includes(cls.id) ? 0x2ecc71 : 0x444a66); });
       bg.on('pointerdown', () => this.toggleSelection(cls.id));
-      this.classCards.push({ cls, bg, token });
+      this.classCards.push({ cls, bg });
     });
   }
 
@@ -67,18 +78,26 @@ export class MenuScene extends Phaser.Scene {
     } else if (this.selection.length < 3) {
       this.selection.push(classId);
     }
+    for (const card of this.classCards) {
+      card.bg.setStrokeStyle(2, this.selection.includes(card.cls.id) ? 0x2ecc71 : 0x444a66);
+    }
     this.refreshSlots();
   }
 
   drawSelectedSlots() {
     this.slotGfx = [];
-    const y = 400;
-    this.add.text(80, y - 20, 'Votre equipe :', { fontSize: '18px', color: '#ffffff' });
+    const y = 380;
+    this.add.text(30, y - 24, 'Votre equipe :', {
+      fontFamily: 'Trebuchet MS', fontSize: '18px', color: '#ffffff',
+    });
     for (let i = 0; i < 3; i++) {
-      const x = 80 + i * 90;
-      const bg = this.add.rectangle(x, y, 80, 80, 0x1f2335).setOrigin(0).setStrokeStyle(2, 0x666666);
-      const txt = this.add.text(x + 40, y + 40, '?', { fontSize: '36px', color: '#666666' }).setOrigin(0.5);
-      this.slotGfx.push({ bg, txt });
+      const x = 30 + i * 100;
+      const bg = this.add.rectangle(x, y, 88, 88, 0x1f2335).setOrigin(0).setStrokeStyle(2, 0x666666);
+      const img = this.add.image(x + 44, y + 44, 'portrait_iop').setOrigin(0.5).setScale(0.7).setVisible(false);
+      const placeholder = this.add.text(x + 44, y + 44, '?', {
+        fontFamily: 'Trebuchet MS', fontSize: '36px', color: '#666666',
+      }).setOrigin(0.5);
+      this.slotGfx.push({ bg, img, placeholder });
     }
   }
 
@@ -87,14 +106,14 @@ export class MenuScene extends Phaser.Scene {
       const slot = this.slotGfx[i];
       const id = this.selection[i];
       if (id) {
-        const cls = CLASS_LIST.find(c => c.id === id);
-        slot.bg.setFillStyle(cls.color);
-        slot.txt.setText(cls.name[0]);
-        slot.txt.setColor('#ffffff');
+        slot.img.setTexture('portrait_' + id);
+        slot.img.setVisible(true);
+        slot.placeholder.setText('');
+        slot.bg.setStrokeStyle(3, 0x2ecc71);
       } else {
-        slot.bg.setFillStyle(0x1f2335);
-        slot.txt.setText('?');
-        slot.txt.setColor('#666666');
+        slot.img.setVisible(false);
+        slot.placeholder.setText('?');
+        slot.bg.setStrokeStyle(2, 0x666666);
       }
     }
     if (this.startBtnTxt) {
@@ -105,12 +124,20 @@ export class MenuScene extends Phaser.Scene {
   }
 
   drawMapSelector() {
-    const y = 530;
-    this.add.text(80, y - 20, 'Carte :', { fontSize: '18px', color: '#ffffff' });
-    this.mapText = this.add.text(80, y + 4, '', { fontSize: '20px', color: '#f1c40f' });
-
-    const prev = this.add.text(280, y + 4, '<', { fontSize: '24px', color: '#ffffff' }).setInteractive();
-    const next = this.add.text(310, y + 4, '>', { fontSize: '24px', color: '#ffffff' }).setInteractive();
+    const y = 510;
+    this.add.text(30, y - 20, 'Carte :', {
+      fontFamily: 'Trebuchet MS', fontSize: '18px', color: '#ffffff',
+    });
+    const box = this.add.rectangle(30, y + 4, 260, 40, 0x1f2335).setOrigin(0).setStrokeStyle(2, 0x444a66);
+    this.mapText = this.add.text(160, y + 24, '', {
+      fontFamily: 'Trebuchet MS', fontSize: '20px', color: '#f1c40f',
+    }).setOrigin(0.5);
+    const prev = this.add.text(48, y + 24, '<', {
+      fontFamily: 'Trebuchet MS', fontSize: '24px', color: '#ffffff',
+    }).setOrigin(0.5).setInteractive();
+    const next = this.add.text(272, y + 24, '>', {
+      fontFamily: 'Trebuchet MS', fontSize: '24px', color: '#ffffff',
+    }).setOrigin(0.5).setInteractive();
     prev.on('pointerdown', () => { this.mapIndex = (this.mapIndex - 1 + MAP_LIST.length) % MAP_LIST.length; this.refreshMap(); });
     next.on('pointerdown', () => { this.mapIndex = (this.mapIndex + 1) % MAP_LIST.length; this.refreshMap(); });
     this.refreshMap();
@@ -121,38 +148,38 @@ export class MenuScene extends Phaser.Scene {
   }
 
   drawAiPreview() {
-    this.add.text(420, 510, 'Equipe ennemie :', { fontSize: '18px', color: '#ffffff' });
+    this.add.text(360, 490, 'Equipe ennemie :', {
+      fontFamily: 'Trebuchet MS', fontSize: '18px', color: '#ffffff',
+    });
     this.aiTokens = [];
-    for (let i = 0; i < 3; i++) {
-      const cls = CLASS_LIST.find(c => c.id === this.aiClasses[i]);
-      const x = 420 + i * 80;
-      const y = 560;
-      const bg = this.add.rectangle(x, y, 70, 70, cls.color).setOrigin(0).setStrokeStyle(2, 0xaa3333);
-      this.add.text(x + 35, y + 35, cls.name[0], { fontSize: '28px', color: '#ffffff' }).setOrigin(0.5);
-      this.aiTokens.push(bg);
-    }
-    const reroll = this.add.text(420, 640, '> Tirer une autre equipe ennemie', { fontSize: '14px', color: '#9aa1c4' }).setInteractive();
+    this.renderAiTeam();
+    const reroll = this.add.text(360, 624, '> Tirer au hasard une nouvelle equipe', {
+      fontFamily: 'Trebuchet MS', fontSize: '13px', color: '#9aa1c4', fontStyle: 'italic',
+    }).setInteractive();
     reroll.on('pointerdown', () => {
       this.aiClasses = pickRandom(CLASS_LIST, 3).map(c => c.id);
-      // redessiner
-      for (const t of this.aiTokens) t.destroy();
-      this.aiTokens = [];
-      for (let i = 0; i < 3; i++) {
-        const cls = CLASS_LIST.find(c => c.id === this.aiClasses[i]);
-        const x = 420 + i * 80;
-        const y = 560;
-        const bg = this.add.rectangle(x, y, 70, 70, cls.color).setOrigin(0).setStrokeStyle(2, 0xaa3333);
-        this.add.text(x + 35, y + 35, cls.name[0], { fontSize: '28px', color: '#ffffff' }).setOrigin(0.5);
-        this.aiTokens.push(bg);
-      }
+      this.renderAiTeam();
     });
   }
 
+  renderAiTeam() {
+    for (const obj of this.aiTokens) obj.destroy();
+    this.aiTokens = [];
+    for (let i = 0; i < 3; i++) {
+      const cls = CLASS_LIST.find(c => c.id === this.aiClasses[i]);
+      const x = 360 + i * 90;
+      const y = 530;
+      const bg = this.add.rectangle(x, y, 80, 80, 0x1f2335).setOrigin(0).setStrokeStyle(2, 0xaa3333);
+      const img = this.add.image(x + 40, y + 40, 'portrait_' + cls.id).setOrigin(0.5).setScale(0.65);
+      this.aiTokens.push(bg, img);
+    }
+  }
+
   drawStartButton() {
-    const x = 980, y = 600, w = 220, h = 70;
-    this.startBtn = this.add.rectangle(x, y, w, h, 0x3a3a3a).setOrigin(0).setStrokeStyle(2, 0x222222).setInteractive();
+    const x = 970, y = 600, w = 260, h = 80;
+    this.startBtn = this.add.rectangle(x, y, w, h, 0x3a3a3a).setOrigin(0).setStrokeStyle(3, 0x222222).setInteractive();
     this.startBtnTxt = this.add.text(x + w / 2, y + h / 2, 'COMBATTRE', {
-      fontSize: '24px', color: '#888888',
+      fontFamily: 'Trebuchet MS', fontSize: '28px', color: '#888888', fontStyle: 'bold',
     }).setOrigin(0.5);
     this.startBtn.on('pointerdown', () => {
       if (this.selection.length !== 3) return;
@@ -165,11 +192,19 @@ export class MenuScene extends Phaser.Scene {
   }
 
   drawSpellTooltipArea() {
-    this.add.rectangle(800, 160, 460, 220, 0x14182a).setOrigin(0).setStrokeStyle(2, 0x333a55);
-    this.tooltipTitle = this.add.text(820, 175, 'Survolez une classe', { fontSize: '20px', color: '#f1c40f' });
+    this.add.rectangle(660, 350, 280, 200, 0x14182a).setOrigin(0).setStrokeStyle(2, 0x333a55);
+    this.tooltipTitle = this.add.text(680, 364, 'Survolez une classe pour voir ses sorts', {
+      fontFamily: 'Trebuchet MS', fontSize: '15px', color: '#f1c40f',
+    });
+    this.tooltipIcons = [];
     this.tooltipLines = [];
     for (let i = 0; i < 4; i++) {
-      const t = this.add.text(820, 215 + i * 40, '', { fontSize: '13px', color: '#cccccc', wordWrap: { width: 420 } });
+      const iy = 400 + i * 36;
+      const icon = this.add.image(696, iy, 'spell_pression').setOrigin(0.5).setScale(0.55).setVisible(false);
+      const t = this.add.text(720, iy - 10, '', {
+        fontFamily: 'Trebuchet MS', fontSize: '11px', color: '#cccccc', wordWrap: { width: 220 }, lineSpacing: 2,
+      });
+      this.tooltipIcons.push(icon);
       this.tooltipLines.push(t);
     }
   }
@@ -178,7 +213,8 @@ export class MenuScene extends Phaser.Scene {
     this.tooltipTitle.setText(`Sorts du ${cls.name}`);
     cls.spellIds.forEach((id, i) => {
       const s = SPELLS[id];
-      this.tooltipLines[i].setText(`[${s.short}] ${s.name} (${s.apCost} PA, portee ${s.range.min}-${s.range.max}) - ${s.desc}`);
+      this.tooltipIcons[i].setTexture('spell_' + id).setVisible(true);
+      this.tooltipLines[i].setText(`${s.name} (${s.apCost} PA, ${s.range.min}-${s.range.max})\n${s.desc}`);
     });
   }
 }

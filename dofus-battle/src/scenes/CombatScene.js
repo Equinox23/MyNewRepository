@@ -9,24 +9,25 @@ import {
 import { applySpell, triggerTrapsOn } from '../systems/Combat.js';
 import { planTurn } from '../systems/AI.js';
 
-export class CombatScene extends Phaser.Scene {
-  constructor() {
-    super('CombatScene');
-  }
+const VIEW_W = 1280;
+const VIEW_H = 720;
+const ZOOM_MIN = 0.6;
+const ZOOM_MAX = 2.5;
 
-  init(data) {
-    this.params = data || {};
-  }
+export class CombatScene extends Phaser.Scene {
+  constructor() { super('CombatScene'); }
+
+  init(data) { this.params = data || {}; }
 
   create() {
     this.cameras.main.setBackgroundColor('#0c0c14');
 
+    // ---- Etat du combat ----
     const mapId = this.params.mapId || 'arene';
     const map = MAPS[mapId];
     const playerClasses = this.params.playerClasses || ['iop', 'cra', 'eniripsa'];
     const enemyClasses = this.params.enemyClasses || ['iop', 'cra', 'sram'];
 
-    // Construire les combattants
     const fighters = [];
     playerClasses.forEach((cls, i) => {
       const [c, r] = map.playerSpawns[i];
@@ -39,58 +40,93 @@ export class CombatScene extends Phaser.Scene {
       fighters.push(f);
     });
 
-    this.state = {
-      map,
-      mapId,
-      fighters,
-      traps: [],
-    };
+    this.state = { map, mapId, fighters, traps: [] };
     this.turn = new TurnManager(fighters);
     this.selectedSpell = null;
     this.hover = null;
-    this.busy = false; // pendant les animations / IA
+    this.busy = false;
     this.logs = [];
-    // mode tactile: tap-preview puis tap-confirm sur la meme case
     this.touchMode = false;
     this.pendingTile = null;
+    this.pointerDownInfo = null;
+    this.pinch = null;
 
-    this.layers = {
-      grid: this.add.graphics(),
-      highlight: this.add.graphics(),
-      hoverPath: this.add.graphics(),
-      fighters: this.add.container(),
-      effects: this.add.container(),
-      ui: this.add.container(),
-    };
+    // ---- Cameras ----
+    this.mainCam = this.cameras.main;
+    this.mainCam.setBounds(-160, -120, VIEW_W + 320, VIEW_H + 240);
+    this.uiCam = this.cameras.add(0, 0, VIEW_W, VIEW_H);
+    this.uiCam.setName('uiCam');
+    this.uiCam.transparent = true;
+    this.uiCam.setScroll(0, 0);
 
-    this.drawGrid();
+    // Listes pour filtrage par camera
+    this.worldObjs = [];
+    this.uiObjs = [];
+
+    // ---- Couches monde ----
+    this.floorGfx = this.addWorld(this.add.graphics().setDepth(0));
+    this.highlightGfx = this.addWorld(this.add.graphics().setDepth(100));
+    this.hoverGfx = this.addWorld(this.add.graphics().setDepth(110));
+    this.trapMarkers = []; // visuels de pieges allies
+
+    this.drawFloor();
+    this.drawWalls();
     this.createFighterSprites();
-    this.buildHud();
 
+    // ---- HUD ----
+    this.buildHud();
+    this.buildZoomControls();
+
+    // ---- Input ----
     this.input.mouse.disableContextMenu();
+    // Zone tactile transparente couvrant la zone de jeu (entre top bar et bottom panel)
+    const tapZone = this.add.rectangle(VIEW_W / 2, 330, VIEW_W, 540, 0xffffff, 0).setInteractive();
+    this.addUi(tapZone); // ne pas zoomer
+    tapZone.on('pointerdown', (p) => this.onMapPointerDown(p));
+
     this.input.on('pointermove', (p) => this.onPointerMove(p));
-    this.input.on('pointerdown', (p) => this.onPointerDown(p));
-    this.input.keyboard.on('keydown-ESC', () => { this.selectedSpell = null; this.refreshHighlights(); });
+    this.input.on('pointerup', (p) => this.onPointerUp(p));
+    this.input.on('wheel', (pointer, currentlyOver, dx, dy) => {
+      const step = dy > 0 ? -0.1 : 0.1;
+      this.setZoom(this.mainCam.zoom + step);
+    });
+
+    this.input.keyboard.on('keydown-ESC', () => this.cancelAction());
     this.input.keyboard.on('keydown-SPACE', () => { if (!this.busy && this.turn.current().team === 'player') this.endTurn(); });
 
     this.log('Combat lance !');
     this.startTurn();
   }
 
-  // --- DESSIN GRILLE ---
+  update() {
+    this.updatePinch();
+  }
 
-  drawGrid() {
-    const g = this.layers.grid;
+  // ---- Helpers cameras / listes ----
+  addWorld(obj) {
+    this.worldObjs.push(obj);
+    this.uiCam.ignore(obj);
+    return obj;
+  }
+  addUi(obj) {
+    this.uiObjs.push(obj);
+    this.mainCam.ignore(obj);
+    return obj;
+  }
+
+  // ---- DESSIN SOL ----
+  drawFloor() {
+    const g = this.floorGfx;
     g.clear();
     for (let r = 0; r < MAP_ROWS; r++) {
       for (let c = 0; c < MAP_COLS; c++) {
-        const blocked = this.state.map.tiles[r][c] === 1;
-        this.drawTile(g, c, r, blocked ? 0x3a2818 : ((c + r) % 2 === 0 ? 0x2a3458 : 0x232b48), 0x141826);
+        if (this.state.map.tiles[r][c] === 1) continue;
+        this.drawTileDiamond(g, c, r, ((c + r) % 2 === 0 ? 0x2a3458 : 0x232b48), 0x141826);
       }
     }
   }
 
-  drawTile(g, c, r, fill, stroke, alpha = 1) {
+  drawTileDiamond(g, c, r, fill, stroke, alpha = 1) {
     const p = tileToScreen(c, r);
     g.lineStyle(1, stroke, alpha);
     g.fillStyle(fill, alpha);
@@ -104,45 +140,165 @@ export class CombatScene extends Phaser.Scene {
     g.strokePath();
   }
 
-  // --- COMBATTANTS ---
+  fillTile(g, c, r, color, alpha) {
+    const p = tileToScreen(c, r);
+    g.fillStyle(color, alpha);
+    g.beginPath();
+    g.moveTo(p.x, p.y);
+    g.lineTo(p.x + TILE_W / 2, p.y + TILE_H / 2);
+    g.lineTo(p.x, p.y + TILE_H);
+    g.lineTo(p.x - TILE_W / 2, p.y + TILE_H / 2);
+    g.closePath();
+    g.fillPath();
+  }
 
+  // ---- DESSIN MURS 3D ISO ----
+  drawWalls() {
+    this.walls = [];
+    for (let r = 0; r < MAP_ROWS; r++) {
+      for (let c = 0; c < MAP_COLS; c++) {
+        if (this.state.map.tiles[r][c] !== 1) continue;
+        const g = this.add.graphics();
+        this.drawWallAt(g, c, r);
+        const depth = (c + r) * 1000 + 500;
+        g.setDepth(depth);
+        this.addWorld(g);
+        this.walls.push({ c, r, g });
+      }
+    }
+  }
+
+  drawWallAt(g, c, r) {
+    const p = tileToScreen(c, r);
+    const H = 32; // hauteur visuelle du mur
+
+    // Ombre au sol
+    g.fillStyle(0x000000, 0.45);
+    g.beginPath();
+    g.moveTo(p.x, p.y);
+    g.lineTo(p.x + TILE_W / 2, p.y + TILE_H / 2);
+    g.lineTo(p.x, p.y + TILE_H);
+    g.lineTo(p.x - TILE_W / 2, p.y + TILE_H / 2);
+    g.closePath();
+    g.fillPath();
+
+    // Face gauche (NW) - plus sombre
+    g.fillStyle(0x4a352a, 1);
+    g.lineStyle(1, 0x1a0d05, 1);
+    g.beginPath();
+    g.moveTo(p.x - TILE_W / 2, p.y + TILE_H / 2);
+    g.lineTo(p.x, p.y + TILE_H);
+    g.lineTo(p.x, p.y + TILE_H - H);
+    g.lineTo(p.x - TILE_W / 2, p.y + TILE_H / 2 - H);
+    g.closePath();
+    g.fillPath();
+    g.strokePath();
+
+    // Face droite (NE) - plus claire
+    g.fillStyle(0x6a4d3a, 1);
+    g.beginPath();
+    g.moveTo(p.x + TILE_W / 2, p.y + TILE_H / 2);
+    g.lineTo(p.x, p.y + TILE_H);
+    g.lineTo(p.x, p.y + TILE_H - H);
+    g.lineTo(p.x + TILE_W / 2, p.y + TILE_H / 2 - H);
+    g.closePath();
+    g.fillPath();
+    g.strokePath();
+
+    // Top (eclaire)
+    g.fillStyle(0x8a6d5a, 1);
+    g.beginPath();
+    g.moveTo(p.x, p.y - H);
+    g.lineTo(p.x + TILE_W / 2, p.y + TILE_H / 2 - H);
+    g.lineTo(p.x, p.y + TILE_H - H);
+    g.lineTo(p.x - TILE_W / 2, p.y + TILE_H / 2 - H);
+    g.closePath();
+    g.fillPath();
+    g.strokePath();
+
+    // Crenelures / texture briques sur les faces
+    g.lineStyle(1, 0x3a2a18, 0.7);
+    for (let i = 1; i < 3; i++) {
+      const y = p.y + TILE_H - (H / 3) * i;
+      // ligne gauche
+      g.beginPath();
+      g.moveTo(p.x - TILE_W / 2, p.y + TILE_H / 2 - (H / 3) * i);
+      g.lineTo(p.x, y);
+      g.strokePath();
+      // ligne droite
+      g.beginPath();
+      g.moveTo(p.x + TILE_W / 2, p.y + TILE_H / 2 - (H / 3) * i);
+      g.lineTo(p.x, y);
+      g.strokePath();
+    }
+    // brique verticale top
+    g.lineStyle(1, 0x4a3a28, 0.5);
+    g.beginPath();
+    g.moveTo(p.x, p.y - H);
+    g.lineTo(p.x, p.y + TILE_H - H);
+    g.strokePath();
+  }
+
+  // ---- COMBATTANTS ----
   createFighterSprites() {
     for (const f of this.state.fighters) {
       const p = tileToScreen(f.c, f.r);
       const cont = this.add.container(p.x, p.y + TILE_H / 2);
-      const ring = this.add.circle(0, -4, 22, f.team === 'player' ? 0x2ecc71 : 0xe74c3c, 0.3);
-      const body = this.add.circle(0, -8, 18, f.cls.color);
-      body.setStrokeStyle(2, 0xffffff);
-      const initial = this.add.text(0, -10, f.cls.name[0], {
-        fontSize: '20px', color: '#ffffff', fontFamily: 'Trebuchet MS', fontStyle: 'bold',
+
+      // Anneau d equipe au sol
+      const ringColor = f.team === 'player' ? 0x2ecc71 : 0xe74c3c;
+      const ring = this.add.graphics();
+      ring.lineStyle(3, ringColor, 0.85);
+      ring.fillStyle(ringColor, 0.18);
+      ring.strokeEllipse(0, 4, 44, 18);
+      ring.fillEllipse(0, 4, 44, 18);
+
+      // Sprite portrait
+      const sprite = this.add.image(0, -16, 'portrait_' + f.classId).setOrigin(0.5, 1);
+      sprite.setScale(0.9);
+
+      // Barre de vie cadre
+      const hpBg = this.add.rectangle(0, 16, 50, 8, 0x111111).setStrokeStyle(1, 0x000000);
+      const hpBar = this.add.rectangle(-25, 16, 50, 6, 0x2ecc71).setOrigin(0, 0.5);
+      const hpText = this.add.text(0, 16, '', {
+        fontFamily: 'Trebuchet MS', fontSize: '9px', color: '#ffffff', fontStyle: 'bold',
       }).setOrigin(0.5);
-      const hpBg = this.add.rectangle(0, 16, 44, 6, 0x111111).setOrigin(0.5);
-      const hpBar = this.add.rectangle(-22, 16, 44, 6, 0x2ecc71).setOrigin(0, 0.5);
+
+      // Nom
       const nameText = this.add.text(0, 26, f.name, {
-        fontSize: '11px', color: '#ffffff',
+        fontFamily: 'Trebuchet MS', fontSize: '11px', color: '#ffffff',
+        stroke: '#000000', strokeThickness: 2,
       }).setOrigin(0.5);
-      cont.add([ring, body, initial, hpBg, hpBar, nameText]);
-      this.layers.fighters.add(cont);
-      f.gfx = { cont, ring, body, hpBar, nameText };
+
+      // Indicateur tour actif (anneau jaune autour du sprite)
+      const turnRing = this.add.graphics();
+      turnRing.setVisible(false);
+
+      cont.add([ring, turnRing, sprite, hpBg, hpBar, hpText, nameText]);
+      cont.setDepth((f.c + f.r) * 1000 + 501);
+      this.addWorld(cont);
+
+      f.gfx = { cont, ring, turnRing, sprite, hpBg, hpBar, hpText, nameText };
       this.refreshFighterUi(f);
     }
-    this.depthSortFighters();
-  }
-
-  depthSortFighters() {
-    const list = this.state.fighters.slice().sort((a, b) => (a.c + a.r) - (b.c + b.r));
-    list.forEach((f, i) => f.gfx.cont.setDepth(i + 1));
   }
 
   refreshFighterUi(f) {
-    const ratio = f.hp / f.maxHp;
-    f.gfx.hpBar.width = 44 * ratio;
+    const ratio = Math.max(0, f.hp / f.maxHp);
+    f.gfx.hpBar.width = 50 * ratio;
     f.gfx.hpBar.fillColor = ratio > 0.5 ? 0x2ecc71 : (ratio > 0.25 ? 0xf39c12 : 0xe74c3c);
+    f.gfx.hpText.setText(`${f.hp}/${f.maxHp}`);
     f.gfx.cont.setAlpha(f.alive ? 1 : 0.3);
-    if (this.turn && this.turn.current() === f && f.alive) {
-      f.gfx.ring.setStrokeStyle(3, 0xf1c40f);
+    if (!f.alive) f.gfx.sprite.setTint(0x444444);
+
+    const active = this.turn && this.turn.current() === f && f.alive;
+    f.gfx.turnRing.clear();
+    if (active) {
+      f.gfx.turnRing.lineStyle(3, 0xf1c40f, 1);
+      f.gfx.turnRing.strokeEllipse(0, 4, 50, 22);
+      f.gfx.turnRing.setVisible(true);
     } else {
-      f.gfx.ring.setStrokeStyle(0);
+      f.gfx.turnRing.setVisible(false);
     }
   }
 
@@ -150,100 +306,173 @@ export class CombatScene extends Phaser.Scene {
     for (const f of this.state.fighters) this.refreshFighterUi(f);
   }
 
-  // --- HUD ---
+  updateFighterDepth(f) {
+    f.gfx.cont.setDepth((f.c + f.r) * 1000 + 501);
+  }
 
+  // ---- HUD ----
   buildHud() {
     // Bandeau ordre de tour
-    this.add.rectangle(0, 0, 1280, 60, 0x000000, 0.6).setOrigin(0);
-    this.add.text(20, 18, 'Ordre :', { fontSize: '16px', color: '#cccccc' });
+    const topBg = this.add.rectangle(0, 0, VIEW_W, 60, 0x000000, 0.7).setOrigin(0);
+    this.addUi(topBg);
+    this.addUi(this.add.text(20, 18, 'Ordre :', { fontFamily: 'Trebuchet MS', fontSize: '16px', color: '#cccccc' }));
     this.turnIcons = [];
     this.turn.order.forEach((f, i) => {
-      const x = 100 + i * 50;
-      const r = this.add.rectangle(x, 30, 40, 40, f.team === 'player' ? 0x2ecc71 : 0xe74c3c).setOrigin(0.5).setStrokeStyle(2, 0x111111);
-      const c = this.add.circle(x, 30, 14, f.cls.color);
-      const t = this.add.text(x, 30, f.cls.name[0], { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
-      this.turnIcons.push({ fighter: f, r, c, t });
+      const x = 100 + i * 56;
+      const r = this.add.rectangle(x, 30, 46, 46, f.team === 'player' ? 0x2ecc71 : 0xe74c3c).setOrigin(0.5).setStrokeStyle(2, 0x111111);
+      const img = this.add.image(x, 30, 'portrait_' + f.classId).setOrigin(0.5).setScale(0.45);
+      const initial = this.add.text(x - 18, 14, f.cls.name[0], {
+        fontFamily: 'Trebuchet MS', fontSize: '11px', color: '#ffffff', fontStyle: 'bold',
+        stroke: '#000', strokeThickness: 2,
+      }).setOrigin(0.5);
+      this.addUi(r); this.addUi(img); this.addUi(initial);
+      this.turnIcons.push({ fighter: f, r, img, initial });
     });
+    this.roundText = this.addUi(this.add.text(VIEW_W - 100, 30, 'Tour 1', {
+      fontFamily: 'Trebuchet MS', fontSize: '20px', color: '#f1c40f',
+    }).setOrigin(0.5));
 
-    // Round
-    this.roundText = this.add.text(1180, 30, 'Tour 1', { fontSize: '20px', color: '#f1c40f' }).setOrigin(0.5);
+    // Bandeau bas
+    this.addUi(this.add.rectangle(0, 600, VIEW_W, 120, 0x000000, 0.78).setOrigin(0));
 
-    // Bandeau bas: infos perso + sorts
-    this.add.rectangle(0, 600, 1280, 120, 0x000000, 0.7).setOrigin(0);
-    this.curStatsText = this.add.text(20, 615, '', { fontSize: '16px', color: '#ffffff' });
+    // Portrait combattant actif
+    this.activePortrait = this.addUi(this.add.image(60, 660, 'portrait_iop').setOrigin(0.5).setScale(0.8));
+    this.addUi(this.add.rectangle(60, 660, 76, 76, 0x000000, 0).setStrokeStyle(2, 0xf1c40f));
+    this.curStatsText = this.addUi(this.add.text(110, 614, '', {
+      fontFamily: 'Trebuchet MS', fontSize: '15px', color: '#ffffff', lineSpacing: 4,
+    }));
+
+    // Sorts
     this.spellButtons = [];
     for (let i = 0; i < 5; i++) {
-      const x = 360 + i * 90;
+      const x = 380 + i * 80;
       const y = 660;
-      const bg = this.add.rectangle(x, y, 78, 78, 0x222230).setStrokeStyle(2, 0x444466).setInteractive();
-      const label = this.add.text(x, y - 18, '', { fontSize: '20px', color: '#ffffff' }).setOrigin(0.5);
-      const cost = this.add.text(x + 30, y + 22, '', { fontSize: '14px', color: '#f1c40f' }).setOrigin(0.5);
-      const tip = this.add.text(x, y + 45, '', { fontSize: '11px', color: '#cccccc', wordWrap: { width: 78 } }).setOrigin(0.5, 0);
-      this.spellButtons.push({ bg, label, cost, tip, idx: i });
+      const bg = this.add.rectangle(x, y, 74, 74, 0x222230).setStrokeStyle(3, 0x444466).setInteractive();
+      const img = this.add.image(x, y, 'spell_pression').setOrigin(0.5).setScale(0.92);
+      const cost = this.add.text(x + 26, y + 22, '', {
+        fontFamily: 'Trebuchet MS', fontSize: '13px', color: '#f1c40f', fontStyle: 'bold',
+        stroke: '#000000', strokeThickness: 3,
+      }).setOrigin(0.5);
+      const disabled = this.add.rectangle(x, y, 74, 74, 0x000000, 0).setVisible(false);
+      this.addUi(bg); this.addUi(img); this.addUi(cost); this.addUi(disabled);
+      this.spellButtons.push({ bg, img, cost, disabled, idx: i });
       bg.on('pointerdown', () => this.onSpellButtonClick(i));
       bg.on('pointerover', () => this.showSpellTooltip(i));
       bg.on('pointerout', () => this.hideSpellTooltip());
     }
 
-    // Bouton annuler (selection de sort / tile en attente)
-    const cx = 870, cy = 660;
-    const cancelBtn = this.add.rectangle(cx, cy, 110, 60, 0x34495e).setStrokeStyle(2, 0x111111).setInteractive();
-    this.add.text(cx, cy, 'ANNULER', { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
-    cancelBtn.on('pointerdown', () => { if (!this.busy) this.cancelAction(); });
-
-    // Bouton fin de tour
-    const ex = 1100, ey = 660;
-    const endBtn = this.add.rectangle(ex, ey, 140, 60, 0xc0392b).setStrokeStyle(2, 0x111111).setInteractive();
-    this.add.text(ex, ey, 'FIN DE TOUR', { fontSize: '14px', color: '#ffffff' }).setOrigin(0.5);
-    endBtn.on('pointerdown', () => {
+    // Boutons annuler / fin de tour
+    this.makeButton(850, 660, 100, 56, 'ANNULER', 0x34495e, () => { if (!this.busy) this.cancelAction(); });
+    this.makeButton(1100, 660, 140, 60, 'FIN DE TOUR', 0xc0392b, () => {
       if (!this.busy && this.turn.current().team === 'player') this.endTurn();
     });
 
-    // Journal de combat
-    this.add.rectangle(960, 80, 300, 510, 0x000000, 0.5).setOrigin(0);
-    this.add.text(975, 90, 'Journal', { fontSize: '16px', color: '#f1c40f' });
+    // Journal
+    this.addUi(this.add.rectangle(960, 80, 300, 510, 0x000000, 0.55).setOrigin(0).setStrokeStyle(1, 0x333a55));
+    this.addUi(this.add.text(975, 90, 'Journal', { fontFamily: 'Trebuchet MS', fontSize: '16px', color: '#f1c40f' }));
     this.logTexts = [];
     for (let i = 0; i < 18; i++) {
-      const t = this.add.text(975, 115 + i * 25, '', { fontSize: '12px', color: '#cccccc', wordWrap: { width: 280 } });
+      const t = this.addUi(this.add.text(975, 115 + i * 25, '', {
+        fontFamily: 'Trebuchet MS', fontSize: '12px', color: '#cccccc', wordWrap: { width: 280 },
+      }));
       this.logTexts.push(t);
     }
 
-    // Tooltip survol case
-    this.spellTooltip = this.add.text(640, 580, '', { fontSize: '13px', color: '#f1c40f' }).setOrigin(0.5);
+    // Tooltip sort
+    this.spellTooltip = this.addUi(this.add.text(640, 594, '', {
+      fontFamily: 'Trebuchet MS', fontSize: '13px', color: '#f1c40f',
+      stroke: '#000', strokeThickness: 2,
+    }).setOrigin(0.5, 1));
+  }
+
+  makeButton(x, y, w, h, label, color, cb) {
+    const bg = this.add.rectangle(x, y, w, h, color).setStrokeStyle(2, 0x111111).setInteractive();
+    const t = this.add.text(x, y, label, {
+      fontFamily: 'Trebuchet MS', fontSize: '14px', color: '#ffffff', fontStyle: 'bold',
+    }).setOrigin(0.5);
+    this.addUi(bg); this.addUi(t);
+    bg.on('pointerdown', cb);
+    bg.on('pointerover', () => bg.setStrokeStyle(2, 0xf1c40f));
+    bg.on('pointerout', () => bg.setStrokeStyle(2, 0x111111));
+    return { bg, t };
+  }
+
+  buildZoomControls() {
+    const x = 1230, w = 44, h = 44;
+    let y = 80;
+    const mk = (sym, cb) => {
+      const bg = this.add.rectangle(x, y, w, h, 0x222230).setStrokeStyle(2, 0x444466).setInteractive();
+      const t = this.add.text(x, y, sym, {
+        fontFamily: 'Trebuchet MS', fontSize: '20px', color: '#ffffff', fontStyle: 'bold',
+      }).setOrigin(0.5);
+      this.addUi(bg); this.addUi(t);
+      bg.on('pointerdown', cb);
+      bg.on('pointerover', () => bg.setStrokeStyle(2, 0xf1c40f));
+      bg.on('pointerout', () => bg.setStrokeStyle(2, 0x444466));
+      y += h + 8;
+    };
+    mk('+', () => this.setZoom(this.mainCam.zoom + 0.2));
+    mk('-', () => this.setZoom(this.mainCam.zoom - 0.2));
+    mk('o', () => this.resetCamera());
+    // legende
+    this.addUi(this.add.text(x, y + 4, 'ZOOM', {
+      fontFamily: 'Trebuchet MS', fontSize: '10px', color: '#888899',
+    }).setOrigin(0.5));
+  }
+
+  setZoom(z) {
+    const newZoom = Phaser.Math.Clamp(z, ZOOM_MIN, ZOOM_MAX);
+    this.mainCam.setZoom(newZoom);
+    this.clampCamera();
+  }
+
+  resetCamera() {
+    this.mainCam.setZoom(1);
+    this.mainCam.setScroll(0, 0);
+  }
+
+  clampCamera() {
+    // Phaser bounds clamp est natif (cam.setBounds active dirtyBounds).
   }
 
   refreshHud() {
     const cur = this.turn.current();
     this.roundText.setText('Tour ' + this.turn.round);
+    this.activePortrait.setTexture('portrait_' + cur.classId);
     this.curStatsText.setText(
-      `${cur.name}\nPV ${cur.hp}/${cur.maxHp}    PA ${cur.pa}/${cur.maxPa}    PM ${cur.pm}/${cur.maxPm}`
+      `${cur.name}\nPV ${cur.hp}/${cur.maxHp}\nPA ${cur.pa}/${cur.maxPa}    PM ${cur.pm}/${cur.maxPm}`
     );
 
-    // Sorts
     const spells = cur.spells;
     for (let i = 0; i < this.spellButtons.length; i++) {
       const btn = this.spellButtons[i];
       const spell = spells[i];
       if (!spell) {
-        btn.bg.setFillStyle(0x111118);
-        btn.label.setText('');
+        btn.img.setVisible(false);
         btn.cost.setText('');
+        btn.bg.setFillStyle(0x111118);
         btn.bg.disableInteractive();
+        btn.disabled.setVisible(false);
         continue;
       }
       btn.bg.setInteractive();
-      btn.label.setText(spell.short);
+      btn.img.setVisible(true);
+      btn.img.setTexture('spell_' + spell.id);
       btn.cost.setText(spell.apCost + ' PA');
       const usable = cur.team === 'player' && cur.pa >= spell.apCost && !this.busy;
       const selected = this.selectedSpell === spell;
-      btn.bg.setFillStyle(selected ? 0xf1c40f : (usable ? spell.color : 0x222230), 1);
-      btn.label.setColor(usable ? '#ffffff' : '#777777');
+      btn.bg.setFillStyle(0x222230);
+      btn.bg.setStrokeStyle(3, selected ? 0xf1c40f : (usable ? 0x6a7090 : 0x33384a));
+      btn.disabled.setVisible(!usable);
+      btn.disabled.setFillStyle(0x000000, usable ? 0 : 0.55);
+      btn.img.setAlpha(usable ? 1 : 0.4);
     }
 
     for (const ic of this.turnIcons) {
       const active = this.turn.current() === ic.fighter;
       ic.r.setStrokeStyle(active ? 3 : 2, active ? 0xf1c40f : 0x111111);
-      ic.r.setAlpha(ic.fighter.alive ? 1 : 0.3);
+      ic.r.setAlpha(ic.fighter.alive ? 1 : 0.35);
+      ic.img.setAlpha(ic.fighter.alive ? 1 : 0.35);
     }
 
     this.refreshAllFighters();
@@ -253,9 +482,11 @@ export class CombatScene extends Phaser.Scene {
     const cur = this.turn.current();
     const spell = cur.spells[i];
     if (!spell) { this.spellTooltip.setText(''); return; }
-    this.spellTooltip.setText(`${spell.name} - ${spell.desc}`);
+    this.spellTooltip.setText(
+      `${spell.name} - ${spell.desc}\nPortee ${spell.range.min}-${spell.range.max}` +
+      (spell.needsLOS ? ', vue requise' : '') + (spell.inLine ? ', en ligne' : '')
+    );
   }
-
   hideSpellTooltip() { this.spellTooltip.setText(''); }
 
   log(line) {
@@ -266,20 +497,7 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
-  // --- INTERACTIONS ---
-
-  onPointerMove(p) {
-    // Sur tactile, le pointermove est emis lors du touch sans valeur ajoutee:
-    // on ignore pour eviter de melanger avec le mode tap-confirm.
-    if (this.isTouchPointer(p)) return;
-    const t = screenToTile(p.x, p.y);
-    if (!inBounds(t.c, t.r)) { this.hover = null; this.refreshHighlights(); return; }
-    if (!this.hover || this.hover.c !== t.c || this.hover.r !== t.r) {
-      this.hover = t;
-      this.refreshHighlights();
-    }
-  }
-
+  // ---- INTERACTIONS ----
   isTouchPointer(p) {
     const ev = p && p.event;
     if (!ev) return false;
@@ -288,22 +506,80 @@ export class CombatScene extends Phaser.Scene {
     return false;
   }
 
-  onPointerDown(p) {
-    if (this.busy) return;
+  onMapPointerDown(p) {
+    if (this.pinch) return;
     if (this.isTouchPointer(p)) this.touchMode = true;
+    this.pointerDownInfo = {
+      x: p.x, y: p.y,
+      startScrollX: this.mainCam.scrollX,
+      startScrollY: this.mainCam.scrollY,
+      time: this.time.now,
+      dragging: false,
+    };
+  }
+
+  onPointerMove(p) {
+    if (this.pinch) return;
+    if (this.pointerDownInfo && p.isDown) {
+      const dx = p.x - this.pointerDownInfo.x;
+      const dy = p.y - this.pointerDownInfo.y;
+      const d = Math.hypot(dx, dy);
+      if (d > 10) {
+        if (this.mainCam.zoom > 1.02) {
+          this.pointerDownInfo.dragging = true;
+          this.mainCam.scrollX = this.pointerDownInfo.startScrollX - dx / this.mainCam.zoom;
+          this.mainCam.scrollY = this.pointerDownInfo.startScrollY - dy / this.mainCam.zoom;
+          this.hover = null;
+          this.refreshHighlights();
+          return;
+        }
+      }
+    }
+    if (this.isTouchPointer(p)) return;
+    const wp = this.mainCam.getWorldPoint(p.x, p.y);
+    const t = screenToTile(wp.x, wp.y);
+    const f = this.findFighterAtScreen(p.x, p.y);
+    const hoverTile = f ? { c: f.c, r: f.r } : (inBounds(t.c, t.r) ? t : null);
+    if (!hoverTile) { if (this.hover) { this.hover = null; this.refreshHighlights(); } return; }
+    if (!this.hover || this.hover.c !== hoverTile.c || this.hover.r !== hoverTile.r) {
+      this.hover = hoverTile;
+      this.refreshHighlights();
+    }
+  }
+
+  onPointerUp(p) {
+    if (this.pinch) return;
+    if (!this.pointerDownInfo) return;
+    const wasDragging = this.pointerDownInfo.dragging;
+    this.pointerDownInfo = null;
+    if (wasDragging) return;
+    if (this.busy) return;
+    // Tap court a partir de cette position.
+    this.handleTap(p);
+  }
+
+  handleTap(p) {
     const cur = this.turn.current();
     if (cur.team !== 'player') return;
-    const t = screenToTile(p.x, p.y);
-    if (!inBounds(t.c, t.r)) return;
 
-    // Clic droit (souris uniquement) = annuler la selection
-    if (!this.touchMode && (p.button === 2 || p.rightButtonDown())) {
+    // Clic droit souris = annuler
+    if (!this.touchMode && (p.button === 2 || (p.rightButtonDown && p.rightButtonDown()))) {
       this.cancelAction();
       return;
     }
 
+    // Resoudre la tuile cible: priorite combattant cliquables
+    const f = this.findFighterAtScreen(p.x, p.y);
+    let t;
+    if (f) {
+      t = { c: f.c, r: f.r };
+    } else {
+      const wp = this.mainCam.getWorldPoint(p.x, p.y);
+      t = screenToTile(wp.x, wp.y);
+      if (!inBounds(t.c, t.r)) return;
+    }
+
     if (this.touchMode) {
-      // Mode tactile: 1er tap = preview ; 2e tap meme case = confirmer.
       if (this.pendingTile && this.pendingTile.c === t.c && this.pendingTile.r === t.r) {
         const target = t;
         this.pendingTile = null;
@@ -312,16 +588,31 @@ export class CombatScene extends Phaser.Scene {
         else this.tryMoveTo(target);
         return;
       }
-      // Sinon: mettre cette case en preview (pseudo-hover)
       this.pendingTile = t;
       this.hover = t;
       this.refreshHighlights();
       return;
     }
 
-    // Souris: action immediate
     if (this.selectedSpell) this.tryCastAt(t);
     else this.tryMoveTo(t);
+  }
+
+  findFighterAtScreen(sx, sy) {
+    const wp = this.mainCam.getWorldPoint(sx, sy);
+    // bbox de chaque sprite (en world coords)
+    const sorted = this.state.fighters.filter(f => f.alive).sort((a, b) => (b.c + b.r) - (a.c + a.r));
+    for (const f of sorted) {
+      const sp = f.gfx.sprite;
+      const w = sp.displayWidth, h = sp.displayHeight;
+      const cx = f.gfx.cont.x + sp.x;
+      const cy = f.gfx.cont.y + sp.y;
+      // Origine sprite (0.5, 1) : top-left = cx - w/2, cy - h
+      const left = cx - w / 2, right = cx + w / 2;
+      const top = cy - h, bottom = cy;
+      if (wp.x >= left && wp.x <= right && wp.y >= top && wp.y <= bottom) return f;
+    }
+    return null;
   }
 
   cancelAction() {
@@ -347,6 +638,7 @@ export class CombatScene extends Phaser.Scene {
   tryMoveTo(t) {
     const cur = this.turn.current();
     if (cur.pm <= 0) return;
+    if (this.state.map.tiles[t.r][t.c] === 1) return;
     const occ = this.computeOccupied(cur);
     const result = bfs(this.state.map.tiles, occ, { c: cur.c, r: cur.r }, cur.pm);
     const path = pathTo(result, t);
@@ -390,21 +682,16 @@ export class CombatScene extends Phaser.Scene {
     if (spell.target === 'ally' && !(target && target.team === caster.team)) return false;
     if (spell.target === 'self' && (t.c !== caster.c || t.r !== caster.r)) return false;
     if (spell.target === 'tile') {
-      // pour teleport, la case doit etre libre ; pour piege idem
-      const blocked = this.state.map.tiles[t.r][t.c] === 1;
-      if (blocked) return false;
+      if (this.state.map.tiles[t.r][t.c] === 1) return false;
       if (target) return false;
     }
     return true;
   }
 
-  // --- HIGHLIGHTS ---
-
+  // ---- HIGHLIGHTS ----
   refreshHighlights() {
-    const g = this.layers.highlight;
-    const hp = this.layers.hoverPath;
-    g.clear();
-    hp.clear();
+    const g = this.highlightGfx; g.clear();
+    const hp = this.hoverGfx; hp.clear();
     if (this.busy) return;
     const cur = this.turn.current();
     if (!cur || cur.team !== 'player') return;
@@ -413,65 +700,47 @@ export class CombatScene extends Phaser.Scene {
 
     if (this.selectedSpell) {
       const spell = this.selectedSpell;
-      // portee
-      const range = computeReachableRange(cur, spell);
+      const range = computeReachableRange(cur, spell, this.state.map.tiles);
       for (const t of range) this.fillTile(g, t.c, t.r, 0x3498db, 0.25);
-      // ligne de vue / validite
       if (this.hover) {
         if (this.spellTargetValid(cur, spell, this.hover)) {
-          // zone d effet
           const area = tilesInArea(spell.area || { type: 'single' }, this.hover);
-          for (const t of area) this.fillTile(g, t.c, t.r, 0xf1c40f, 0.5);
+          for (const t of area) this.fillTile(g, t.c, t.r, 0xf1c40f, 0.55);
         } else {
-          this.fillTile(g, this.hover.c, this.hover.r, 0xe74c3c, 0.4);
+          this.fillTile(g, this.hover.c, this.hover.r, 0xe74c3c, 0.45);
         }
       }
     } else {
-      // mouvement
       const result = bfs(this.state.map.tiles, occ, { c: cur.c, r: cur.r }, cur.pm);
       for (const [k, d] of result.dist.entries()) {
         if (d === 0) continue;
         const [c, r] = k.split(',').map(Number);
-        this.fillTile(g, c, r, 0x2ecc71, 0.18);
+        this.fillTile(g, c, r, 0x2ecc71, 0.2);
       }
       if (this.hover) {
         const path = pathTo(result, this.hover);
         if (path && path.length > 1) {
-          for (const t of path.slice(1)) this.fillTile(hp, t.c, t.r, 0xffffff, 0.35);
+          for (const t of path.slice(1)) this.fillTile(hp, t.c, t.r, 0xffffff, 0.4);
         }
       }
     }
 
-    // afficher les pieges du joueur (les ennemis sont caches)
+    // Pieges allies (visibles pour le joueur)
     for (const trap of this.state.traps) {
-      if (trap.ownerTeam === 'player') this.fillTile(g, trap.c, trap.r, 0x9b59b6, 0.4);
+      if (trap.ownerTeam === 'player') this.fillTile(g, trap.c, trap.r, 0x9b59b6, 0.5);
     }
   }
 
-  fillTile(g, c, r, color, alpha) {
-    const p = tileToScreen(c, r);
-    g.fillStyle(color, alpha);
-    g.beginPath();
-    g.moveTo(p.x, p.y);
-    g.lineTo(p.x + TILE_W / 2, p.y + TILE_H / 2);
-    g.lineTo(p.x, p.y + TILE_H);
-    g.lineTo(p.x - TILE_W / 2, p.y + TILE_H / 2);
-    g.closePath();
-    g.fillPath();
-  }
-
-  // --- ANIMATIONS / EFFETS ---
-
+  // ---- ANIMATIONS / EFFETS ----
   animatePath(fighter, path, onDone) {
     const steps = path.slice(1);
     let i = 0;
     const stepNext = () => {
       if (i >= steps.length) {
-        // checker piege
         const events = [];
         triggerTrapsOn(this.state, fighter, events);
         this.consumeEvents(events);
-        this.depthSortFighters();
+        this.updateFighterDepth(fighter);
         onDone && onDone();
         return;
       }
@@ -479,22 +748,20 @@ export class CombatScene extends Phaser.Scene {
       fighter.c = next.c;
       fighter.r = next.r;
       const p = tileToScreen(next.c, next.r);
+      this.updateFighterDepth(fighter);
       this.tweens.add({
         targets: fighter.gfx.cont,
         x: p.x,
         y: p.y + TILE_H / 2,
-        duration: 140,
+        duration: 160,
         onComplete: () => {
-          // verifier piege a chaque pas
           const events = [];
           triggerTrapsOn(this.state, fighter, events);
           if (events.length) {
             this.consumeEvents(events);
-            this.depthSortFighters();
             this.refreshAllFighters();
             if (!fighter.alive) { onDone && onDone(); return; }
           }
-          this.depthSortFighters();
           stepNext();
         },
       });
@@ -504,19 +771,42 @@ export class CombatScene extends Phaser.Scene {
 
   castSpell(caster, spell, target, onDone) {
     this.flashTile(target.c, target.r, spell.color);
+    this.spellAnim(caster, target, spell);
     this.log(`${caster.name} lance ${spell.name}.`);
     const events = applySpell(this.state, caster, spell, target);
     this.consumeEvents(events);
     this.refreshAllFighters();
-    this.depthSortFighters();
-    this.time.delayedCall(450, () => onDone && onDone());
+    this.time.delayedCall(500, () => onDone && onDone());
+  }
+
+  spellAnim(caster, target, spell) {
+    // Projectile: petite bille qui va du caster a la cible (sauf melee/self/teleport)
+    const from = tileToScreen(caster.c, caster.r);
+    const to = tileToScreen(target.c, target.r);
+    const isMelee = spell.range && spell.range.max <= 1;
+    const isSelf = spell.target === 'self';
+    const hasTeleport = spell.effects.some(e => e.type === 'teleport');
+    if (isMelee || isSelf || hasTeleport) return;
+
+    const dot = this.add.circle(from.x, from.y + TILE_H / 2 - 14, 7, spell.color, 1);
+    dot.setStrokeStyle(2, 0x000000, 0.5);
+    dot.setDepth(99999);
+    this.addWorld(dot);
+    this.tweens.add({
+      targets: dot,
+      x: to.x, y: to.y + TILE_H / 2 - 14,
+      duration: 320,
+      onComplete: () => dot.destroy(),
+    });
   }
 
   flashTile(c, r, color) {
     const p = tileToScreen(c, r);
-    const flash = this.add.circle(p.x, p.y + TILE_H / 2, 28, color, 0.7);
+    const flash = this.add.ellipse(p.x, p.y + TILE_H / 2, 56, 28, color, 0.7);
+    flash.setDepth(99998);
+    this.addWorld(flash);
     this.tweens.add({
-      targets: flash, alpha: 0, scale: 1.8, duration: 500,
+      targets: flash, alpha: 0, scaleX: 1.7, scaleY: 1.7, duration: 520,
       onComplete: () => flash.destroy(),
     });
   }
@@ -525,20 +815,28 @@ export class CombatScene extends Phaser.Scene {
     for (const e of events) {
       if (e.text) this.log(e.text);
       if (e.type === 'damage' && e.target && e.target.gfx) {
-        this.popText(e.target, '-' + e.amount, '#e74c3c');
+        this.popText(e.target, '-' + e.amount, '#ff5577');
         this.shakeFighter(e.target);
       } else if (e.type === 'heal' && e.target && e.target.gfx) {
-        this.popText(e.target, '+' + e.amount, '#2ecc71');
+        this.popText(e.target, '+' + e.amount, '#7dffa0');
       } else if (e.type === 'trap_placed') {
         this.flashTile(e.tile.c, e.tile.r, 0x9b59b6);
+      } else if (e.type === 'dot' && e.target && e.target.gfx) {
+        this.popText(e.target, 'POISON', '#9b59b6');
+      } else if (e.type === 'buff' && e.target && e.target.gfx) {
+        this.popText(e.target, 'BUFF', '#f1c40f');
       }
     }
   }
 
   popText(fighter, text, color) {
     const p = tileToScreen(fighter.c, fighter.r);
-    const t = this.add.text(p.x, p.y - 10, text, { fontSize: '20px', color, fontStyle: 'bold' }).setOrigin(0.5).setDepth(999);
-    this.tweens.add({ targets: t, y: p.y - 60, alpha: 0, duration: 700, onComplete: () => t.destroy() });
+    const t = this.add.text(p.x, p.y - 20, text, {
+      fontFamily: 'Trebuchet MS', fontSize: '22px', color, fontStyle: 'bold',
+      stroke: '#000000', strokeThickness: 4,
+    }).setOrigin(0.5).setDepth(999999);
+    this.addWorld(t);
+    this.tweens.add({ targets: t, y: p.y - 70, alpha: 0, duration: 800, onComplete: () => t.destroy() });
   }
 
   shakeFighter(f) {
@@ -549,8 +847,7 @@ export class CombatScene extends Phaser.Scene {
     });
   }
 
-  // --- TURN FLOW ---
-
+  // ---- TURN FLOW ----
   computeOccupied(exclude) {
     const occ = new Set();
     for (const f of this.state.fighters) {
@@ -564,7 +861,6 @@ export class CombatScene extends Phaser.Scene {
   startTurn() {
     const cur = this.turn.current();
     cur.startTurn();
-    // appliquer les DoT
     if (cur.dots && cur.dots.length) {
       const total = cur.applyDots();
       if (total > 0) {
@@ -572,15 +868,20 @@ export class CombatScene extends Phaser.Scene {
         this.popText(cur, '-' + total, '#9b59b6');
       }
     }
+    this.hover = null;
+    this.pendingTile = null;
     this.refreshHud();
     this.refreshHighlights();
     this.log(`> Au tour de ${cur.name}.`);
     if (this.checkEnd()) return;
+    if (!cur.alive) { this.endTurn(); return; }
 
-    if (!cur.alive) {
-      this.endTurn();
-      return;
+    // Centrer la camera sur le combattant actif si zoom > 1
+    if (this.mainCam.zoom > 1.02) {
+      const p = tileToScreen(cur.c, cur.r);
+      this.mainCam.pan(p.x, p.y, 300, 'Sine.easeInOut');
     }
+
     if (cur.team === 'enemy') {
       this.busy = true;
       this.time.delayedCall(500, () => this.runAI());
@@ -591,6 +892,7 @@ export class CombatScene extends Phaser.Scene {
     const cur = this.turn.current();
     cur.endTurn();
     this.selectedSpell = null;
+    this.pendingTile = null;
     if (this.checkEnd()) return;
     this.turn.advance();
     this.startTurn();
@@ -601,11 +903,7 @@ export class CombatScene extends Phaser.Scene {
     const actions = planTurn(this.state, cur);
     let i = 0;
     const next = () => {
-      if (i >= actions.length) {
-        this.busy = false;
-        this.endTurn();
-        return;
-      }
+      if (i >= actions.length) { this.busy = false; this.endTurn(); return; }
       const action = actions[i++];
       if (action.type === 'move') {
         cur.pm -= (action.path.length - 1);
@@ -620,9 +918,7 @@ export class CombatScene extends Phaser.Scene {
           if (this.checkEnd()) { this.busy = false; return; }
           this.time.delayedCall(200, next);
         });
-      } else {
-        next();
-      }
+      } else { next(); }
     };
     next();
   }
@@ -638,10 +934,38 @@ export class CombatScene extends Phaser.Scene {
     }
     return false;
   }
+
+  // ---- PINCH ZOOM ----
+  updatePinch() {
+    const p1 = this.input.pointer1;
+    const p2 = this.input.pointer2;
+    if (p1 && p2 && p1.isDown && p2.isDown) {
+      const dist = Phaser.Math.Distance.Between(p1.x, p1.y, p2.x, p2.y);
+      const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+      if (this.pinch) {
+        const factor = dist / Math.max(8, this.pinch.startDist);
+        const newZoom = Phaser.Math.Clamp(this.pinch.startZoom * factor, ZOOM_MIN, ZOOM_MAX);
+        this.mainCam.setZoom(newZoom);
+        const dx = mid.x - this.pinch.startMid.x;
+        const dy = mid.y - this.pinch.startMid.y;
+        this.mainCam.scrollX = this.pinch.startScrollX - dx / Math.max(0.5, newZoom);
+        this.mainCam.scrollY = this.pinch.startScrollY - dy / Math.max(0.5, newZoom);
+      } else {
+        this.pinch = {
+          startDist: dist, startMid: mid,
+          startZoom: this.mainCam.zoom,
+          startScrollX: this.mainCam.scrollX,
+          startScrollY: this.mainCam.scrollY,
+        };
+        this.pointerDownInfo = null;
+      }
+    } else if (this.pinch) {
+      this.pinch = null;
+    }
+  }
 }
 
-function computeReachableRange(caster, spell) {
-  // Ne tient pas compte des obstacles -- comme Dofus pour la portee de base.
+function computeReachableRange(caster, spell, tiles) {
   const out = [];
   const max = spell.range.max;
   const min = spell.range.min;
