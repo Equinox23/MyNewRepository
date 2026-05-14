@@ -1093,23 +1093,44 @@ export class Hud {
     }
     this.nameEl.textContent = fighter.name + (fighter.team === 'player' ? '  (vous)' : '');
     this.hpEl.textContent = `${fighter.hp}/${fighter.maxHp}`;
-    this.paEl.textContent = `${fighter.pa}/${fighter.maxPa}`;
-    this.pmEl.textContent = `${fighter.pm}/${fighter.maxPm}`;
+    // Max PA/PM "effectifs" : incluent les bonus en cours (3 Concentration
+    // -> "11/11" et pas "11/8") pour que le joueur voie son cap reel.
+    const effMaxPa = fighter.effectiveMaxPa !== undefined ? fighter.effectiveMaxPa : fighter.maxPa;
+    const effMaxPm = fighter.effectiveMaxPm !== undefined ? fighter.effectiveMaxPm : fighter.maxPm;
+    this.paEl.textContent = `${fighter.pa}/${effMaxPa}`;
+    this.pmEl.textContent = `${fighter.pm}/${effMaxPm}`;
 
-    // Affichage des buffs actifs. duration inclut le tour de cast : on
-    // affiche duration - 1 pour le restant apres le tour en cours.
+    // Affichage des buffs actifs. On agrege les damageMult non-permanents
+    // en UNE seule ligne (3 x Concentration -> "+90% degats") plutot que
+    // de multiplier les entrees identiques.
     if (fighter.buffs && fighter.buffs.length) {
-      this.buffsEl.innerHTML = fighter.buffs.map(b => {
+      let aggDmgMult = 0;
+      let aggDmgMultDuration = 0;
+      const otherBuffs = [];
+      for (const b of fighter.buffs) {
+        if (b.damageMult && !b.permanent) {
+          aggDmgMult += b.damageMult;
+          aggDmgMultDuration = Math.max(aggDmgMultDuration, b.duration - 1);
+        } else {
+          otherBuffs.push(b);
+        }
+      }
+      const lines = [];
+      if (aggDmgMult > 0) {
+        lines.push(`<span class="buff">+${Math.round(aggDmgMult * 100)}% degats (${Math.max(0, aggDmgMultDuration)}t)</span>`);
+      }
+      for (const b of otherBuffs) {
         const parts = [];
         if (b.damageMult) parts.push(`+${Math.round(b.damageMult * 100)}% degats`);
         if (b.bonusPa) parts.push(`+${b.bonusPa} PA`);
         if (b.bonusPm) parts.push(`+${b.bonusPm} PM`);
         if (b.shield) parts.push(`-${Math.round(b.shield * 100)}% degats reçus`);
         if (b.dot) parts.push(`Poison ${b.dot.min}-${b.dot.max}/tour`);
-        if (parts.length === 0) return '';
+        if (parts.length === 0) continue;
         const tag = b.permanent ? '(carte)' : `(${Math.max(0, b.duration - 1)}t)`;
-        return `<span class="buff">${parts.join(', ')} ${tag}</span>`;
-      }).filter(s => s).join('  ');
+        lines.push(`<span class="buff">${parts.join(', ')} ${tag}</span>`);
+      }
+      this.buffsEl.innerHTML = lines.join('  ');
     } else {
       this.buffsEl.innerHTML = '';
     }
@@ -1284,27 +1305,64 @@ export class Hud {
     const teamClass = f.team === 'player' ? 'player' : 'enemy';
     let buffsHtml = '';
     if (f.buffs && f.buffs.length) {
-      const parts = f.buffs.map(b => {
+      // Agregation des damageMult non-permanents en une seule ligne.
+      let aggDmgMult = 0;
+      let aggDmgMultDuration = 0;
+      const otherBuffs = [];
+      for (const b of f.buffs) {
+        if (b.damageMult && !b.permanent) {
+          aggDmgMult += b.damageMult;
+          aggDmgMultDuration = Math.max(aggDmgMultDuration, b.duration - 1);
+        } else {
+          otherBuffs.push(b);
+        }
+      }
+      const parts = [];
+      if (aggDmgMult > 0) {
+        parts.push(`+${Math.round(aggDmgMult * 100)}% dgt (${Math.max(0, aggDmgMultDuration)}t)`);
+      }
+      for (const b of otherBuffs) {
         const bits = [];
         if (b.damageMult) bits.push(`+${Math.round(b.damageMult * 100)}% dgt`);
         if (b.bonusPa) bits.push(`+${b.bonusPa} PA`);
         if (b.bonusPm) bits.push(`+${b.bonusPm} PM`);
         if (b.shield) bits.push(`-${Math.round(b.shield * 100)}% reçus`);
         if (b.dot) bits.push(`Poison ${b.dot.min}-${b.dot.max}`);
-        if (!bits.length) return '';
+        if (!bits.length) continue;
         const tag = b.permanent ? '(carte)' : `(${Math.max(0, b.duration - 1)}t)`;
-        return bits.join(', ') + ' ' + tag;
-      }).filter(Boolean);
+        parts.push(bits.join(', ') + ' ' + tag);
+      }
       if (parts.length) buffsHtml = `<div class="fi-buffs">${parts.join(' / ')}</div>`;
+    }
+    const effMaxPa = f.effectiveMaxPa !== undefined ? f.effectiveMaxPa : f.maxPa;
+    const effMaxPm = f.effectiveMaxPm !== undefined ? f.effectiveMaxPm : f.maxPm;
+    // Affichage specifique aux bombes : pas de PA/PM, on montre le
+    // fusible restant et les degats prevus a l explosion.
+    let bodyRows;
+    if (f.isBomb) {
+      const fuseMax = (f.def && f.def.fuseMax) || 3;
+      const remaining = Math.max(0, fuseMax - (f.bombAge || 0));
+      const baseDmg = (f.def && f.def.bombDamage) || 50;
+      const growth = (f.def && f.def.bombDamageGrowth) || 0;
+      const nextDmg = Math.round(baseDmg * (1 + growth * (f.bombAge || 0)));
+      bodyRows = `
+        <div class="fi-row"><span class="lbl">PV</span><span class="val hp">${f.hp} / ${f.maxHp}</span></div>
+        <div class="fi-row"><span class="lbl">Fusible</span><span class="val pm">${remaining} tour${remaining > 1 ? 's' : ''}</span></div>
+        <div class="fi-row"><span class="lbl">Degats</span><span class="val hp">${nextDmg}</span></div>
+      `;
+    } else {
+      bodyRows = `
+        <div class="fi-row"><span class="lbl">PV</span><span class="val hp">${f.hp} / ${f.maxHp}</span></div>
+        <div class="fi-row"><span class="lbl">PA</span><span class="val pa">${f.pa} / ${effMaxPa}</span></div>
+        <div class="fi-row"><span class="lbl">PM</span><span class="val pm">${f.pm} / ${effMaxPm}</span></div>
+      `;
     }
     this.fighterInfoEl.innerHTML = `
       <button class="fi-pin" type="button" title="Desepingler">x</button>
       <div class="fi-title">${isPinned ? 'INFO (epinglee)' : 'INFO'}</div>
       <div class="fi-name">${f.name}</div>
       <div class="fi-team ${teamClass}">${teamLabel}</div>
-      <div class="fi-row"><span class="lbl">PV</span><span class="val hp">${f.hp} / ${f.maxHp}</span></div>
-      <div class="fi-row"><span class="lbl">PA</span><span class="val pa">${f.pa} / ${f.maxPa}</span></div>
-      <div class="fi-row"><span class="lbl">PM</span><span class="val pm">${f.pm} / ${f.maxPm}</span></div>
+      ${bodyRows}
       ${buffsHtml}
     `;
     if (isPinned) {

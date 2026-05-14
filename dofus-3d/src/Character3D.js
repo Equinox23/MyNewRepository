@@ -7,6 +7,7 @@ import { buildCraqueleur } from './models/craqueleur.js';
 import { buildCrapaud } from './models/crapaud.js';
 import { buildCrapaudChef } from './models/crapaudChef.js';
 import { buildRoublard } from './models/roublard.js';
+import { buildBombeRoublard } from './models/bombeRoublard.js';
 import { HpBar3D } from './HpBar3D.js';
 
 const BUILDERS = {
@@ -18,6 +19,7 @@ const BUILDERS = {
   craqueleur: buildCraqueleur,
   crapaud: buildCrapaud,
   crapaudChef: buildCrapaudChef,
+  bombeRoublard: buildBombeRoublard,
 };
 
 const HP_BAR_Y = {
@@ -29,6 +31,7 @@ const HP_BAR_Y = {
   craqueleur: 1.55,
   crapaud: 1.10,
   crapaudChef: 1.80,
+  bombeRoublard: 1.20,
 };
 
 export class Character3D {
@@ -170,6 +173,48 @@ export class Character3D {
       };
       requestAnimationFrame(step);
     });
+  }
+
+  // Affiche un compteur de tours restants sur une bombe (sprite
+  // attache au groupe, persistant entre les frames).
+  setBombFuse(turnsLeft) {
+    const text = String(Math.max(0, turnsLeft));
+    if (!this._fuseSprite) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 96; canvas.height = 96;
+      this._fuseCanvas = canvas;
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.minFilter = THREE.LinearFilter;
+      this._fuseTex = tex;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+      const sprite = new THREE.Sprite(mat);
+      sprite.scale.set(0.7, 0.7, 1);
+      sprite.position.set(0, (HP_BAR_Y[this.classId] || 1.4) + 0.35, 0);
+      sprite.renderOrder = 1001;
+      this.group.add(sprite);
+      this._fuseSprite = sprite;
+    }
+    const canvas = this._fuseCanvas;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // Pastille rouge.
+    ctx.beginPath();
+    ctx.arc(48, 48, 36, 0, Math.PI * 2);
+    ctx.fillStyle = '#c0392b';
+    ctx.fill();
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#fff0c8';
+    ctx.stroke();
+    // Chiffre.
+    ctx.font = 'bold 56px "Trebuchet MS", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = '#000';
+    ctx.strokeText(text, 48, 50);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(text, 48, 50);
+    this._fuseTex.needsUpdate = true;
   }
 
   // Texte flottant au-dessus du perso, generique.

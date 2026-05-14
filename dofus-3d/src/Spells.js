@@ -138,6 +138,31 @@ const ICON_POISON_SPIT = `
     <circle cx="13" cy="22" r="1" fill="#fff" opacity="0.5"/>
   </svg>`;
 
+const ICON_BOMB = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="15" cy="20" r="8" fill="currentColor"/>
+    <rect x="14" y="11" width="2.5" height="2.5" fill="currentColor"/>
+    <line x1="16" y1="11" x2="22" y2="5"/>
+    <polygon points="22 5, 27 4, 24 9" fill="currentColor"/>
+    <circle cx="12" cy="18" r="1.2" fill="#fff"/>
+  </svg>`;
+
+const ICON_BOMB_MOVE = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="22" r="6" fill="currentColor"/>
+    <rect x="11" y="15" width="2" height="2" fill="currentColor"/>
+    <line x1="12" y1="15" x2="15" y2="11"/>
+    <polygon points="16 5, 28 5, 22 11" fill="currentColor"/>
+    <polygon points="22 17, 28 17, 28 23" fill="currentColor"/>
+    <line x1="14" y1="14" x2="26" y2="6" stroke-dasharray="2 2"/>
+  </svg>`;
+
+const ICON_DETONATE = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="16 2, 19 13, 30 16, 19 19, 16 30, 13 19, 2 16, 13 13" fill="currentColor"/>
+    <circle cx="16" cy="16" r="3" fill="#fff"/>
+  </svg>`;
+
 // Couleurs canoniques par categorie.
 export const SPELL_CATEGORY_COLOR = {
   attack: '#c0392b',
@@ -183,50 +208,40 @@ export const SPELLS = {
   },
 
   // ---------- ROUBLARD ----------
-  coupBas: {
-    id: 'coupBas', name: 'Coup Bas', short: 'CB', icon: ICON_FIST,
+  // 4 sorts focalises sur la pose / gestion / detonation de bombes.
+  poserBombe: {
+    id: 'poserBombe', name: 'Poser une Bombe', short: 'PB', icon: ICON_BOMB,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
-    target: 'enemy', area: { type: 'single' },
-    effects: [
-      { type: 'damage', min: 14, max: 20 },
-      { type: 'debuff_pm', value: 1 },
-    ],
-    desc: 'Frappe sournoise au corps a corps : degats + la cible perd 1 PM.',
+    apCost: 4, range: { min: 1, max: 3 }, needsLOS: false,
+    target: 'tile', area: { type: 'single' },
+    effects: [{ type: 'placeBomb' }],
+    desc: 'Pose une bombe sur une case libre (50 PV, bloque la vue). Explose en croix dans 3 tours pour 50 degats, +75% par tour ecoule. Max 2 bombes sur le terrain, 1 pose par tour.',
   },
-  bombeExplosive: {
-    id: 'bombeExplosive', name: 'Bombe Explosive', short: 'BX', icon: ICON_CROSS_PUNCH,
+  alimentationBombe: {
+    id: 'alimentationBombe', name: 'Alimentation', short: 'AL', icon: ICON_BOMB_MOVE,
+    category: 'move', color: SPELL_CATEGORY_COLOR.move,
+    apCost: 2, range: { min: 1, max: 5 }, needsLOS: false,
+    target: 'tile', area: { type: 'single' },
+    effects: [{ type: 'moveBomb' }],
+    desc: 'Deplace votre bombe la plus proche vers la case visee (case libre).',
+  },
+  detonationManuelle: {
+    id: 'detonationManuelle', name: 'Detonation', short: 'DT', icon: ICON_DETONATE,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 4, range: { min: 1, max: 5 }, needsLOS: true,
-    target: 'tile', area: { type: 'cross', size: 1 },
-    effects: [{ type: 'damage', min: 18, max: 25 }],
-    desc: 'Lance une bombe sur une case : explose en croix (case + 4 voisines).',
-  },
-  tirPrecis: {
-    id: 'tirPrecis', name: 'Tir Precis', short: 'TP', icon: ICON_LINE,
-    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 3, range: { min: 2, max: 7 }, needsLOS: true,
-    target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 13, max: 18 }],
-    desc: 'Tir de precision a longue portee. Doit avoir une vue degagee.',
-  },
-  esquive: {
-    id: 'esquive', name: 'Esquive', short: 'ES', icon: ICON_SHIELD,
-    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
-    apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
+    apCost: 3, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
-    cooldown: 3,
-    effects: [{ type: 'buff', shield: 0.30, duration: 2 }],
-    desc: 'Position d esquive : -30% degats reçus pendant 2 tours.',
+    effects: [{ type: 'detonateBombs' }],
+    desc: 'Declenche manuellement TOUTES vos bombes en place.',
   },
-  acceleration: {
-    id: 'acceleration', name: 'Acceleration', short: 'AC', icon: ICON_BOOST,
+  bouclierBombe: {
+    id: 'bouclierBombe', name: 'Bouclier de Bombe', short: 'BB', icon: ICON_SHIELD,
     category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
-    apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
-    target: 'self', area: { type: 'single' },
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
+    target: 'ally', area: { type: 'single' },
+    targetFilter: 'bomb',
     cooldown: 3,
-    effects: [{ type: 'buff', bonusPm: 2, duration: 2 }],
-    desc: '+2 PM pendant 2 tours.',
+    effects: [{ type: 'buff', shield: 0.5, duration: 3 }],
+    desc: 'Pose un bouclier (-50% degats reçus) sur une de vos bombes pendant 3 tours.',
   },
 
   // ---------- OSAMODAS ----------
@@ -296,10 +311,12 @@ export const SPELLS = {
   frappeCraqueleur: {
     id: 'frappeCraqueleur', name: 'Frappe du Craqueleur', short: 'FC', icon: ICON_CROSS_PUNCH,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
-    target: 'tile', area: { type: 'cross', size: 1 },
+    apCost: 5, range: { min: 1, max: 1 }, needsLOS: false,
+    // Ligne de 2 cases devant le craqueleur (la case ciblee + la
+    // suivante dans la meme direction). Pas perçant.
+    target: 'tile', area: { type: 'line', length: 2 },
     effects: [{ type: 'damage', min: 30, max: 40 }],
-    desc: 'Frappe en croix au corps a corps : la case ciblee + ses 4 voisines.',
+    desc: 'Frappe en ligne sur 2 cases devant le Craqueleur. Au corps a corps.',
   },
   lancerRocher: {
     id: 'lancerRocher', name: 'Lancer de Rocher', short: 'LR', icon: ICON_ROCK_THROW,
@@ -310,7 +327,7 @@ export const SPELLS = {
       { type: 'damage', min: 20, max: 30 },
       { type: 'debuff_pm', value: 2 },
     ],
-    desc: 'Jette un rocher : degats + la cible perd 2 PM.',
+    desc: 'Jette un rocher (ligne de vue requise) : degats + la cible perd 2 PM.',
   },
 
   // ---------- CRAPAUD ----------
@@ -391,6 +408,17 @@ export function spellEffectLines(spell) {
         break;
       case 'dot':
         lines.push(`Poison : ${eff.min}-${eff.max} degats pendant ${eff.duration} tours`);
+        break;
+      case 'placeBomb':
+        lines.push('Pose une bombe (50 PV)');
+        lines.push('Explose en croix dans 3 tours');
+        lines.push('Degats : 50 + 75% par tour ecoule');
+        break;
+      case 'moveBomb':
+        lines.push('Deplace la bombe la plus proche');
+        break;
+      case 'detonateBombs':
+        lines.push('Detonation immediate de toutes vos bombes');
         break;
     }
   }

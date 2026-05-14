@@ -122,7 +122,7 @@ export class Game {
   }
 
   // ---------- TOUR ----------
-  startTurn() {
+  async startTurn() {
     if (this.checkEnd()) return;
     const cur = this.turn.current();
     // 1) Appliquer les DoT actifs AVANT que la nouvelle ressource se
@@ -160,10 +160,27 @@ export class Game {
     for (const f of this.fighters) f.character.setActive(f === cur);
     this.mode = 'move';
     this.selectedSpellId = null;
+    cur._bombPlacedThisTurn = false;
     this.hud.update(cur, this.mode, null);
     this.hud.flash(`Tour ${this.turn.round}  -  ${cur.name}`, 1200);
     this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, cur);
     this.hud.log && this.hud.log(`Tour de ${cur.name}`, 'info');
+
+    // Vieillit toutes les bombes appartenant au combattant actif. Si
+    // une bombe atteint son fusible, elle explose avant que le joueur
+    // ne joue son tour.
+    await this._processOwnedBombsTurnStart(cur);
+    if (this.ended) return;
+    if (!cur.alive) {
+      // Le Roublard a saute sur sa propre bombe : on avance.
+      if (cur.character) cur.character.die();
+      this.hud.log && this.hud.log(`${cur.name} meurt dans l explosion !`, 'death');
+      this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
+      if (this.checkEnd()) return;
+      this.turn.advance();
+      this.startTurn();
+      return;
+    }
     this.refreshRangeOverlay();
     if (cur.def.ai) {
       this.busy = true;
@@ -238,16 +255,17 @@ export class Game {
     await this.applySpellEffects(caster, spell, { c: caster.c, r: caster.r });
   }
 
-  async onTileTap(c, r) {
+  async onTileTap(c, r, pointerType = 'mouse') {
     if (this.busy || this.ended) return;
     const cur = this.turn.current();
     if (cur.team !== 'player' || cur.def.ai) return;
+    const isTouch = pointerType && pointerType !== 'mouse';
     if (this.mode === 'move') {
       // En mode deplacement, on bloque les cases inutilisables.
       if (this.map3d.isBlockedFor(c, r, cur)) return;
       await this.tryMove(c, r);
     } else if (this.mode === 'spell') {
-      await this.tryCastSpell(c, r);
+      await this.tryCastSpell(c, r, isTouch);
     }
   }
 
@@ -282,12 +300,18 @@ export class Game {
   }
 
   // ---------- SORTS (joueur) ----------
-  async tryCastSpell(c, r) {
+  async tryCastSpell(c, r, isTouch = false) {
     const cur = this.turn.current();
     const spell = SPELLS[this.selectedSpellId];
     if (!spell) return;
     const reason = this.validateSpellTarget(cur, spell, c, r);
-    if (reason) { this.hud.flash(reason, 900); return; }
+    if (reason) {
+      this.hud.flash(reason, 900);
+      // Sur mobile, taper une case non ciblable equivaut au clic droit
+      // PC : on revient en mode deplacement (etat de base).
+      if (isTouch) this.setMode('move');
+      return;
+    }
     cur.pa -= spell.apCost;
     if (spell.cooldown) cur.setCooldown(spell.id, spell.cooldown);
     cur.character.popCost(spell.apCost, 'pa');
@@ -307,11 +331,9 @@ export class Game {
   validateSpellTarget(caster, spell, c, r) {
     const dist = Math.abs(caster.c - c) + Math.abs(caster.r - r);
     if (dist < spell.range.min || dist > spell.range.max) return 'Hors de portee';
-    // Pour les sorts de degats, on n empeche pas de viser l eau (sauf
-    // si target='tile' + summon/teleport, traite ci-dessous). Un mur
-    // bloque toujours le ciblage.
     if (this.map3d.isWall(c, r)) return 'Mur';
-    if (spell.needsLOS && !hasLOS(this.map3d.getData(), caster.c, caster.r, c, r)) return 'Pas de vue';
+    const blockers = this.bombBlockers();
+    if (spell.needsLOS && !hasLOS(this.map3d.getData(), caster.c, caster.r, c, r, blockers)) return 'Pas de vue';
     if (spell.area && spell.area.type === 'line') {
       const dc = c - caster.c, dr = r - caster.r;
       if (dc !== 0 && dr !== 0) return 'Doit etre en ligne droite';
@@ -319,20 +341,46 @@ export class Game {
     const targetFighter = this.fighters.find(f => f.alive && f.c === c && f.r === r);
     if (spell.target === 'self' && targetFighter !== caster) return 'Cible : soi-meme';
     if (spell.target === 'enemy' && (!targetFighter || targetFighter.team === caster.team)) return 'Pas d ennemi';
-    if (spell.target === 'ally' && (!targetFighter || targetFighter.team !== caster.team)) return 'Pas d allie';
+    if (spell.target === 'ally') {
+      if (!targetFighter || targetFighter.team !== caster.team) return 'Pas d allie';
+      if (spell.targetFilter === 'bomb' && !targetFighter.isBomb) return 'Cible : une bombe';
+    }
     if (spell.target === 'tile') {
-      const needsEmpty = spell.effects.some(e => e.type === 'teleport' || e.type === 'summon');
+      const isPlace = spell.effects.some(e => e.type === 'placeBomb' || e.type === 'moveBomb');
+      const needsEmpty = spell.effects.some(e =>
+        e.type === 'teleport' || e.type === 'summon' || e.type === 'placeBomb' || e.type === 'moveBomb'
+      );
       if (needsEmpty && targetFighter) return 'Case occupee';
-      // Pour summon, le Craqueleur ne peut pas apparaitre dans l eau.
       if (spell.effects.some(e => e.type === 'summon')) {
         if (this.map3d.isWater(c, r)) return 'Pas dans l eau';
       }
-      // Pour teleport, on interdit a un non-aquatique d arriver dans l eau.
       if (spell.effects.some(e => e.type === 'teleport')) {
         if (this.map3d.isBlockedFor(c, r, caster)) return 'Inaccessible';
       }
+      if (isPlace) {
+        // Bombe : ne peut etre posee que sur du sol / pont (pas mur ni eau).
+        if (this.map3d.isWater(c, r) && !this.map3d.isBridge(c, r)) return 'Pas dans l eau';
+      }
+      if (spell.effects.some(e => e.type === 'placeBomb')) {
+        const myBombs = this.fighters.filter(f => f.alive && f.isBomb && f.bombOwner === caster);
+        if (myBombs.length >= 2) return 'Max 2 bombes deja en place';
+        if (caster._bombPlacedThisTurn) return 'Deja une bombe posee ce tour';
+      }
+      if (spell.effects.some(e => e.type === 'moveBomb')) {
+        const myBombs = this.fighters.filter(f => f.alive && f.isBomb && f.bombOwner === caster);
+        if (myBombs.length === 0) return 'Aucune bombe a deplacer';
+      }
     }
     return null;
+  }
+
+  // Set des positions des bombes (utilise pour bloquer la LOS).
+  bombBlockers() {
+    const s = new Set();
+    for (const f of this.fighters) {
+      if (f.alive && f.isBomb) s.add(`${f.c},${f.r}`);
+    }
+    return s;
   }
 
   async applySpellEffects(caster, spell, target) {
@@ -629,6 +677,139 @@ export class Game {
         this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
         return;
       }
+      case 'placeBomb': {
+        // Pose une bombe sur la case visee.
+        const bomb = new Fighter('bombeRoublard', caster.team, target.c, target.r);
+        bomb.character = new Character3D(this.scene3d.scene, 'bombeRoublard', caster.team, target.c, target.r);
+        bomb.bombOwner = caster;
+        bomb.bombAge = 0;
+        bomb.character.setBombFuse(bomb.def.fuseMax);
+        this.fighters.push(bomb);
+        caster._bombPlacedThisTurn = true;
+        // VFX de pose : petit portail rouge + apparition zoom.
+        if (this.vfx) this.vfx.portal(target.c, target.r, { color: 0xc0392b, duration: 0.55 });
+        bomb.character.group.scale.setScalar(0.01);
+        await new Promise(resolve => {
+          const start = performance.now();
+          const tick = (now) => {
+            const t = Math.min(1, (now - start) / 350);
+            const e = t * t;
+            bomb.character.group.scale.setScalar(0.01 + 0.99 * e);
+            if (t < 1) requestAnimationFrame(tick);
+            else { bomb.character.group.scale.setScalar(1); resolve(); }
+          };
+          requestAnimationFrame(tick);
+        });
+        caster.character.flashGlow(0xc0392b, 600);
+        this.hud.log && this.hud.log(`${caster.name} pose une bombe (50 PV)`, 'summon');
+        return;
+      }
+      case 'moveBomb': {
+        // Trouve la bombe du caster la plus proche de la case visee.
+        const myBombs = this.fighters.filter(f =>
+          f.alive && f.isBomb && f.bombOwner === caster
+        );
+        if (myBombs.length === 0) return;
+        myBombs.sort((a, b) =>
+          (Math.abs(a.c - target.c) + Math.abs(a.r - target.r)) -
+          (Math.abs(b.c - target.c) + Math.abs(b.r - target.r))
+        );
+        const bomb = myBombs[0];
+        // VFX : petit portail au depart et a l arrivee + teleport.
+        if (this.vfx) {
+          this.vfx.portal(bomb.c, bomb.r, { color: 0xc0392b, duration: 0.4 });
+          this.vfx.portal(target.c, target.r, { color: 0xc0392b, duration: 0.4 });
+        }
+        await bomb.character.teleportTo(target.c, target.r);
+        bomb.c = target.c;
+        bomb.r = target.r;
+        this.hud.log && this.hud.log(`${caster.name} alimente sa bombe -> (${target.c},${target.r})`, 'cast');
+        return;
+      }
+      case 'detonateBombs': {
+        const myBombs = this.fighters.filter(f =>
+          f.alive && f.isBomb && f.bombOwner === caster
+        );
+        if (myBombs.length === 0) {
+          this.hud.log && this.hud.log(`${caster.name} : aucune bombe a detoner`, 'cast');
+          return;
+        }
+        caster.character.flashGlow(0xff5a1f, 600);
+        for (const bomb of myBombs) {
+          await this.explodeBomb(bomb);
+          if (this.ended) return;
+        }
+        return;
+      }
+    }
+  }
+
+  // Fait exploser une bombe : VFX, degats en croix, retire la bombe.
+  async explodeBomb(bomb) {
+    if (!bomb || !bomb.alive) return;
+    const cells = this.crossCells(bomb.c, bomb.r, (bomb.def.bombArea && bomb.def.bombArea.size) || 1);
+    const baseDmg = bomb.def.bombDamage || 50;
+    const growth = bomb.def.bombDamageGrowth || 0;
+    const dmg = Math.round(baseDmg * (1 + growth * bomb.bombAge));
+
+    // VFX : grosse onde de choc + flash central + impacts.
+    if (this.vfx) {
+      this.vfx.shockwave(bomb.c, bomb.r, { color: 0xff5a1f, radius: 2.4, duration: 0.7 });
+      this.vfx.flash(bomb.c, bomb.r, { color: 0xffd166, duration: 0.45 });
+    }
+    // Retire la bombe immediatement : elle ne se prend pas ses propres degats.
+    bomb.alive = false;
+    if (bomb.character) bomb.character.die();
+    await new Promise(r => setTimeout(r, 180));
+
+    const dying = [];
+    for (const cell of cells) {
+      const tf = this.fighters.find(f =>
+        f.alive && !f.isBomb && f.c === cell.c && f.r === cell.r
+      );
+      if (!tf) continue;
+      const actual = tf.takeDamage(dmg);
+      tf.character.popDamage(actual);
+      tf.character.hpBar.setHp(tf.hp, tf.maxHp);
+      if (this.vfx) this.vfx.flash(cell.c, cell.r, { color: 0xff8a00, duration: 0.3 });
+      this.hud.log && this.hud.log(`Bombe explose : ${tf.name} subit ${actual} degats`, 'attack');
+      if (!tf.alive) dying.push(tf);
+    }
+    for (const d of dying) {
+      this.hud.log && this.hud.log(`${d.name} est vaincu !`, 'death');
+      await d.character.die();
+    }
+    if (dying.length) this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
+    if (this.checkEnd()) return;
+  }
+
+  // Au debut du tour d un combattant, on vieillit toutes ses bombes
+  // posees. Quand l age atteint le fusible, la bombe explose avant
+  // qu il ne joue son tour.
+  async _processOwnedBombsTurnStart(owner) {
+    if (!owner) return;
+    const myBombs = this.fighters.filter(f =>
+      f.alive && f.isBomb && f.bombOwner === owner
+    );
+    if (myBombs.length === 0) return;
+    for (const bomb of myBombs) {
+      bomb.bombAge = (bomb.bombAge || 0) + 1;
+      const fuseMax = (bomb.def && bomb.def.fuseMax) || 3;
+      const remaining = Math.max(0, fuseMax - bomb.bombAge);
+      if (bomb.character && bomb.character.setBombFuse) {
+        bomb.character.setBombFuse(remaining);
+      }
+      // Si la bombe est l element epingle dans le panneau info, on
+      // rafraichit l affichage (fusible + degats prevus a jour).
+      if (this.hud._infoFighter === bomb && this.hud.renderFighterInfo) {
+        this.hud.renderFighterInfo();
+      }
+      if (bomb.bombAge >= fuseMax) {
+        this.busy = true;
+        await this.explodeBomb(bomb);
+        this.busy = false;
+        if (this.ended) return;
+      }
     }
   }
 
@@ -757,6 +938,21 @@ export class Game {
     if (this.ended) return;
 
     await this.aiAttackLoop(ai, target, attackSpells);
+    if (this.ended) return;
+
+    // Apres avoir attaque : si aucun ennemi adjacent et qu il reste des
+    // PM, on se rapproche du prochain ennemi LE PLUS PROCHE pour
+    // preparer le tour suivant.
+    if (ai.pm > 0) {
+      const enemies = this.fighters
+        .filter(f => f.alive && !f.isBomb && f.team !== ai.team)
+        .map(f => ({ f, d: Math.abs(ai.c - f.c) + Math.abs(ai.r - f.r) }))
+        .sort((a, b) => a.d - b.d);
+      if (enemies.length > 0 && enemies[0].d > 1) {
+        await this.aiPause(400);
+        await this.aiApproach(ai, enemies[0].f, 1);
+      }
+    }
   }
 
   // IA peureuse : essaie de tirer le plus loin possible (proche du max
@@ -801,11 +997,18 @@ export class Game {
       const usable = attackSpells.filter(s => s.apCost <= ai.pa).filter(s => {
         const d = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
         if (d < s.range.min || d > s.range.max) return false;
-        if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r)) return false;
+        if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r, this.bombBlockers())) return false;
         return true;
       });
       if (usable.length === 0) break;
-      usable.sort((a, b) => spellScore(b) - spellScore(a));
+      // Preference stricte : portee la plus COURTE d abord (le Craqueleur
+      // choisit Frappe range 1 plutot que Lancer Rocher range 6 si les
+      // deux sont utilisables). En cas d egalite, on prend le sort qui
+      // marque le meilleur score (degats/debuffs).
+      usable.sort((a, b) => {
+        if (a.range.max !== b.range.max) return a.range.max - b.range.max;
+        return spellScore(b) - spellScore(a);
+      });
       const spell = usable[0];
       if (!first) await this.aiPause(350);
       first = false;
@@ -834,7 +1037,7 @@ export class Game {
         if (ai.pa < spell.apCost) continue;
         const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
         if (dist < spell.range.min || dist > spell.range.max) continue;
-        if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r)) continue;
+        if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r, this.bombBlockers())) continue;
         ai.pa -= spell.apCost;
         if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
         ai.character.popCost(spell.apCost, 'pa');
@@ -865,7 +1068,7 @@ export class Game {
         for (const spell of shieldSpells) {
           const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
           if (dist < spell.range.min || dist > spell.range.max) continue;
-          if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r)) continue;
+          if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r, this.bombBlockers())) continue;
           if (anyCast) await this.aiPause(350);
           ai.pa -= spell.apCost;
           if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
@@ -884,7 +1087,13 @@ export class Game {
   }
 
   pickWeakestTarget(ai) {
-    const enemies = this.fighters.filter(f => f.alive && f.team !== ai.team);
+    // On ignore les bombes : elles ne combattent pas et risquent de
+    // monopoliser l attention de l IA (50 PV = toujours plus faible).
+    // Si seules des bombes restent, on tombe en fallback dessus.
+    let enemies = this.fighters.filter(f => f.alive && !f.isBomb && f.team !== ai.team);
+    if (enemies.length === 0) {
+      enemies = this.fighters.filter(f => f.alive && f.team !== ai.team);
+    }
     if (enemies.length === 0) return null;
     enemies.sort((a, b) => {
       if (a.hp !== b.hp) return a.hp - b.hp;
@@ -972,7 +1181,7 @@ export class Game {
       const distToTarget = Math.abs(c - target.c) + Math.abs(r - target.r);
       if (distToTarget > maxDist) continue;
       // On veut conserver une ligne de vue sur la cible
-      if (!hasLOS(this.map3d.getData(), c, r, target.c, target.r)) continue;
+      if (!hasLOS(this.map3d.getData(), c, r, target.c, target.r, this.bombBlockers())) continue;
       const s = scoreDist(distToTarget);
       if (s < bestScore) { bestScore = s; best = { c, r }; }
     }

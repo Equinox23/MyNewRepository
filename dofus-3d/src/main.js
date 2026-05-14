@@ -136,7 +136,7 @@ canvas.addEventListener('pointerup', (e) => {
       game.setMode('move');
       return;
     }
-    handleTap(e.clientX, e.clientY);
+    handleTap(e.clientX, e.clientY, p.pointerType);
   }
 });
 
@@ -173,16 +173,21 @@ function handleHover(x, y) {
   canvas.style.cursor = enemyHere ? SWORD_CURSOR : POINTER_CURSOR;
 }
 
-function handleTap(x, y) {
+function handleTap(x, y, pointerType = 'mouse') {
   if (game.busy || game.ended) return;
   const hit = picker.pick(x, y);
-  if (!hit) return;
-  // Pin : si la case contient un combattant, on epingle son info dans
-  // le panneau (le hover ne l ecrasera plus). Sinon, on desepingle.
+  const isTouch = pointerType && pointerType !== 'mouse';
+  if (!hit) {
+    // Tap dans le vide (hors map). Sur mobile, ça equivaut au clic droit
+    // PC : on annule la selection courante et on revient en mode deplacement.
+    hud.unpinFighterInfo();
+    if (isTouch && game.mode === 'spell') game.setMode('move');
+    return;
+  }
   const fighter = game.fighters.find(f => f.alive && f.c === hit.c && f.r === hit.r);
   if (fighter) hud.pinFighterInfo(fighter);
   else hud.unpinFighterInfo();
-  game.onTileTap(hit.c, hit.r);
+  game.onTileTap(hit.c, hit.r, pointerType);
 }
 
 // --- INPUTS clavier ---

@@ -52,8 +52,10 @@ export function pathTo(result, target) {
 }
 
 // Ligne de vue Bresenham. Retourne true si les cases entre (c1, r1) et
-// (c2, r2) (exclusives) ne contiennent aucun mur.
-export function hasLOS(mapData, c1, r1, c2, r2) {
+// (c2, r2) (exclusives) ne contiennent ni mur ni bloqueur additionnel.
+// `extraBlockers` : Set de cles "c,r" qui bloquent aussi la vue
+// (typiquement les bombes posees sur le terrain).
+export function hasLOS(mapData, c1, r1, c2, r2, extraBlockers = null) {
   let x0 = c1, y0 = r1;
   const x1 = c2, y1 = r2;
   const dx = Math.abs(x1 - x0);
@@ -65,6 +67,7 @@ export function hasLOS(mapData, c1, r1, c2, r2) {
     if (x0 === x1 && y0 === y1) return true;
     if (!(x0 === c1 && y0 === r1)) {
       if (mapData[y0] && mapData[y0][x0] === 1) return false;
+      if (extraBlockers && extraBlockers.has(`${x0},${y0}`)) return false;
     }
     const e2 = 2 * err;
     if (e2 >= dy) { err += dy; x0 += sx; }

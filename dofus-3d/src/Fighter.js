@@ -13,14 +13,26 @@ export const DEFS = {
   osamodas: {
     name: 'Osamodas',
     role: 'Invocateur',
-    hp: 95, pa: 8, pm: 4, initiative: 11,
+    hp: 100, pa: 8, pm: 4, initiative: 11,
     spellIds: ['invocationCraqueleur', 'piqureMotivante', 'protectionCraqueleur', 'soinInvocation'],
   },
   roublard: {
     name: 'Roublard',
-    role: 'Assassin',
+    role: 'Artificier',
     hp: 100, pa: 8, pm: 4, initiative: 13,
-    spellIds: ['coupBas', 'bombeExplosive', 'tirPrecis', 'esquive', 'acceleration'],
+    spellIds: ['poserBombe', 'alimentationBombe', 'detonationManuelle', 'bouclierBombe'],
+  },
+  bombeRoublard: {
+    name: 'Bombe',
+    role: 'Bombe',
+    hp: 50, pa: 0, pm: 0, initiative: 0,
+    spellIds: [],
+    // Drapeaux specifiques aux bombes.
+    isBomb: true,
+    fuseMax: 3,           // explose apres 3 tours du proprietaire
+    bombDamage: 50,       // degats de base
+    bombDamageGrowth: 0.75, // +75% par tour ecoule (additif sur la base)
+    bombArea: { type: 'cross', size: 1 },
   },
   bouftou: {
     name: 'Bouftou',
@@ -85,10 +97,27 @@ export class Fighter {
     // Buffs : { duration, damageMult?, bonusPa?, bonusPm?, shield?, dot?, permanent? }
     this.buffs = [];
     this.spellCooldowns = {};
+    // Specifique aux bombes posees par le Roublard.
+    this.isBomb = !!def.isBomb;
+    this.bombAge = 0;
+    this.bombOwner = null;  // reference vers le combattant qui l a posee
   }
 
   get spells() {
     return this.def.spellIds.map(id => SPELLS[id]).filter(Boolean);
+  }
+
+  // Max effectif PA / PM = base + buffs additifs. Sert a l affichage
+  // "6/9" plutot que "9/6" quand on a recu un bonus.
+  get effectiveMaxPa() {
+    let max = this.maxPa;
+    for (const b of this.buffs) if (b.bonusPa) max += b.bonusPa;
+    return max;
+  }
+  get effectiveMaxPm() {
+    let max = this.maxPm;
+    for (const b of this.buffs) if (b.bonusPm) max += b.bonusPm;
+    return max;
   }
 
   startTurn() {
