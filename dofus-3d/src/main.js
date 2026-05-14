@@ -87,7 +87,12 @@ canvas.addEventListener('pointerup', (e) => {
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinch = null;
   if (p && !p.moved && pointers.size === 0) {
-    if (p.button === 2 && p.pointerType === 'mouse') return;
+    // Clic droit (sans drag) = annule la selection courante et revient
+    // en mode "Deplacer". Le drag clic droit reste reserve a la rotation.
+    if (p.button === 2 && p.pointerType === 'mouse') {
+      game.setMode('move');
+      return;
+    }
     handleTap(e.clientX, e.clientY);
   }
 });
