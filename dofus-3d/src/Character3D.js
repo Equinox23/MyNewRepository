@@ -28,7 +28,6 @@ export class Character3D {
     const builder = BUILDERS[classId] || buildIop;
     this.group = builder();
     this.group.position.set(c, 0, r);
-    if (team === 'enemy') this.group.rotation.y = Math.PI; // face the player
     scene.add(this.group);
 
     // Anneau d equipe au sol
@@ -79,6 +78,16 @@ export class Character3D {
     this.r = r;
     this.group.position.x = c;
     this.group.position.z = r;
+  }
+
+  // Oriente le perso vers une case cible (visuellement, le sprite "front"
+  // est l axe +Z). atan2(dx, dz) donne 0 quand on regarde +Z, +PI/2 pour +X.
+  faceToward(c, r) {
+    const dx = c - this.group.position.x;
+    const dz = r - this.group.position.z;
+    if (Math.abs(dx) + Math.abs(dz) < 0.001) return;
+    this.facing = Math.atan2(dx, dz);
+    this.group.rotation.y = this.facing;
   }
 
   // Glisse vers une case adjacente.

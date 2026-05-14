@@ -11,25 +11,31 @@ const picker = new Picker(scene3d, map3d);
 const hud = new Hud();
 const game = new Game({ scene3d, map3d, picker, hud });
 
-// Retirer l ecran de chargement
 const loader = document.getElementById('loader');
 if (loader) loader.remove();
-// Le HUD textuel initial dans l index.html ne sert plus en V2
-const oldHud = document.getElementById('hud');
-if (oldHud) oldHud.remove();
+// On garde le HUD textuel en haut a gauche (titre + tip)
+// car les controles meritent un rappel visible.
 
 game.setup();
 
 // --- INPUTS ---
 const canvas = scene3d.renderer.domElement;
 
+// Le menu contextuel parasite le clic droit, on le bloque.
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// Wheel : zoom toward the cursor world point.
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
-  scene3d.zoom(e.deltaY > 0 ? 1.1 : 1 / 1.1);
+  const worldPoint = scene3d.worldPointAtCursor(e.clientX, e.clientY);
+  scene3d.zoom(e.deltaY > 0 ? 1.1 : 1 / 1.1, worldPoint);
 }, { passive: false });
 
 const pointers = new Map();
 let pinch = null;
+// Sensibilites des rotations (radians par pixel)
+const AZ_SENS = 0.008;
+const POLAR_SENS = 0.005;
 
 canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture(e.pointerId);
@@ -37,6 +43,8 @@ canvas.addEventListener('pointerdown', (e) => {
     startX: e.clientX, startY: e.clientY,
     x: e.clientX, y: e.clientY,
     moved: false,
+    button: e.button,
+    pointerType: e.pointerType,
   });
   if (pointers.size === 2) {
     const [a, b] = pointers.values();
@@ -47,20 +55,39 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   const p = pointers.get(e.pointerId);
   if (p) {
+    const dx = e.clientX - p.x;
+    const dy = e.clientY - p.y;
     p.x = e.clientX;
     p.y = e.clientY;
     if (Math.hypot(e.clientX - p.startX, e.clientY - p.startY) > 6) p.moved = true;
+
+    // Rotation : clic droit drag (souris) ou drag a 1 doigt (touch).
+    if (pointers.size === 1 && p.moved) {
+      const isMouseRotate = p.pointerType === 'mouse' && p.button === 2;
+      const isTouchRotate = p.pointerType === 'touch';
+      if (isMouseRotate || isTouchRotate) {
+        scene3d.rotate(-dx * AZ_SENS, dy * POLAR_SENS);
+        picker.setHover(null);
+        return;
+      }
+    }
   }
+
+  // Pinch : zoom centré sur le milieu des 2 doigts.
   if (pointers.size === 2 && pinch) {
     const [a, b] = pointers.values();
     const d = Math.hypot(a.x - b.x, a.y - b.y);
     if (d > 1 && pinch.dist > 1) {
-      scene3d.zoom(pinch.dist / d);
+      const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+      const worldPoint = scene3d.worldPointAtCursor(mid.x, mid.y);
+      scene3d.zoom(pinch.dist / d, worldPoint);
       pinch.dist = d;
     }
     return;
   }
-  if (e.pointerType === 'mouse') {
+
+  // Hover souris : montre la case cible.
+  if (e.pointerType === 'mouse' && pointers.size === 0) {
     handleHover(e.clientX, e.clientY);
   }
 });
@@ -70,6 +97,8 @@ canvas.addEventListener('pointerup', (e) => {
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinch = null;
   if (p && !p.moved && pointers.size === 0) {
+    // Le clic droit ne doit pas declencher un pick (utilise pour rotation).
+    if (p.button === 2 && p.pointerType === 'mouse') return;
     handleTap(e.clientX, e.clientY);
   }
 });

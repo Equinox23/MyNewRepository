@@ -37,6 +37,8 @@ export class Game {
     const bouftou = new Fighter('bouftou', 'enemy', 11, 7);
     iop.character = new Character3D(this.scene3d.scene, 'iop', 'player', 3, 7);
     bouftou.character = new Character3D(this.scene3d.scene, 'bouftou', 'enemy', 11, 7);
+    iop.character.faceToward(bouftou.c, bouftou.r);
+    bouftou.character.faceToward(iop.c, iop.r);
     this.fighters = [iop, bouftou];
     this.turn = new TurnManager(this.fighters);
     this.refreshHpBars();
@@ -62,6 +64,13 @@ export class Game {
 
   endTurn() {
     if (this.busy || this.ended) return;
+    this._advanceTurn();
+  }
+
+  // Avancement interne (sans verifier busy) - utilise par l IA en fin
+  // de tour, ou un endTurn de joueur valide.
+  _advanceTurn() {
+    if (this.ended) return;
     this.turn.advance();
     this.startTurn();
   }
@@ -196,7 +205,10 @@ export class Game {
       if (!player.alive) break;
     }
 
-    this.endTurn();
+    // L IA a fini ses actions : on libere busy puis on avance le tour
+    // (via la voie interne pour ne pas etre bloque par busy).
+    this.busy = false;
+    this._advanceTurn();
   }
 
   computeOccupied(exclude) {
