@@ -212,15 +212,15 @@ export const SPELLS = {
   poserBombe: {
     id: 'poserBombe', name: 'Poser une Bombe', short: 'PB', icon: ICON_BOMB,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 4, range: { min: 1, max: 3 }, needsLOS: false,
+    apCost: 5, range: { min: 1, max: 3 }, needsLOS: false,
     target: 'tile', area: { type: 'single' },
     effects: [{ type: 'placeBomb' }],
-    desc: 'Pose une bombe sur une case libre (50 PV, bloque la vue). Explose en croix dans 3 tours pour 50 degats, +75% par tour ecoule. Max 2 bombes sur le terrain, 1 pose par tour.',
+    desc: 'Pose une bombe sur une case libre (50 PV, bloque la vue). Explose dans 3 tours en zone rayon 2 pour 50 degats, +75% par tour ecoule. Max 2 bombes sur le terrain, 1 pose par tour.',
   },
   alimentationBombe: {
     id: 'alimentationBombe', name: 'Alimentation', short: 'AL', icon: ICON_BOMB_MOVE,
     category: 'move', color: SPELL_CATEGORY_COLOR.move,
-    apCost: 2, range: { min: 1, max: 5 }, needsLOS: false,
+    apCost: 3, range: { min: 1, max: 5 }, needsLOS: false,
     target: 'tile', area: { type: 'single' },
     effects: [{ type: 'moveBomb' }],
     desc: 'Deplace votre bombe la plus proche vers la case visee (case libre).',
@@ -228,10 +228,11 @@ export const SPELLS = {
   detonationManuelle: {
     id: 'detonationManuelle', name: 'Detonation', short: 'DT', icon: ICON_DETONATE,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 3, range: { min: 0, max: 0 }, needsLOS: false,
-    target: 'self', area: { type: 'single' },
-    effects: [{ type: 'detonateBombs' }],
-    desc: 'Declenche manuellement TOUTES vos bombes en place.',
+    apCost: 2, range: { min: 1, max: 15 }, needsLOS: false,
+    target: 'ally', area: { type: 'single' },
+    targetFilter: 'bomb',
+    effects: [{ type: 'detonateBomb' }],
+    desc: 'Selectionne une de vos bombes et la fait exploser immediatement. Une bombe touchee par l explosion declenche une explosion en chaîne.',
   },
   bouclierBombe: {
     id: 'bouclierBombe', name: 'Bouclier de Bombe', short: 'BB', icon: ICON_SHIELD,
@@ -413,11 +414,15 @@ export function spellEffectLines(spell) {
         break;
       case 'placeBomb':
         lines.push('Pose une bombe (50 PV)');
-        lines.push('Explose en croix dans 3 tours');
+        lines.push('Explose en zone (rayon 2) dans 3 tours');
         lines.push('Degats : 50 + 75% par tour ecoule');
         break;
       case 'moveBomb':
         lines.push('Deplace la bombe la plus proche');
+        break;
+      case 'detonateBomb':
+        lines.push('Detonation de la bombe ciblee');
+        lines.push('Chaine sur les bombes touchees');
         break;
       case 'detonateBombs':
         lines.push('Detonation immediate de toutes vos bombes');

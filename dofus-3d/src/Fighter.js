@@ -32,7 +32,9 @@ export const DEFS = {
     fuseMax: 3,           // explose apres 3 tours du proprietaire
     bombDamage: 50,       // degats de base
     bombDamageGrowth: 0.75, // +75% par tour ecoule (additif sur la base)
-    bombArea: { type: 'cross', size: 1 },
+    // L explosion couvre un disque Manhattan de rayon 2 (13 cases) et
+    // touche allies comme ennemis.
+    bombArea: { type: 'circle', radius: 2 },
   },
   bouftou: {
     name: 'Bouftou',

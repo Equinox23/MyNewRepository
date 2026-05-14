@@ -489,6 +489,17 @@ export class Hud {
         width: 16px; height: 16px; accent-color: #95a5a6; cursor: pointer;
       }
       #settings-panel .sp-hint { font-size: 11px; color: #888; font-style: italic; margin-top: 8px; }
+      #settings-panel .sp-btn {
+        display: block; width: 100%;
+        margin-top: 4px; padding: 8px 10px;
+        background: #2c3e50; border: 2px solid #6a7090;
+        color: #ecf0f1; border-radius: 8px;
+        font: bold 12px "Trebuchet MS", sans-serif;
+        cursor: pointer; touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+      }
+      #settings-panel .sp-btn:hover { background: #3b556e; }
+      #settings-panel .sp-btn:active { background: #95a5a6; color: #14182a; }
 
       /* Indicateur "epingle" sur la fiche du combattant. */
       #fighter-info .fi-pin {
@@ -692,6 +703,8 @@ export class Hud {
       <label><input type="checkbox" data-target="turn" checked> Ordre du tour</label>
       <label><input type="checkbox" data-target="log" checked> Journal de combat</label>
       <label><input type="checkbox" data-target="info" checked> Infobulle combattant</label>
+      <div class="sp-section">DISPOSITION</div>
+      <button id="sp-reset-pos" type="button" class="sp-btn">Reinitialiser les positions</button>
       <div class="sp-hint">Astuce : pince a 2 doigts un panneau pour le redimensionner.</div>
     `;
     document.body.appendChild(panel);
@@ -706,6 +719,43 @@ export class Hud {
         this.setPanelVisible(input.dataset.target, input.checked);
       });
     });
+    const resetBtn = panel.querySelector('#sp-reset-pos');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.resetPanelPositions();
+      });
+    }
+  }
+
+  // Vide les positions / scales memorisees et remet chaque panneau a
+  // sa position CSS par defaut, a sa taille naturelle.
+  resetPanelPositions() {
+    const panels = [
+      { el: this.statsEl, key: 'dofus3d.statsPos' },
+      { el: this.spellsEl, key: 'dofus3d.spellsPos' },
+      { el: this.turnOrderEl, key: 'dofus3d.turnPos' },
+      { el: this.combatLogEl, key: 'dofus3d.logPos' },
+      { el: this.fighterInfoEl, key: 'dofus3d.infoPos' },
+      { el: this.helpPanelEl, key: 'dofus3d.helpPos' },
+      { el: this.settingsPanelEl, key: 'dofus3d.settingsPos' },
+    ];
+    for (const { el, key } of panels) {
+      if (!el) continue;
+      try {
+        localStorage.removeItem(key);
+        localStorage.removeItem(key + '.scale');
+      } catch (_) {}
+      // Reset des styles inline appliques par drag / pinch.
+      el.style.left = '';
+      el.style.top = '';
+      el.style.bottom = '';
+      el.style.right = '';
+      el.style.transform = '';
+      el.style.transformOrigin = '';
+      delete el.dataset.scale;
+    }
+    this.flash('Disposition reinitialisee', 1200);
   }
 
   toggleSettings(force) {

@@ -740,53 +740,71 @@ export class Game {
         this.hud.log && this.hud.log(`${caster.name} alimente sa bombe -> (${target.c},${target.r})`, 'cast');
         return;
       }
-      case 'detonateBombs': {
-        const myBombs = this.fighters.filter(f =>
-          f.alive && f.isBomb && f.bombOwner === caster
+      case 'detonateBomb': {
+        // Le joueur a clique sur une de ses bombes ; on l explose.
+        const bomb = this.fighters.find(f =>
+          f.alive && f.isBomb && f.c === target.c && f.r === target.r &&
+          f.bombOwner === caster
         );
-        if (myBombs.length === 0) {
-          this.hud.log && this.hud.log(`${caster.name} : aucune bombe a detoner`, 'cast');
+        if (!bomb) {
+          this.hud.log && this.hud.log(`${caster.name} : pas de bombe ici`, 'cast');
           return;
         }
-        caster.character.flashGlow(0xff5a1f, 600);
-        for (const bomb of myBombs) {
-          await this.explodeBomb(bomb);
-          if (this.ended) return;
-        }
+        caster.character.flashGlow(0xff5a1f, 500);
+        await this.explodeBomb(bomb);
         return;
       }
     }
   }
 
-  // Fait exploser une bombe : VFX, degats en croix, retire la bombe.
+  // Fait exploser une bombe : VFX, degats en zone (rayon 2 Manhattan),
+  // touche allies ET ennemis, et declenche en chaîne toute bombe
+  // touchee dans le rayon de l explosion.
   async explodeBomb(bomb) {
-    if (!bomb || !bomb.alive) return;
-    const cells = this.crossCells(bomb.c, bomb.r, (bomb.def.bombArea && bomb.def.bombArea.size) || 1);
+    if (!bomb || !bomb.alive || bomb._exploding) return;
+    bomb._exploding = true;
+    // Aire : on supporte 'circle' (par defaut) ou ancien 'cross'.
+    const area = bomb.def.bombArea || { type: 'circle', radius: 2 };
+    let cells;
+    if (area.type === 'circle') {
+      cells = this.circleCells(bomb.c, bomb.r, area.radius || 2);
+    } else {
+      cells = this.crossCells(bomb.c, bomb.r, area.size || 1);
+    }
     const baseDmg = bomb.def.bombDamage || 50;
     const growth = bomb.def.bombDamageGrowth || 0;
     const dmg = Math.round(baseDmg * (1 + growth * bomb.bombAge));
+    const radiusVfx = (area.type === 'circle') ? ((area.radius || 2) + 0.6) : 2.4;
 
-    // VFX : grosse onde de choc + flash central + impacts.
+    // VFX : grosse onde de choc dimensionnee au rayon + flash central.
     if (this.vfx) {
-      this.vfx.shockwave(bomb.c, bomb.r, { color: 0xff5a1f, radius: 2.4, duration: 0.7 });
-      this.vfx.flash(bomb.c, bomb.r, { color: 0xffd166, duration: 0.45 });
+      this.vfx.shockwave(bomb.c, bomb.r, { color: 0xff5a1f, radius: radiusVfx, duration: 0.75 });
+      this.vfx.flash(bomb.c, bomb.r, { color: 0xffd166, duration: 0.5 });
     }
+    this.hud.log && this.hud.log(`Bombe explose : ${dmg} degats en zone`, 'attack');
     // Retire la bombe immediatement : elle ne se prend pas ses propres degats.
     bomb.alive = false;
     if (bomb.character) bomb.character.die();
     await new Promise(r => setTimeout(r, 180));
 
     const dying = [];
+    const chained = [];
     for (const cell of cells) {
       const tf = this.fighters.find(f =>
-        f.alive && !f.isBomb && f.c === cell.c && f.r === cell.r
+        f.alive && f.c === cell.c && f.r === cell.r
       );
-      if (!tf) continue;
+      if (!tf || tf === bomb) continue;
+      if (tf.isBomb) {
+        // Chain : la bombe touchee n encaisse pas, elle explose a son tour.
+        if (!tf._exploding) chained.push(tf);
+        continue;
+      }
+      // Allies comme ennemis : pas de filtre de team.
       const actual = tf.takeDamage(dmg);
       tf.character.popDamage(actual);
       tf.character.hpBar.setHp(tf.hp, tf.maxHp);
       if (this.vfx) this.vfx.flash(cell.c, cell.r, { color: 0xff8a00, duration: 0.3 });
-      this.hud.log && this.hud.log(`Bombe explose : ${tf.name} subit ${actual} degats`, 'attack');
+      this.hud.log && this.hud.log(`${tf.name} subit ${actual} degats`, 'attack');
       if (!tf.alive) dying.push(tf);
     }
     for (const d of dying) {
@@ -795,6 +813,13 @@ export class Game {
     }
     if (dying.length) this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
     if (this.checkEnd()) return;
+
+    // Explosions en chaîne (apres un petit decalage pour le rendu).
+    for (const c of chained) {
+      if (this.ended) return;
+      await new Promise(r => setTimeout(r, 220));
+      await this.explodeBomb(c);
+    }
   }
 
   // Au debut du tour d un combattant, on vieillit toutes ses bombes
@@ -940,7 +965,7 @@ export class Game {
       if (this.ended) return;
       if (healed) await this.aiPause(450);
     }
-    const target = this.pickWeakestTarget(ai);
+    let target = this.pickWeakestTarget(ai);
     if (!target) return;
     const attackSpells = ai.spells.filter(s =>
       !ai.isOnCooldown(s.id) &&
@@ -948,12 +973,40 @@ export class Game {
       (s.target === 'enemy' || s.target === 'tile')
     );
     if (attackSpells.length === 0) return;
-    // Preference corps-a-corps : on cherche d abord a se placer dans la
-    // portee la plus courte (typiquement 1 case pour un melee). Si on
-    // n y arrive pas, aiApproach moves the AI as far as possible along
-    // the path, then the attack loop will pick the best usable spell
-    // (incluant les sorts a distance comme Lancer Rocher).
     const shortestRange = attackSpells.reduce((m, s) => Math.min(m, s.range.max), Infinity);
+
+    // Verifie si une cible est en attack-range atteignable en `pm` pas
+    // depuis la position actuelle de l ai (utilise BFS).
+    const isReachableForAttack = (tgt) => {
+      const occ = this.computeOccupied(ai);
+      const blocked = (c, r) => this.map3d.isBlockedFor(c, r, ai);
+      const myResult = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, ai.pm, blocked);
+      for (let dc = -shortestRange; dc <= shortestRange; dc++) {
+        for (let dr = -shortestRange; dr <= shortestRange; dr++) {
+          if (Math.abs(dc) + Math.abs(dr) > shortestRange) continue;
+          const key = `${tgt.c + dc},${tgt.r + dr}`;
+          if (myResult.dist.has(key)) return true;
+        }
+      }
+      return false;
+    };
+
+    // Si le hero choisi est hors d atteinte ce tour mais qu une bombe
+    // ennemie est, elle, atteignable (typiquement une bombe qui bloque
+    // le passage), on bascule la cible sur la bombe pour la detruire.
+    if (!isReachableForAttack(target)) {
+      const bombs = this.fighters
+        .filter(f => f.alive && f.isBomb && f.team !== ai.team)
+        .map(f => ({ f, d: Math.abs(ai.c - f.c) + Math.abs(ai.r - f.r) }))
+        .sort((a, b) => a.d - b.d);
+      for (const { f: bomb } of bombs) {
+        if (isReachableForAttack(bomb)) {
+          target = bomb;
+          this.hud.log && this.hud.log(`${ai.name} cible la bombe (route bloquee)`, 'info');
+          break;
+        }
+      }
+    }
 
     if (ai.pm > 0) {
       const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
