@@ -4,9 +4,27 @@ import { TurnManager } from './TurnManager.js';
 import { bfs, pathTo, hasLOS } from './Path.js';
 import { SPELLS } from './Spells.js';
 
-// Orchestrateur de combat 1v1 (V3). Generalise la gestion des sorts :
-// chaque combattant a une liste de spellIds, et la logique est dirigee
-// par les `effects` definis dans Spells.js (damage / teleport / buff).
+// Configurations de combats predefinis. Chacun decrit la composition
+// ennemie ; les spawns sont calcules a la setup.
+export const COMBATS = {
+  bouftou: {
+    name: 'Meute de Bouftous',
+    enemyComposition: [
+      'bouftou', 'bouftou', 'bouftou', 'bouftouRoyal',
+    ],
+  },
+};
+
+// Spawns par defaut (gauche pour le joueur, droite pour les ennemis).
+const PLAYER_SPAWNS = [
+  { c: 3, r: 7 }, { c: 2, r: 5 }, { c: 2, r: 9 },
+];
+const ENEMY_SPAWNS = [
+  { c: 11, r: 7 }, { c: 12, r: 5 }, { c: 12, r: 9 }, { c: 13, r: 7 },
+];
+
+// Orchestrateur de combat. Prend une config (classes joueur + combat)
+// et gere : spawn, tour par tour, inputs joueur, IA, fin de partie.
 export class Game {
   constructor({ scene3d, map3d, picker, hud, rangeOverlay }) {
     this.scene3d = scene3d;
@@ -20,29 +38,65 @@ export class Game {
     this.selectedSpellId = null;
     this.busy = false;
     this.ended = false;
+    this.config = null;
 
     this.hud.on('onMove', () => this.setMode('move'));
     this.hud.on('onSpellSlot', (slot) => this.selectSpellSlot(slot));
     this.hud.on('onEnd', () => this.endTurn());
   }
 
-  setup() {
+  setup(config) {
+    this.cleanup();
+    this.config = config;
     this.ended = false;
     this.busy = false;
     this.mode = 'move';
     this.selectedSpellId = null;
     this.rangeOverlay && this.rangeOverlay.clear();
 
-    const iop = new Fighter('iop', 'player', 3, 7);
-    const bouftou = new Fighter('bouftou', 'enemy', 11, 7);
-    iop.character = new Character3D(this.scene3d.scene, 'iop', 'player', 3, 7);
-    bouftou.character = new Character3D(this.scene3d.scene, 'bouftou', 'enemy', 11, 7);
-    iop.character.faceToward(bouftou.c, bouftou.r);
-    bouftou.character.faceToward(iop.c, iop.r);
-    this.fighters = [iop, bouftou];
+    const playerClasses = config.playerClasses || ['iop'];
+    const enemyComposition = config.enemyComposition
+      || (COMBATS[config.combatId] && COMBATS[config.combatId].enemyComposition)
+      || ['bouftou'];
+
+    // Spawn joueur(s)
+    playerClasses.forEach((cls, i) => {
+      const pos = PLAYER_SPAWNS[i % PLAYER_SPAWNS.length];
+      const f = new Fighter(cls, 'player', pos.c, pos.r);
+      f.character = new Character3D(this.scene3d.scene, cls, 'player', pos.c, pos.r);
+      this.fighters.push(f);
+    });
+    // Spawn ennemis
+    enemyComposition.forEach((cls, i) => {
+      const pos = ENEMY_SPAWNS[i % ENEMY_SPAWNS.length];
+      const f = new Fighter(cls, 'enemy', pos.c, pos.r);
+      f.character = new Character3D(this.scene3d.scene, cls, 'enemy', pos.c, pos.r);
+      this.fighters.push(f);
+    });
+
+    // Orienter chacun vers l ennemi le plus proche
+    for (const f of this.fighters) {
+      const other = this.fighters.find(o => o.alive && o.team !== f.team);
+      if (other) f.character.faceToward(other.c, other.r);
+    }
+
     this.turn = new TurnManager(this.fighters);
     this.refreshHpBars();
     this.startTurn();
+  }
+
+  cleanup() {
+    for (const f of this.fighters) {
+      if (f.character && f.character.group) {
+        this.scene3d.scene.remove(f.character.group);
+      }
+    }
+    this.fighters = [];
+    this.turn = null;
+    this.busy = false;
+    this.ended = false;
+    this.rangeOverlay && this.rangeOverlay.clear();
+    this.picker && this.picker.setHover(null);
   }
 
   startTurn() {
@@ -52,9 +106,9 @@ export class Game {
     for (const f of this.fighters) f.character.setActive(f === cur);
     this.mode = 'move';
     this.selectedSpellId = null;
-    this.rangeOverlay.clear();
     this.hud.update(cur, this.mode, null);
     this.hud.flash(`Tour ${this.turn.round}  -  ${cur.name}`, 1200);
+    this.refreshRangeOverlay();
     if (cur.team === 'enemy') {
       this.busy = true;
       setTimeout(() => this.runAI(), 700);
@@ -84,7 +138,6 @@ export class Game {
     this.hud.update(cur, this.mode, this.selectedSpellId);
   }
 
-  // Selection d un sort par numero de slot (0-based).
   selectSpellSlot(slot) {
     if (this.busy) return;
     const cur = this.turn.current();
@@ -95,12 +148,12 @@ export class Game {
       this.hud.flash('Pas assez de PA pour ' + spell.name, 900);
       return;
     }
-    // Sort sur soi-meme : on lance directement, pas besoin de cible.
     if (spell.target === 'self') {
       this.busy = true;
       this.castSelf(cur, spell).finally(() => {
         this.busy = false;
         if (!this.checkEnd()) {
+          this.refreshRangeOverlay();
           this.hud.update(cur, this.mode, this.selectedSpellId);
         }
       });
@@ -119,13 +172,11 @@ export class Game {
     await this.applySpellEffects(caster, spell, { c: caster.c, r: caster.r });
   }
 
-  // Tap d une case du terrain.
   async onTileTap(c, r) {
     if (this.busy || this.ended) return;
     const cur = this.turn.current();
     if (cur.team !== 'player') return;
     if (this.map3d.isWall(c, r) && this.mode === 'move') return;
-
     if (this.mode === 'move') {
       await this.tryMove(c, r);
     } else if (this.mode === 'spell') {
@@ -147,18 +198,17 @@ export class Game {
     if (cost > cur.pm) return;
     this.busy = true;
     this.picker.setHover(null);
-    // Popup "-N" vert au-dessus du perso pour materialiser le cout PM.
     cur.character.popCost(cost, 'pm');
-    // Decompte PAS par PAS pour que le HUD diminue visuellement les PM
-    // a chaque case parcourue (au lieu d un seul saut a la fin).
     for (const step of path.slice(1)) {
       cur.pm--;
       this.hud.update(cur, this.mode, this.selectedSpellId);
+      this.refreshRangeOverlay();
       await cur.character.moveTo(step.c, step.r, 170);
       cur.c = step.c;
       cur.r = step.r;
     }
     this.busy = false;
+    this.refreshRangeOverlay();
     this.hud.update(cur, this.mode, this.selectedSpellId);
   }
 
@@ -169,7 +219,6 @@ export class Game {
     const reason = this.validateSpellTarget(cur, spell, c, r);
     if (reason) { this.hud.flash(reason, 900); return; }
     cur.pa -= spell.apCost;
-    // Popup "-X" bleu au-dessus du perso + HUD a jour avant l anim.
     cur.character.popCost(spell.apCost, 'pa');
     this.hud.update(cur, this.mode, this.selectedSpellId);
     this.busy = true;
@@ -184,13 +233,17 @@ export class Game {
     this.hud.update(cur, this.mode, this.selectedSpellId);
   }
 
-  // Renvoie null si valide, sinon un message d erreur explicite.
   validateSpellTarget(caster, spell, c, r) {
     const dist = Math.abs(caster.c - c) + Math.abs(caster.r - r);
     if (dist < spell.range.min || dist > spell.range.max) return 'Hors de portee';
     if (this.map3d.isWall(c, r)) return 'Mur';
     if (spell.needsLOS && !hasLOS(this.map3d.getData(), caster.c, caster.r, c, r)) {
       return 'Pas de vue';
+    }
+    // Sort en ligne droite : la cible doit etre orthogonale au lanceur.
+    if (spell.area && spell.area.type === 'line') {
+      const dc = c - caster.c, dr = r - caster.r;
+      if (dc !== 0 && dr !== 0) return 'Doit etre en ligne droite';
     }
     const targetFighter = this.fighters.find(f => f.alive && f.c === c && f.r === r);
     if (spell.target === 'self' && targetFighter !== caster) return 'Cible : soi-meme';
@@ -203,7 +256,6 @@ export class Game {
     return null;
   }
 
-  // Applique tous les effets d un sort.
   async applySpellEffects(caster, spell, target) {
     for (const effect of spell.effects) {
       await this.applyEffect(effect, caster, spell, target);
@@ -214,18 +266,32 @@ export class Game {
   async applyEffect(effect, caster, spell, target) {
     switch (effect.type) {
       case 'damage': {
-        const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
-        if (!tf) return;
-        const base = effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1));
-        const dmg = Math.round(base * caster.damageMultiplier());
-        // Choix d animation : lunge pour CAC, sinon flash.
-        const lunge = caster.character.lungeTo(target.c, target.r, 320);
+        // Calcule les cases affectees (ligne pour AOE line, sinon
+        // unique tile cible).
+        let cells;
+        if (spell.area && spell.area.type === 'line') {
+          cells = this.lineCells(caster, target, spell.area.length);
+        } else {
+          cells = [{ c: target.c, r: target.r }];
+        }
+        // Lunge vers la 1ere case visee (direction).
+        const firstCell = cells[0] || target;
+        const lunge = caster.character.lungeTo(firstCell.c, firstCell.r, 320);
         await new Promise(r => setTimeout(r, 180));
-        tf.takeDamage(dmg);
-        tf.character.popDamage(dmg);
-        tf.character.hpBar.setHp(tf.hp, tf.maxHp);
+        // Applique les degats a chaque combattant present dans la zone.
+        const dying = [];
+        for (const cell of cells) {
+          const tf = this.fighters.find(f => f.alive && f.c === cell.c && f.r === cell.r);
+          if (!tf) continue;
+          const base = effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1));
+          const dmg = Math.round(base * caster.damageMultiplier());
+          tf.takeDamage(dmg);
+          tf.character.popDamage(dmg);
+          tf.character.hpBar.setHp(tf.hp, tf.maxHp);
+          if (!tf.alive) dying.push(tf);
+        }
         await lunge;
-        if (!tf.alive) await tf.character.die();
+        for (const d of dying) await d.character.die();
         return;
       }
       case 'heal': {
@@ -235,7 +301,7 @@ export class Game {
         const healed = tf.heal(amt);
         tf.character.popHeal(healed);
         tf.character.hpBar.setHp(tf.hp, tf.maxHp);
-        tf.character.flashGlow(0x2ecc71, 700);
+        tf.character.flashGlow(0xe91e63, 700);
         await new Promise(r => setTimeout(r, 500));
         return;
       }
@@ -246,42 +312,85 @@ export class Game {
         return;
       }
       case 'buff': {
-        // duration en tours du caster : decremente au DEBUT de chaque
-        // tour. On stocke +1 pour que le tour de cast compte aussi
-        // (sinon le bonus n est actif qu apres). L affichage HUD
-        // soustrait 1 pour ne pas trahir la duree promise.
         caster.buffs.push({ stat: effect.stat, value: effect.value, duration: effect.duration + 1 });
         caster.character.flashGlow(parseInt(spell.color.slice(1), 16), 900);
-        this.hud.flash(`${spell.name} : +${Math.round(effect.value * 100)}% ${effect.stat} pendant ${effect.duration} tours`, 1400);
-        await new Promise(r => setTimeout(r, 500));
+        this.hud.flash(`${spell.name} : +${Math.round(effect.value * 100)}% ${effect.stat} pendant ${effect.duration} tours (cumule)`, 1400);
+        await new Promise(r => setTimeout(r, 400));
         return;
       }
     }
   }
 
-  // Affiche les cases dans la portee du sort selectionne, peintes a la
-  // couleur du sort lui-meme (ainsi chaque sort a sa propre identite
-  // visuelle quand on le selectionne).
+  // Cases d une ligne droite depuis caster en direction de target.
+  lineCells(caster, target, length) {
+    const dc = Math.sign(target.c - caster.c);
+    const dr = Math.sign(target.r - caster.r);
+    if (dc === 0 && dr === 0) return [];
+    const cells = [];
+    for (let i = 1; i <= length; i++) {
+      const cc = caster.c + dc * i;
+      const cr = caster.r + dr * i;
+      if (!this.map3d.inBounds(cc, cr)) break;
+      if (this.map3d.isWall(cc, cr)) break; // mur stoppe la ligne
+      cells.push({ c: cc, r: cr });
+    }
+    return cells;
+  }
+
+  // Surlignage des cases : portee de mouvement OU portee de sort.
   refreshRangeOverlay() {
     this.rangeOverlay.clear();
-    if (this.mode !== 'spell' || !this.selectedSpellId) return;
+    if (!this.turn || this.busy) return;
     const cur = this.turn.current();
-    const spell = SPELLS[this.selectedSpellId];
-    if (!spell) return;
-    const tiles = [];
-    for (let dc = -spell.range.max; dc <= spell.range.max; dc++) {
-      for (let dr = -spell.range.max; dr <= spell.range.max; dr++) {
-        const d = Math.abs(dc) + Math.abs(dr);
-        if (d < spell.range.min || d > spell.range.max) continue;
-        const c = cur.c + dc;
-        const r = cur.r + dr;
-        if (c < 0 || r < 0) continue;
-        if (this.map3d.isWall(c, r)) continue;
+    if (!cur || cur.team !== 'player') return;
+
+    if (this.mode === 'move') {
+      // Affiche les cases atteignables avec les PM restants (BFS).
+      const occ = this.computeOccupied(cur);
+      const result = bfs(this.map3d.getData(), occ, { c: cur.c, r: cur.r }, cur.pm);
+      const tiles = [];
+      for (const [key, d] of result.dist.entries()) {
+        if (d === 0) continue;
+        const [c, r] = key.split(',').map(Number);
         tiles.push({ c, r });
       }
+      this.rangeOverlay.paint(tiles, 0x6ee7b6, 0.30);
+      return;
     }
-    const color = parseInt(spell.color.replace('#', ''), 16);
-    this.rangeOverlay.paint(tiles, color, 0.33);
+
+    if (this.mode === 'spell' && this.selectedSpellId) {
+      const spell = SPELLS[this.selectedSpellId];
+      if (!spell) return;
+      const tiles = [];
+      if (spell.area && spell.area.type === 'line') {
+        // Pour un sort en ligne, surligne uniquement les 4 axes
+        // orthogonaux jusqu a la portee max.
+        for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          for (let i = 1; i <= spell.range.max; i++) {
+            const c = cur.c + dc * i;
+            const r = cur.r + dr * i;
+            if (!this.map3d.inBounds(c, r)) break;
+            if (this.map3d.isWall(c, r)) break;
+            tiles.push({ c, r });
+          }
+        }
+      } else {
+        // Portee manhattan standard.
+        for (let dc = -spell.range.max; dc <= spell.range.max; dc++) {
+          for (let dr = -spell.range.max; dr <= spell.range.max; dr++) {
+            const d = Math.abs(dc) + Math.abs(dr);
+            if (d < spell.range.min || d > spell.range.max) continue;
+            const c = cur.c + dc;
+            const r = cur.r + dr;
+            if (!this.map3d.inBounds(c, r)) continue;
+            if (this.map3d.isWall(c, r)) continue;
+            tiles.push({ c, r });
+          }
+        }
+      }
+      const color = parseInt(spell.color.replace('#', ''), 16);
+      this.rangeOverlay.paint(tiles, color, 0.33);
+    }
   }
 
   // ---------- IA ----------
@@ -298,6 +407,12 @@ export class Game {
   }
 
   async runAggressive(ai) {
+    // 1. Si le combattant a un sort de soin, soigne un allie blesse a portee.
+    if (ai.spells.some(s => s.effects.some(e => e.type === 'heal'))) {
+      await this.aiTryHeal(ai);
+      if (this.ended) return;
+    }
+
     const target = this.pickWeakestTarget(ai);
     if (!target) return;
     const damageSpells = ai.spells.filter(s =>
@@ -330,6 +445,32 @@ export class Game {
       this.hud.update(ai, this.mode, this.selectedSpellId);
       await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
       if (this.checkEnd()) return;
+    }
+  }
+
+  // Soigne l allie le plus blesse (sous 70% PV) a portee, une fois par tour.
+  async aiTryHeal(ai) {
+    const healSpells = ai.spells.filter(s =>
+      s.effects.some(e => e.type === 'heal') && s.target === 'ally'
+    );
+    if (healSpells.length === 0) return;
+    const wounded = this.fighters.filter(f =>
+      f.alive && f.team === ai.team && f !== ai && f.hp < f.maxHp * 0.7
+    ).sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
+    if (wounded.length === 0) return;
+
+    for (const target of wounded) {
+      for (const spell of healSpells) {
+        if (ai.pa < spell.apCost) continue;
+        const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
+        if (dist < spell.range.min || dist > spell.range.max) continue;
+        if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r)) continue;
+        ai.pa -= spell.apCost;
+        ai.character.popCost(spell.apCost, 'pa');
+        this.hud.update(ai, this.mode, this.selectedSpellId);
+        await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
+        return; // un seul soin par tour
+      }
     }
   }
 
@@ -402,18 +543,12 @@ export class Game {
     if (winner && !this.ended) {
       this.ended = true;
       this.busy = true;
-      setTimeout(() => this.hud.showEnd(winner, () => this.reset()), 600);
+      setTimeout(() => this.hud.showEnd(winner, () => {
+        if (this.onEnd) this.onEnd();
+      }), 600);
       return true;
     }
     return false;
-  }
-
-  reset() {
-    for (const f of this.fighters) {
-      this.scene3d.scene.remove(f.character.group);
-    }
-    this.fighters = [];
-    this.setup();
   }
 }
 

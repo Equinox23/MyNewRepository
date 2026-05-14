@@ -1,17 +1,20 @@
 import * as THREE from 'three';
 import { buildIop } from './models/iop.js';
 import { buildBouftou } from './models/bouftou.js';
+import { buildBouftouRoyal } from './models/bouftouRoyal.js';
 import { HpBar3D } from './HpBar3D.js';
 
 const BUILDERS = {
   iop: buildIop,
   bouftou: buildBouftou,
+  bouftouRoyal: buildBouftouRoyal,
 };
 
 // Hauteur de la barre de vie au-dessus du sol (par classe).
 const HP_BAR_Y = {
   iop: 1.55,
   bouftou: 1.30,
+  bouftouRoyal: 1.95,
 };
 
 export class Character3D {

@@ -2,8 +2,9 @@ import { Scene3D } from './Scene3D.js';
 import { Map3D, MAP_SIZE } from './Map3D.js';
 import { Picker } from './Picker.js';
 import { Hud } from './Hud.js';
-import { Game } from './Game.js';
+import { Game, COMBATS } from './Game.js';
 import { RangeOverlay } from './RangeOverlay.js';
+import { Menu } from './Menu.js';
 
 // --- CURSEURS PERSONNALISES ---
 // Curseur de base : fleche doree style RPG (hotspot a la pointe = 3,2).
@@ -38,7 +39,25 @@ if (loader) loader.remove();
 hud.on('onRotateLeft', () => scene3d.snapRotate(-1));
 hud.on('onRotateRight', () => scene3d.snapRotate(1));
 
-game.setup();
+// --- MENU PRE-COMBAT ---
+// Au demarrage, on affiche le menu de selection. La scene 3D
+// tourne en arriere-plan mais aucun combattant n est encore spawn.
+const menu = new Menu(selection => {
+  menu.hide();
+  document.body.style.cursor = POINTER_CURSOR;
+  game.setup({
+    playerClasses: [selection.classId],
+    combatId: selection.combatId,
+    mapId: selection.mapId,
+  });
+});
+// Quand la partie se termine et que le joueur clique "Rejouer",
+// on revient sur le menu.
+game.onEnd = () => {
+  game.cleanup();
+  menu.show();
+};
+menu.show();
 
 // --- INPUTS souris / tactile ---
 const canvas = scene3d.renderer.domElement;

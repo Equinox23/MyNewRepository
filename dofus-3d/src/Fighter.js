@@ -6,14 +6,21 @@ export const DEFS = {
   iop: {
     name: 'Iop',
     role: 'Guerrier',
-    hp: 100, pa: 6, pm: 3, initiative: 12,
+    hp: 100, pa: 8, pm: 4, initiative: 12,
     spellIds: ['pression', 'bond', 'epeeDivine', 'concentration'],
   },
   bouftou: {
     name: 'Bouftou',
-    role: 'Boule de laine',
-    hp: 65, pa: 6, pm: 3, initiative: 10,
-    spellIds: ['coupDeCorne'],
+    role: 'Meute',
+    hp: 55, pa: 5, pm: 4, initiative: 10,
+    spellIds: ['morsureBouftou'],
+    ai: 'aggressive',
+  },
+  bouftouRoyal: {
+    name: 'Bouftou Royal',
+    role: 'Chef de meute',
+    hp: 160, pa: 7, pm: 3, initiative: 9,
+    spellIds: ['morsureRoyale', 'soinAnimal'],
     ai: 'aggressive',
   },
 };
@@ -37,11 +44,10 @@ export class Fighter {
     this.initiative = def.initiative + Math.random();
     this.alive = true;
     this.character = null;
-    // Buffs actifs : { stat, value, duration }. duration en TOURS.
+    // Buffs actifs : { stat, value, duration } -- cumulables.
     this.buffs = [];
   }
 
-  // Resout les ids en objets sorts (rafraichi a chaque acces, peu couteux).
   get spells() {
     return this.def.spellIds.map(id => SPELLS[id]).filter(Boolean);
   }

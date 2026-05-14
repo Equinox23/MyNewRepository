@@ -1,12 +1,9 @@
-// Registre central des sorts. Chaque sort a maintenant son propre
-// dessin SVG (champ `icon`). L icone est rendu en blanc et superpose
-// sur l accent de couleur du sort dans le HUD.
+// Registre central des sorts. Chaque sort a son propre dessin SVG (icon),
+// sa couleur de categorie (rouge = attaque, rose = soin, jaune = boost,
+// vert = deplacement), et ses effets composables.
 //
-// Types d effets supportes :
-//  - 'damage'   : { min, max }
-//  - 'heal'     : { min, max }
-//  - 'teleport' : -
-//  - 'buff'     : { stat, value, duration }
+// Types d effets : 'damage', 'heal', 'teleport', 'buff'.
+// Type d aire   : { type: 'single' } | { type: 'line', length: N }.
 
 const ICON_SWORD = `
   <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -25,21 +22,21 @@ const ICON_JUMP = `
     <path d="M6 28 Q16 22 26 28" stroke-dasharray="2 2"/>
   </svg>`;
 
-const ICON_GREATSWORD = `
+const ICON_LINE = `
   <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <g transform="translate(16 16) rotate(-30)">
-      <line x1="0" y1="-14" x2="0" y2="9"/>
-      <polygon points="-3,-14 0,-18 3,-14" fill="currentColor"/>
-      <line x1="-7" y1="10" x2="7" y2="10"/>
-      <line x1="0" y1="10" x2="0" y2="14"/>
-      <circle cx="0" cy="-3" r="1.5" fill="currentColor"/>
+      <line x1="0" y1="-15" x2="0" y2="13"/>
+      <polygon points="-3,-15 0,-19 3,-15" fill="currentColor"/>
+      <line x1="-7" y1="-15" x2="7" y2="-15"/>
+      <line x1="-5" y1="13" x2="5" y2="13"/>
     </g>
-    <circle cx="16" cy="16" r="13" stroke-dasharray="1 3" opacity="0.7"/>
+    <line x1="6" y1="6" x2="26" y2="6" stroke-dasharray="2 2" opacity="0.6"/>
+    <line x1="6" y1="26" x2="26" y2="26" stroke-dasharray="2 2" opacity="0.6"/>
   </svg>`;
 
 const ICON_FIST = `
   <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <ellipse cx="16" cy="16" rx="7" ry="6" fill="none"/>
+    <ellipse cx="16" cy="16" rx="7" ry="6"/>
     <line x1="10" y1="14" x2="22" y2="14"/>
     <line x1="11" y1="17.5" x2="21" y2="17.5"/>
     <line x1="16" y1="6" x2="16" y2="3"/>
@@ -52,17 +49,29 @@ const ICON_FIST = `
     <line x1="24" y1="24" x2="26" y2="26"/>
   </svg>`;
 
-const ICON_HORNS = `
+const ICON_BITE = `
   <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M11 24 C3 17 5 7 13 5 C12 10 14 14 11 24 Z" fill="currentColor"/>
-    <path d="M21 24 C29 17 27 7 19 5 C20 10 18 14 21 24 Z" fill="currentColor"/>
+    <line x1="4" y1="7" x2="28" y2="7"/>
+    <polygon points="8 7, 14 22, 11 7" fill="currentColor"/>
+    <polygon points="24 7, 18 22, 21 7" fill="currentColor"/>
   </svg>`;
 
-// Couleurs canoniques par categorie de sort.
-//   attaque (damage)    -> rouge
-//   soin (heal)         -> rose
-//   boost (buff)        -> jaune
-//   deplacement         -> vert
+const ICON_BITE_ROYAL = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="4" y1="11" x2="28" y2="11"/>
+    <polygon points="7 11, 13 26, 10 11" fill="currentColor"/>
+    <polygon points="25 11, 19 26, 22 11" fill="currentColor"/>
+    <path d="M10 6 L12 2 L16 5 L20 2 L22 6 Z" fill="currentColor"/>
+  </svg>`;
+
+const ICON_HEAL_CROSS = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round">
+    <path d="M16 27 C2 16 4 6 12 6 C14 6 16 8 16 10 C16 8 18 6 20 6 C28 6 30 16 16 27 Z" fill="currentColor"/>
+    <line x1="16" y1="12" x2="16" y2="22" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+    <line x1="11" y1="17" x2="21" y2="17" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+  </svg>`;
+
+// Couleurs canoniques par categorie.
 export const SPELL_CATEGORY_COLOR = {
   attack: '#c0392b',
   heal:   '#e91e63',
@@ -75,26 +84,26 @@ export const SPELLS = {
   pression: {
     id: 'pression', name: 'Pression', short: 'PR', icon: ICON_SWORD,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
+    apCost: 3, range: { min: 1, max: 2 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
     effects: [{ type: 'damage', min: 12, max: 18 }],
-    desc: 'Coup au corps a corps. Frappe rapide et fiable.',
+    desc: 'Coup rapide a 1 a 2 cases.',
   },
   bond: {
     id: 'bond', name: 'Bond', short: 'BD', icon: ICON_JUMP,
     category: 'move', color: SPELL_CATEGORY_COLOR.move,
-    apCost: 4, range: { min: 1, max: 5 }, needsLOS: true,
+    apCost: 4, range: { min: 1, max: 5 }, needsLOS: false,
     target: 'tile', area: { type: 'single' },
     effects: [{ type: 'teleport' }],
-    desc: 'Bondit en avant et atterrit sur une case libre.',
+    desc: 'Bondit sur une case libre, meme sans ligne de vue.',
   },
   epeeDivine: {
-    id: 'epeeDivine', name: 'Epee Divine', short: 'ED', icon: ICON_GREATSWORD,
+    id: 'epeeDivine', name: 'Epee Divine', short: 'ED', icon: ICON_LINE,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 5, range: { min: 1, max: 1 }, needsLOS: false,
-    target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 22, max: 30 }],
-    desc: 'Frappe lourde charge d energie divine.',
+    apCost: 5, range: { min: 1, max: 4 }, needsLOS: false,
+    target: 'tile', area: { type: 'line', length: 4 },
+    effects: [{ type: 'damage', min: 18, max: 24 }],
+    desc: 'Frappe une ligne droite devant soi : touche tout dans la ligne.',
   },
   concentration: {
     id: 'concentration', name: 'Concentration', short: 'CO', icon: ICON_FIST,
@@ -102,17 +111,35 @@ export const SPELLS = {
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
     effects: [{ type: 'buff', stat: 'damage', value: 0.3, duration: 2 }],
-    desc: 'Le Iop se concentre et amplifie ses degats.',
+    desc: '+30% degats pendant 2 tours. Cumulable.',
   },
 
   // ---------- BOUFTOU ----------
-  coupDeCorne: {
-    id: 'coupDeCorne', name: 'Coup de Corne', short: 'CC', icon: ICON_HORNS,
+  morsureBouftou: {
+    id: 'morsureBouftou', name: 'Morsure du Bouftou', short: 'MO', icon: ICON_BITE,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 8, max: 12 }],
-    desc: 'Charge cornue au corps a corps.',
+    effects: [{ type: 'damage', min: 6, max: 9 }],
+    desc: 'Morsure brutale au corps a corps.',
+  },
+
+  // ---------- BOUFTOU ROYAL ----------
+  morsureRoyale: {
+    id: 'morsureRoyale', name: 'Morsure Royale', short: 'MR', icon: ICON_BITE_ROYAL,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 12, max: 18 }],
+    desc: 'Morsure royale puissante.',
+  },
+  soinAnimal: {
+    id: 'soinAnimal', name: 'Soin Animal', short: 'SA', icon: ICON_HEAL_CROSS,
+    category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
+    apCost: 3, range: { min: 1, max: 4 }, needsLOS: false,
+    target: 'ally', area: { type: 'single' },
+    effects: [{ type: 'heal', min: 14, max: 20 }],
+    desc: 'Soigne un Bouftou allie de la meute.',
   },
 };
 
@@ -123,6 +150,9 @@ export function spellEffectLines(spell) {
     switch (eff.type) {
       case 'damage':
         lines.push(`Degats : ${eff.min}-${eff.max}`);
+        if (spell.area && spell.area.type === 'line') {
+          lines.push(`(ligne de ${spell.area.length} cases)`);
+        }
         break;
       case 'heal':
         lines.push(`Soins : ${eff.min}-${eff.max}`);
@@ -131,7 +161,7 @@ export function spellEffectLines(spell) {
         lines.push('Teleporte le lanceur');
         break;
       case 'buff':
-        lines.push(`+${Math.round(eff.value * 100)}% ${eff.stat} pendant ${eff.duration} tours`);
+        lines.push(`+${Math.round(eff.value * 100)}% ${eff.stat} pendant ${eff.duration} tours (cumulable)`);
         break;
     }
   }
