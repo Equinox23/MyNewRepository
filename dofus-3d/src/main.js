@@ -1,35 +1,30 @@
 import { Scene3D } from './Scene3D.js';
-import { Map3D } from './Map3D.js';
+import { Map3D, MAP_SIZE } from './Map3D.js';
 import { Picker } from './Picker.js';
 import { Hud } from './Hud.js';
 import { Game } from './Game.js';
+import { RangeOverlay } from './RangeOverlay.js';
 
 // --- INIT ---
 const scene3d = new Scene3D();
 const map3d = new Map3D(scene3d.scene);
 const picker = new Picker(scene3d, map3d);
+const rangeOverlay = new RangeOverlay(scene3d.scene, MAP_SIZE);
 const hud = new Hud();
-const game = new Game({ scene3d, map3d, picker, hud });
+const game = new Game({ scene3d, map3d, picker, hud, rangeOverlay });
 
 const loader = document.getElementById('loader');
 if (loader) loader.remove();
-// On garde le HUD textuel en haut a gauche (titre + tip)
-// car les controles meritent un rappel visible.
 
-// Les fleches de rotation passent par le HUD et appellent snapRotate.
-// direction = -1 -> camera tourne dans le sens des aiguilles, +1 -> trigonometrique.
 hud.on('onRotateLeft', () => scene3d.snapRotate(-1));
 hud.on('onRotateRight', () => scene3d.snapRotate(1));
 
 game.setup();
 
-// --- INPUTS ---
+// --- INPUTS souris / tactile ---
 const canvas = scene3d.renderer.domElement;
-
-// Le menu contextuel parasite le clic droit, on le bloque.
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// Wheel : zoom toward the cursor world point.
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
   const worldPoint = scene3d.worldPointAtCursor(e.clientX, e.clientY);
@@ -38,7 +33,6 @@ canvas.addEventListener('wheel', (e) => {
 
 const pointers = new Map();
 let pinch = null;
-// Sensibilites des rotations (radians par pixel)
 const AZ_SENS = 0.008;
 const POLAR_SENS = 0.005;
 
@@ -47,9 +41,7 @@ canvas.addEventListener('pointerdown', (e) => {
   pointers.set(e.pointerId, {
     startX: e.clientX, startY: e.clientY,
     x: e.clientX, y: e.clientY,
-    moved: false,
-    button: e.button,
-    pointerType: e.pointerType,
+    moved: false, button: e.button, pointerType: e.pointerType,
   });
   if (pointers.size === 2) {
     const [a, b] = pointers.values();
@@ -62,11 +54,8 @@ canvas.addEventListener('pointermove', (e) => {
   if (p) {
     const dx = e.clientX - p.x;
     const dy = e.clientY - p.y;
-    p.x = e.clientX;
-    p.y = e.clientY;
+    p.x = e.clientX; p.y = e.clientY;
     if (Math.hypot(e.clientX - p.startX, e.clientY - p.startY) > 6) p.moved = true;
-
-    // Rotation : clic droit drag (souris) ou drag a 1 doigt (touch).
     if (pointers.size === 1 && p.moved) {
       const isMouseRotate = p.pointerType === 'mouse' && p.button === 2;
       const isTouchRotate = p.pointerType === 'touch';
@@ -77,8 +66,6 @@ canvas.addEventListener('pointermove', (e) => {
       }
     }
   }
-
-  // Pinch : zoom centré sur le milieu des 2 doigts.
   if (pointers.size === 2 && pinch) {
     const [a, b] = pointers.values();
     const d = Math.hypot(a.x - b.x, a.y - b.y);
@@ -90,8 +77,6 @@ canvas.addEventListener('pointermove', (e) => {
     }
     return;
   }
-
-  // Hover souris : montre la case cible.
   if (e.pointerType === 'mouse' && pointers.size === 0) {
     handleHover(e.clientX, e.clientY);
   }
@@ -102,7 +87,6 @@ canvas.addEventListener('pointerup', (e) => {
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinch = null;
   if (p && !p.moved && pointers.size === 0) {
-    // Le clic droit ne doit pas declencher un pick (utilise pour rotation).
     if (p.button === 2 && p.pointerType === 'mouse') return;
     handleTap(e.clientX, e.clientY);
   }
@@ -128,6 +112,49 @@ function handleTap(x, y) {
   if (!hit) return;
   game.onTileTap(hit.c, hit.r);
 }
+
+// --- INPUTS clavier ---
+// 1..9 : selectionne le sort du slot correspondant (slot 0..8).
+// 0    : slot 9.
+// Ctrl + 1..9 : slots 9..17 (utile quand on aura une 2e ligne ; note :
+//   certains navigateurs interceptent Ctrl+1..9 pour changer d onglet,
+//   on tente quand meme avec preventDefault).
+// M / Echap : mode deplacement / annule la selection.
+// Espace : fin de tour.
+document.addEventListener('keydown', (e) => {
+  // Ignore les inputs textes (pas d input dans l app pour l instant).
+  if (e.target && (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA')) return;
+
+  const key = e.key;
+  const ctrl = e.ctrlKey || e.metaKey;
+
+  if (key >= '1' && key <= '9') {
+    e.preventDefault();
+    const slot = (parseInt(key, 10) - 1) + (ctrl ? 9 : 0);
+    game.selectSpellSlot(slot);
+    return;
+  }
+  if (key === '0') {
+    e.preventDefault();
+    game.selectSpellSlot(ctrl ? 18 : 9);
+    return;
+  }
+  if (key === 'Escape') {
+    e.preventDefault();
+    game.setMode('move');
+    return;
+  }
+  if (key === ' ' || e.code === 'Space') {
+    e.preventDefault();
+    game.endTurn();
+    return;
+  }
+  if (key === 'm' || key === 'M') {
+    e.preventDefault();
+    game.setMode('move');
+    return;
+  }
+});
 
 // --- LOOP ---
 let last = performance.now();

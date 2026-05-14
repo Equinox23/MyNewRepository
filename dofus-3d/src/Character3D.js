@@ -191,6 +191,77 @@ export class Character3D {
     requestAnimationFrame(tick);
   }
 
+  // Teleportation : le perso se pince verticalement (disparaitre dans
+  // une colonne lumineuse), apparait a la nouvelle case en s etirant.
+  // Idee : scale.x/z -> 0, scale.y -> 2 ; puis snap ; puis l inverse.
+  teleportTo(c, r) {
+    return new Promise(resolve => {
+      this.busy = true;
+      const phase1 = 200;
+      const phase2 = 250;
+      const start = performance.now();
+      const tick = (now) => {
+        const elapsed = now - start;
+        if (elapsed < phase1) {
+          const t = elapsed / phase1;
+          const e = t * t;
+          this.group.scale.set(1 - 0.85 * e, 1 + 1.2 * e, 1 - 0.85 * e);
+          this.group.position.y = e * 0.3;
+          requestAnimationFrame(tick);
+        } else if (elapsed < phase1 + phase2) {
+          // Snap des qu on entre en phase 2.
+          if (this.c !== c || this.r !== r) {
+            this.c = c;
+            this.r = r;
+            this.group.position.x = c;
+            this.group.position.z = r;
+          }
+          const t = (elapsed - phase1) / phase2;
+          const e = 1 - (1 - t) * (1 - t);
+          this.group.scale.set(0.15 + 0.85 * e, 2.2 - 1.2 * e, 0.15 + 0.85 * e);
+          this.group.position.y = 0.3 * (1 - e);
+          requestAnimationFrame(tick);
+        } else {
+          this.group.scale.set(1, 1, 1);
+          this.group.position.set(c, 0, r);
+          this.busy = false;
+          resolve();
+        }
+      };
+      requestAnimationFrame(tick);
+    });
+  }
+
+  // Petit anneau colore qui se diffuse sous le perso : feedback buff /
+  // sort lance sur soi-meme.
+  flashGlow(colorHex = 0xf1c40f, duration = 900) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: colorHex, transparent: true, opacity: 0.75, depthWrite: false,
+    });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.4, 0.62, 32), mat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.set(this.group.position.x, 0.09, this.group.position.z);
+    ring.renderOrder = 10;
+    this.scene.add(ring);
+    const start = performance.now();
+    const tick = (now) => {
+      const t = Math.min(1, (now - start) / duration);
+      const s = 1 + t * 1.4;
+      ring.scale.set(s, s, 1);
+      // Suit le perso s il bouge (pour les buffs lances apres deplacement)
+      ring.position.x = this.group.position.x;
+      ring.position.z = this.group.position.z;
+      mat.opacity = 0.75 * (1 - t);
+      if (t < 1) requestAnimationFrame(tick);
+      else {
+        this.scene.remove(ring);
+        ring.geometry.dispose();
+        mat.dispose();
+      }
+    };
+    requestAnimationFrame(tick);
+  }
+
   // Animation de mort : le perso s effondre (scale.y -> 0) + alpha.
   die(duration = 600) {
     return new Promise(resolve => {
