@@ -79,6 +79,7 @@ export class Hud {
         cursor: move;
         user-select: none; -webkit-user-select: none;
         touch-action: none;
+        display: flex; align-items: center; gap: 10px;
       }
       #hud-spells.dragging {
         cursor: grabbing; opacity: 0.9;
@@ -88,6 +89,23 @@ export class Hud {
       #hud-spells.dragging button { pointer-events: none; }
 
       .spell-bar { display: flex; gap: 5px; }
+
+      /* Bouton "FIN DE TOUR" : seulement sur mobile (pas de touche Espace). */
+      #btn-end-mobile {
+        display: none;
+        background: #c0392b;
+        border: 3px solid #7c1f17;
+        color: #fff;
+        font: bold 13px "Trebuchet MS", sans-serif;
+        padding: 8px 14px;
+        border-radius: 10px;
+        cursor: pointer;
+        touch-action: manipulation;
+        -webkit-tap-highlight-color: transparent;
+        white-space: nowrap;
+      }
+      #btn-end-mobile:disabled { opacity: 0.45; cursor: default; }
+      #btn-end-mobile:active { background: #7c1f17; }
       .spell {
         position: relative;
         width: 58px; height: 58px;
@@ -417,6 +435,90 @@ export class Hud {
         margin-left: 8px; flex-shrink: 0;
       }
       #help-panel .hp-desc { color: #ddd; }
+
+      /* ----- Bouton parametres ----- */
+      #settings-btn {
+        position: fixed; top: 16px; right: 144px;
+        width: 52px; height: 52px;
+        border-radius: 50%;
+        background: rgba(12, 12, 20, 0.78);
+        border: 3px solid #95a5a6;
+        color: #ecf0f1;
+        cursor: pointer; pointer-events: auto;
+        user-select: none; -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        z-index: 5;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+        transition: background 0.15s, transform 0.1s;
+      }
+      #settings-btn svg { width: 28px; height: 28px; display: block; }
+      #settings-btn:hover { background: rgba(149, 165, 166, 0.18); }
+      #settings-btn:active { background: #95a5a6; color: #14182a; transform: scale(0.92); }
+      #settings-btn.active { background: #95a5a6; color: #14182a; }
+
+      #settings-panel {
+        position: fixed; top: 80px; right: 16px;
+        width: 260px;
+        background: rgba(12, 12, 20, 0.95);
+        border: 2px solid #95a5a6;
+        border-radius: 12px;
+        padding: 14px 16px 14px;
+        color: #fff;
+        font-family: "Trebuchet MS", sans-serif;
+        z-index: 6;
+        box-shadow: 0 12px 32px rgba(0,0,0,0.7);
+        display: none;
+        cursor: move; user-select: none; touch-action: none;
+      }
+      #settings-panel.show { display: block; }
+      #settings-panel.dragging { opacity: 0.9; box-shadow: 0 16px 36px rgba(0,0,0,0.85), 0 0 0 2px #95a5a6; }
+      #settings-panel .sp-title {
+        font-size: 18px; font-weight: bold; color: #ecf0f1;
+        margin-bottom: 10px; letter-spacing: 1px;
+        border-bottom: 1px solid #444a66; padding-bottom: 6px;
+      }
+      #settings-panel .sp-section { font-size: 12px; color: #95a5a6; margin: 10px 0 4px; letter-spacing: 1px; }
+      #settings-panel label {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 13px; padding: 4px 0; cursor: pointer;
+        color: #ddd;
+      }
+      #settings-panel label:hover { color: #fff; }
+      #settings-panel input[type="checkbox"] {
+        width: 16px; height: 16px; accent-color: #95a5a6; cursor: pointer;
+      }
+      #settings-panel .sp-hint { font-size: 11px; color: #888; font-style: italic; margin-top: 8px; }
+
+      /* Indicateur "epingle" sur la fiche du combattant. */
+      #fighter-info .fi-pin {
+        position: absolute; top: 6px; right: 8px;
+        width: 22px; height: 22px;
+        border-radius: 50%;
+        background: #f1c40f; color: #14182a;
+        border: none;
+        cursor: pointer;
+        font: bold 14px "Trebuchet MS", sans-serif;
+        display: none;
+        align-items: center; justify-content: center;
+        line-height: 1; padding: 0;
+      }
+      #fighter-info.pinned .fi-pin { display: flex; }
+      #fighter-info.pinned { border-color: #f1c40f; box-shadow: 0 6px 18px rgba(0,0,0,0.6), 0 0 0 2px #f1c40f; }
+
+      /* ----- ADAPTATIONS MOBILE ----- */
+      @media (pointer: coarse), (max-width: 768px) {
+        #btn-end-mobile { display: block; }
+        .rot-btn { width: 44px; height: 44px; border-width: 2px; }
+        .rot-btn svg { width: 24px; height: 24px; }
+        #rot-recenter { width: 40px; height: 40px; border-width: 2px; top: 12px; right: 12px; }
+        #rot-recenter svg { width: 22px; height: 22px; }
+        #help-btn { width: 40px; height: 40px; border-width: 2px; font-size: 20px; right: 60px; top: 12px; }
+        #settings-btn { width: 40px; height: 40px; border-width: 2px; right: 108px; top: 12px; }
+        #settings-btn svg { width: 22px; height: 22px; }
+        #help-panel { top: 60px; }
+        #settings-panel { top: 60px; }
+      }
     `;
     document.head.appendChild(css);
 
@@ -469,12 +571,18 @@ export class Hud {
     document.body.appendChild(stats);
     this.statsEl = stats;
 
-    // Panneau SORTS : juste la barre de sorts (plus de boutons Move / End).
+    // Panneau SORTS : la barre de sorts + un bouton "Fin de tour"
+    // affiche uniquement sur mobile (pas de touche Espace au tactile).
     const spells = document.createElement('div');
     spells.id = 'hud-spells';
-    spells.innerHTML = `<div class="spell-bar" id="spell-bar"></div>`;
+    spells.innerHTML = `
+      <div class="spell-bar" id="spell-bar"></div>
+      <button id="btn-end-mobile" type="button">FIN DE TOUR</button>
+    `;
     document.body.appendChild(spells);
     this.spellsEl = spells;
+    this.btnEndMobile = document.getElementById('btn-end-mobile');
+    this.btnEndMobile.addEventListener('click', () => this.callbacks.onEnd && this.callbacks.onEnd());
 
     const flash = document.createElement('div');
     flash.id = 'flash';
@@ -493,6 +601,7 @@ export class Hud {
     this.buildFighterInfo();
     this.buildRotationButtons();
     this.buildHelpPanel();
+    this.buildSettingsPanel();
     this.makeDraggable(this.statsEl, 'dofus3d.statsPos');
     this.makeDraggable(this.spellsEl, 'dofus3d.spellsPos');
     this.makeDraggable(this.turnOrderEl, 'dofus3d.turnPos');
@@ -501,6 +610,11 @@ export class Hud {
     });
     this.makeDraggable(this.fighterInfoEl, 'dofus3d.infoPos');
     this.makeDraggable(this.helpPanelEl, 'dofus3d.helpPos');
+    this.makeDraggable(this.settingsPanelEl, 'dofus3d.settingsPos', {
+      ignoreSelector: 'label,input',
+    });
+    // Restaure les visibilites memorisees.
+    this.applyVisibility();
   }
 
   buildHelpPanel() {
@@ -553,6 +667,83 @@ export class Hud {
     this.helpBtnEl.classList.toggle('active', show);
   }
 
+  // ----- Panneau parametres + bouton roue cranteee -----
+  buildSettingsPanel() {
+    const gearSvg = `
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="16" cy="16" r="4"/>
+        <path d="M16 4 v3 M16 25 v3 M4 16 h3 M25 16 h3
+                 M7.5 7.5 l2.1 2.1 M22.4 22.4 l2.1 2.1 M7.5 24.5 l2.1 -2.1 M22.4 9.6 l2.1 -2.1"/>
+      </svg>`;
+    const btn = document.createElement('button');
+    btn.id = 'settings-btn';
+    btn.innerHTML = gearSvg;
+    btn.title = 'Parametres d affichage';
+    document.body.appendChild(btn);
+    this.settingsBtnEl = btn;
+
+    const panel = document.createElement('div');
+    panel.id = 'settings-panel';
+    panel.innerHTML = `
+      <div class="sp-title">PARAMETRES</div>
+      <div class="sp-section">PANNEAUX VISIBLES</div>
+      <label><input type="checkbox" data-target="stats" checked> Stats du combattant</label>
+      <label><input type="checkbox" data-target="spells" checked> Barre de sorts</label>
+      <label><input type="checkbox" data-target="turn" checked> Ordre du tour</label>
+      <label><input type="checkbox" data-target="log" checked> Journal de combat</label>
+      <label><input type="checkbox" data-target="info" checked> Infobulle combattant</label>
+      <div class="sp-hint">Astuce : pince a 2 doigts un panneau pour le redimensionner.</div>
+    `;
+    document.body.appendChild(panel);
+    this.settingsPanelEl = panel;
+
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.toggleSettings();
+    });
+    panel.querySelectorAll('input[type="checkbox"]').forEach(input => {
+      input.addEventListener('change', () => {
+        this.setPanelVisible(input.dataset.target, input.checked);
+      });
+    });
+  }
+
+  toggleSettings(force) {
+    const show = force === undefined ? !this.settingsPanelEl.classList.contains('show') : force;
+    this.settingsPanelEl.classList.toggle('show', show);
+    this.settingsBtnEl.classList.toggle('active', show);
+  }
+
+  // Hash cle (target) -> element du panneau correspondant.
+  _panelByTarget(target) {
+    return ({
+      stats: this.statsEl,
+      spells: this.spellsEl,
+      turn: this.turnOrderEl,
+      log: this.combatLogEl,
+      info: this.fighterInfoEl,
+    })[target];
+  }
+
+  setPanelVisible(target, visible) {
+    const el = this._panelByTarget(target);
+    if (!el) return;
+    el.style.display = visible ? '' : 'none';
+    try { localStorage.setItem('dofus3d.vis.' + target, visible ? '1' : '0'); } catch (_) {}
+  }
+
+  applyVisibility() {
+    for (const target of ['stats', 'spells', 'turn', 'log', 'info']) {
+      let saved;
+      try { saved = localStorage.getItem('dofus3d.vis.' + target); } catch (_) {}
+      if (saved === '0') {
+        this.setPanelVisible(target, false);
+        const cb = this.settingsPanelEl && this.settingsPanelEl.querySelector(`input[data-target="${target}"]`);
+        if (cb) cb.checked = false;
+      }
+    }
+  }
+
   buildTurnOrder() {
     const el = document.createElement('div');
     el.id = 'turn-order';
@@ -596,51 +787,102 @@ export class Hud {
   makeDraggable(panel, storageKey, opts = {}) {
     if (!panel) return;
     const ignoreSelector = opts.ignoreSelector || null;
+    const pointers = new Map();
     let drag = null;
+    let pinch = null;
 
     const onDown = (e) => {
       if (e.target.closest('button')) return;
       if (e.target.closest('input,textarea,select')) return;
       if (ignoreSelector && e.target.closest(ignoreSelector)) return;
       e.preventDefault();
-      const rect = panel.getBoundingClientRect();
-      drag = {
-        pointerId: e.pointerId,
-        offsetX: e.clientX - rect.left,
-        offsetY: e.clientY - rect.top,
-      };
-      panel.classList.add('dragging');
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size >= 2) {
+        // Bascule en mode pinch : on annule le drag eventuel.
+        drag = null;
+        panel.classList.remove('dragging');
+        const arr = Array.from(pointers.values());
+        const a = arr[0], b = arr[1];
+        pinch = {
+          dist: Math.hypot(a.x - b.x, a.y - b.y),
+          scale: this._getScale(panel),
+        };
+      } else if (pointers.size === 1 && !pinch) {
+        const rect = panel.getBoundingClientRect();
+        drag = {
+          pointerId: e.pointerId,
+          offsetX: e.clientX - rect.left,
+          offsetY: e.clientY - rect.top,
+        };
+        panel.classList.add('dragging');
+      }
     };
 
     const onMove = (e) => {
-      if (!drag || drag.pointerId !== e.pointerId) return;
-      e.preventDefault();
-      let x = e.clientX - drag.offsetX;
-      let y = e.clientY - drag.offsetY;
-      const w = panel.offsetWidth;
-      const margin = 60;
-      x = Math.max(margin - w, Math.min(window.innerWidth - margin, x));
-      y = Math.max(0, Math.min(window.innerHeight - 30, y));
-      this.setPanelPos(panel, x, y);
+      const p = pointers.get(e.pointerId);
+      if (p) { p.x = e.clientX; p.y = e.clientY; }
+      if (pinch && pointers.size >= 2) {
+        e.preventDefault();
+        const arr = Array.from(pointers.values());
+        const a = arr[0], b = arr[1];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (d > 1 && pinch.dist > 1) {
+          const newScale = Math.max(0.45, Math.min(1.6, pinch.scale * (d / pinch.dist)));
+          this._setScale(panel, newScale);
+        }
+        return;
+      }
+      if (drag && drag.pointerId === e.pointerId) {
+        e.preventDefault();
+        let x = e.clientX - drag.offsetX;
+        let y = e.clientY - drag.offsetY;
+        const scale = this._getScale(panel);
+        const w = panel.offsetWidth * scale;
+        const margin = 60;
+        x = Math.max(margin - w, Math.min(window.innerWidth - margin, x));
+        y = Math.max(0, Math.min(window.innerHeight - 30, y));
+        this.setPanelPos(panel, x, y);
+      }
     };
 
     const onEnd = (e) => {
-      if (!drag || drag.pointerId !== e.pointerId) return;
-      drag = null;
-      panel.classList.remove('dragging');
-      const rect = panel.getBoundingClientRect();
-      try {
-        localStorage.setItem(storageKey, JSON.stringify({ x: rect.left, y: rect.top }));
-      } catch (_) {}
+      pointers.delete(e.pointerId);
+      if (pinch && pointers.size < 2) {
+        const scale = this._getScale(panel);
+        try { localStorage.setItem(storageKey + '.scale', scale.toFixed(3)); } catch (_) {}
+        pinch = null;
+      }
+      if (drag && drag.pointerId === e.pointerId) {
+        drag = null;
+        panel.classList.remove('dragging');
+        const rect = panel.getBoundingClientRect();
+        try {
+          localStorage.setItem(storageKey, JSON.stringify({ x: rect.left, y: rect.top }));
+        } catch (_) {}
+      }
     };
 
     panel.addEventListener('pointerdown', onDown);
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onEnd);
     document.addEventListener('pointercancel', onEnd);
-    window.addEventListener('blur', () => { drag = null; panel.classList.remove('dragging'); });
+    window.addEventListener('blur', () => {
+      drag = null; pinch = null; pointers.clear();
+      panel.classList.remove('dragging');
+    });
 
     this.restorePanelPosition(panel, storageKey);
+  }
+
+  // L echelle est conservee sur dataset.scale pour pouvoir la reappliquer
+  // a chaque setPanelPos sans interferer avec les translations.
+  _getScale(panel) {
+    return parseFloat(panel.dataset.scale || '1') || 1;
+  }
+  _setScale(panel, scale) {
+    panel.dataset.scale = String(scale);
+    panel.style.transformOrigin = 'top left';
+    panel.style.transform = `scale(${scale})`;
   }
 
   setPanelPos(panel, x, y) {
@@ -648,10 +890,21 @@ export class Hud {
     panel.style.top = y + 'px';
     panel.style.bottom = 'auto';
     panel.style.right = 'auto';
-    panel.style.transform = 'none';
+    // On conserve la scale (transform: scale(N)) et on annule la
+    // translation centrale par defaut (translateX(-50%)).
+    const scale = this._getScale(panel);
+    panel.style.transformOrigin = 'top left';
+    panel.style.transform = `scale(${scale})`;
   }
 
   restorePanelPosition(panel, storageKey) {
+    // Restore scale en premier (sans modifier la position par defaut).
+    let scaleRaw;
+    try { scaleRaw = localStorage.getItem(storageKey + '.scale'); } catch (_) {}
+    if (scaleRaw) {
+      const s = parseFloat(scaleRaw);
+      if (!isNaN(s) && s > 0) this._setScale(panel, s);
+    }
     let raw;
     try { raw = localStorage.getItem(storageKey); } catch (_) { return; }
     if (!raw) return;
@@ -659,7 +912,7 @@ export class Hud {
     try { pos = JSON.parse(raw); } catch (_) { return; }
     if (typeof pos.x !== 'number' || typeof pos.y !== 'number') return;
     const apply = () => {
-      const w = panel.offsetWidth;
+      const w = panel.offsetWidth * this._getScale(panel);
       if (w === 0) return;
       const margin = 60;
       const x = Math.max(margin - w, Math.min(window.innerWidth - margin, pos.x));
@@ -825,6 +1078,9 @@ export class Hud {
     // Un combattant avec un profil IA (Craqueleur invocation par ex.)
     // joue tout seul : le joueur ne peut pas le controler.
     const isAutonomous = !!fighter.def.ai;
+    if (this.btnEndMobile) {
+      this.btnEndMobile.disabled = !isPlayer || isAutonomous;
+    }
 
     for (const slot of this.spellSlots) {
       const cd = (fighter.spellCooldowns && fighter.spellCooldowns[slot.spell.id]) || 0;
@@ -840,9 +1096,10 @@ export class Hud {
       if (cdEl) cdEl.textContent = cd > 0 ? String(cd) : '';
     }
 
-    // Si l infobulle pointe vers le combattant actif, on rafraichit
-    // ses stats en direct (PA/PM debites au fil des actions).
-    if (this._infoFighter === fighter) this.renderFighterInfo();
+    // Si l infobulle pointe vers un combattant (epingle ou en survol),
+    // on rafraichit ses stats en direct (PA / PM / PV mis a jour au fil
+    // des sorts et des deplacements, meme si ce n est pas l actif).
+    if (this._infoFighter) this.renderFighterInfo();
   }
 
   showEnd(winner, onReplay) {
@@ -938,22 +1195,48 @@ export class Hud {
     this._logEntries = [];
   }
 
-  // ----- Infobulle d un combattant survole -----
+  // ----- Infobulle d un combattant survole / epingle -----
+  // Si un combattant est epingle (par clic), le hover est ignore et
+  // l infobulle continue d afficher la cible epinglee.
   showFighterInfo(fighter) {
     if (!this.fighterInfoEl) return;
+    if (this._pinnedFighter) return;
     this._infoFighter = fighter || null;
+    this.renderFighterInfo();
+  }
+
+  pinFighterInfo(fighter) {
+    if (!this.fighterInfoEl || !fighter) return;
+    // Toggle : un second clic sur la meme cible la desepingle.
+    if (this._pinnedFighter === fighter) {
+      this.unpinFighterInfo();
+      return;
+    }
+    this._pinnedFighter = fighter;
+    this._infoFighter = fighter;
+    this.renderFighterInfo();
+  }
+
+  unpinFighterInfo() {
+    this._pinnedFighter = null;
+    this._infoFighter = null;
     this.renderFighterInfo();
   }
 
   renderFighterInfo() {
     if (!this.fighterInfoEl) return;
     const f = this._infoFighter;
+    const isPinned = !!this._pinnedFighter;
+    this.fighterInfoEl.classList.toggle('pinned', isPinned);
     if (!f || !f.alive) {
       this.fighterInfoEl.classList.add('empty');
+      this.fighterInfoEl.classList.remove('pinned');
       this.fighterInfoEl.innerHTML = `
         <div class="fi-title">INFO</div>
-        <div class="fi-body">Survole un combattant.</div>
+        <div class="fi-body">Survole ou clique un combattant.</div>
       `;
+      // Si la cible epinglee n existe plus / est morte, on desepingle.
+      if (isPinned && (!f || !f.alive)) this._pinnedFighter = null;
       return;
     }
     this.fighterInfoEl.classList.remove('empty');
@@ -975,7 +1258,8 @@ export class Hud {
       if (parts.length) buffsHtml = `<div class="fi-buffs">${parts.join(' / ')}</div>`;
     }
     this.fighterInfoEl.innerHTML = `
-      <div class="fi-title">INFO</div>
+      <button class="fi-pin" type="button" title="Desepingler">x</button>
+      <div class="fi-title">${isPinned ? 'INFO (epinglee)' : 'INFO'}</div>
       <div class="fi-name">${f.name}</div>
       <div class="fi-team ${teamClass}">${teamLabel}</div>
       <div class="fi-row"><span class="lbl">PV</span><span class="val hp">${f.hp} / ${f.maxHp}</span></div>
@@ -983,5 +1267,12 @@ export class Hud {
       <div class="fi-row"><span class="lbl">PM</span><span class="val pm">${f.pm} / ${f.maxPm}</span></div>
       ${buffsHtml}
     `;
+    if (isPinned) {
+      const pinBtn = this.fighterInfoEl.querySelector('.fi-pin');
+      if (pinBtn) pinBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.unpinFighterInfo();
+      });
+    }
   }
 }

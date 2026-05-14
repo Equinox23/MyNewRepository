@@ -103,14 +103,14 @@ export class Scene3D {
     this.updateCamera();
   }
 
-  // Rotation discrete d un quart de tour : snap a l indice 90 deg le
-  // plus proche puis +/- une etape, anime en ~350ms.
+  // Rotation discrete par paliers de 45 degres : snap a l indice le
+  // plus proche puis +/- une etape, anime en ~280ms.
   snapRotate(direction) {
     if (this._snapping) return;
-    const step = Math.PI / 2;
+    const step = Math.PI / 4; // 45 degres
     const currentIdx = Math.round(this.azimuth / step);
     const targetAz = (currentIdx + direction) * step;
-    this._animateAzimuth(targetAz, 350);
+    this._animateAzimuth(targetAz, 280);
   }
 
   _animateAzimuth(targetAz, duration) {

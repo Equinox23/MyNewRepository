@@ -75,15 +75,16 @@ canvas.addEventListener('wheel', (e) => {
 
 const pointers = new Map();
 let pinch = null;
-const AZ_SENS = 0.008;
-const POLAR_SENS = 0.005;
 
 canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture(e.pointerId);
+  // Anchor monde sous le pointeur : sert au pan "le point reste sous le doigt".
+  const anchor = scene3d.worldPointAtCursor(e.clientX, e.clientY);
   pointers.set(e.pointerId, {
     startX: e.clientX, startY: e.clientY,
     x: e.clientX, y: e.clientY,
     moved: false, button: e.button, pointerType: e.pointerType,
+    panAnchor: anchor,
   });
   if (pointers.size === 2) {
     const [a, b] = pointers.values();
@@ -94,18 +95,18 @@ canvas.addEventListener('pointerdown', (e) => {
 canvas.addEventListener('pointermove', (e) => {
   const p = pointers.get(e.pointerId);
   if (p) {
-    const dx = e.clientX - p.x;
-    const dy = e.clientY - p.y;
     p.x = e.clientX; p.y = e.clientY;
     if (Math.hypot(e.clientX - p.startX, e.clientY - p.startY) > 6) p.moved = true;
-    if (pointers.size === 1 && p.moved) {
-      const isMouseRotate = p.pointerType === 'mouse' && p.button === 2;
-      const isTouchRotate = p.pointerType === 'touch';
-      if (isMouseRotate || isTouchRotate) {
-        scene3d.rotate(-dx * AZ_SENS, dy * POLAR_SENS);
+    if (pointers.size === 1 && p.moved && p.panAnchor) {
+      // Drag (1 doigt / clic appuye) = pan : le point monde initial sous
+      // le pointeur "suit" le pointeur. La rotation se fait UNIQUEMENT
+      // via les deux boutons dedies.
+      const cur = scene3d.worldPointAtCursor(e.clientX, e.clientY);
+      if (cur) {
+        scene3d.pan(p.panAnchor.x - cur.x, p.panAnchor.z - cur.z);
         picker.setHover(null);
-        return;
       }
+      return;
     }
   }
   if (pointers.size === 2 && pinch) {
@@ -176,6 +177,11 @@ function handleTap(x, y) {
   if (game.busy || game.ended) return;
   const hit = picker.pick(x, y);
   if (!hit) return;
+  // Pin : si la case contient un combattant, on epingle son info dans
+  // le panneau (le hover ne l ecrasera plus). Sinon, on desepingle.
+  const fighter = game.fighters.find(f => f.alive && f.c === hit.c && f.r === hit.r);
+  if (fighter) hud.pinFighterInfo(fighter);
+  else hud.unpinFighterInfo();
   game.onTileTap(hit.c, hit.r);
 }
 
