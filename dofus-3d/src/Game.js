@@ -1018,16 +1018,48 @@ export class Game {
     return new Promise(r => setTimeout(r, ms));
   }
 
+  // Cherche une bombe ennemie attaquable depuis la position courante
+  // de l ai (sort utilisable, dans la portee, ligne de vue si requise).
+  // Retourne la bombe la plus proche en distance Manhattan, ou null.
+  findBombInRange(ai, attackSpells) {
+    const bombs = this.fighters
+      .filter(f => f.alive && f.isBomb && f.team !== ai.team)
+      .map(b => ({ b, d: Math.abs(ai.c - b.c) + Math.abs(ai.r - b.r) }))
+      .sort((a, b) => a.d - b.d);
+    for (const { b: bomb } of bombs) {
+      for (const s of attackSpells) {
+        if (s.apCost > ai.pa) continue;
+        const d = Math.abs(ai.c - bomb.c) + Math.abs(ai.r - bomb.r);
+        if (d < s.range.min || d > s.range.max) continue;
+        if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, bomb.c, bomb.r, this.bombBlockers())) continue;
+        return bomb;
+      }
+    }
+    return null;
+  }
+
   async aiAttackLoop(ai, target, attackSpells) {
     let first = true;
-    while (ai.alive && target.alive) {
+    while (ai.alive && target && target.alive) {
       const usable = attackSpells.filter(s => s.apCost <= ai.pa).filter(s => {
         const d = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
         if (d < s.range.min || d > s.range.max) return false;
         if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r, this.bombBlockers())) return false;
         return true;
       });
-      if (usable.length === 0) break;
+      if (usable.length === 0) {
+        // Aucun sort utilisable sur la cible principale. Si la cible
+        // n est pas deja une bombe, on cherche une bombe ennemie en
+        // portee a frapper a la place.
+        if (!target.isBomb) {
+          const bomb = this.findBombInRange(ai, attackSpells);
+          if (bomb) {
+            target = bomb;
+            continue;
+          }
+        }
+        break;
+      }
       // Preference stricte : portee la plus COURTE d abord (le Craqueleur
       // choisit Frappe range 1 plutot que Lancer Rocher range 6 si les
       // deux sont utilisables). En cas d egalite, on prend le sort qui
