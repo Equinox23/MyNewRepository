@@ -1,4 +1,5 @@
 import { PORTRAITS } from '../assets/portraits.js';
+import { CREATURE_PORTRAITS } from '../assets/creature_portraits.js';
 import { SPELL_ICONS } from '../assets/icons.js';
 
 // Convertit une string SVG en URI data utilisable par Phaser.load.image.
@@ -27,6 +28,9 @@ export class PreloaderScene extends Phaser.Scene {
     this.load.on('complete', () => { subtitle.setText('Pret !'); });
 
     for (const [id, svg] of Object.entries(PORTRAITS)) {
+      this.load.image('portrait_' + id, svgToDataUri(svg));
+    }
+    for (const [id, svg] of Object.entries(CREATURE_PORTRAITS)) {
       this.load.image('portrait_' + id, svgToDataUri(svg));
     }
     for (const [id, svg] of Object.entries(SPELL_ICONS)) {

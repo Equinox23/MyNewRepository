@@ -1,11 +1,16 @@
 import { CLASSES } from '../data/classes.js';
+import { CREATURES } from '../data/creatures.js';
 import { SPELLS } from '../data/spells.js';
+
+export function getEntity(id) {
+  return CLASSES[id] || CREATURES[id] || null;
+}
 
 let nextId = 1;
 
 export class Fighter {
   constructor(classId, team, c, r, name = null) {
-    const cls = CLASSES[classId];
+    const cls = getEntity(classId);
     this.id = nextId++;
     this.classId = classId;
     this.cls = cls;

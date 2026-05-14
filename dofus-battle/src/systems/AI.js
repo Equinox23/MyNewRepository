@@ -8,7 +8,7 @@
 //   { type: 'cast', spell, target }
 //   { type: 'end' }
 
-import { bfs, pathTo, hasLineOfSight, manhattan, tilesInRange, inLine } from './Grid.js';
+import { bfs, pathTo, hasLineOfSight, manhattan, tilesInRange, tilesInArea, inLine } from './Grid.js';
 
 export function planTurn(state, ai) {
   const actions = [];
@@ -96,30 +96,68 @@ function chooseAttack(state, ai, working, occupied, enemies) {
   for (const spell of ai.spells) {
     if (working.pa < spell.apCost) continue;
     if (!spell.effects.some(e => e.type === 'damage' || e.type === 'dot')) continue;
+
+    const baseDmg = spell.effects
+      .filter(e => e.type === 'damage')
+      .reduce((s, e) => s + (e.min + e.max) / 2, 0);
+    const dotDmg = spell.effects
+      .filter(e => e.type === 'dot')
+      .reduce((s, e) => s + (e.min + e.max) / 2 * e.duration, 0);
+
+    // Cas 1 : sort cible sur soi (AOE auto-centree, ex: Cri, Tremblement)
+    if (spell.target === 'self' && spell.area && spell.area.type !== 'single') {
+      const center = { c: working.c, r: working.r };
+      const score = scoreAoe(state, ai, spell, center, baseDmg, dotDmg);
+      if (score !== null) candidates.push({ spell, target: center, score });
+      continue;
+    }
+
     if (spell.target !== 'enemy' && spell.target !== 'tile') continue;
 
+    // Cas 2 : on simule le cast sur la position de chaque ennemi a portee.
     for (const enemy of enemies) {
       const dist = manhattan(working, enemy);
       if (dist < spell.range.min || dist > spell.range.max) continue;
       if (spell.inLine && !inLine(working, enemy)) continue;
       if (spell.needsLOS && !hasLineOfSight(state.map.tiles, occupied, working, enemy)) continue;
 
-      // score = degats moyens + bonus si tue la cible + penalite cout
-      const dmg = spell.effects
-        .filter(e => e.type === 'damage')
-        .reduce((s, e) => s + (e.min + e.max) / 2, 0);
-      const dot = spell.effects
-        .filter(e => e.type === 'dot')
-        .reduce((s, e) => s + (e.min + e.max) / 2 * e.duration, 0);
-      let score = dmg + dot;
-      if (dmg >= enemy.hp) score += 50;
-      score -= spell.apCost * 0.5;
-      candidates.push({ spell, target: { c: enemy.c, r: enemy.r }, score });
+      const center = { c: enemy.c, r: enemy.r };
+      const area = tilesInArea(spell.area || { type: 'single' }, center);
+
+      let enemyHits = 0, allyHits = 0, killCount = 0, totalDmg = 0;
+      for (const tile of area) {
+        const f = state.fighters.find(f2 => f2.alive && f2.c === tile.c && f2.r === tile.r);
+        if (!f) continue;
+        if (f.id === ai.id) continue;
+        if (f.team === ai.team) { allyHits++; continue; }
+        enemyHits++;
+        totalDmg += baseDmg + dotDmg;
+        if (baseDmg >= f.hp) killCount++;
+      }
+      if (enemyHits === 0) continue;
+      const score = totalDmg + killCount * 50 + enemyHits * 5 - allyHits * 20 - spell.apCost * 0.5;
+      candidates.push({ spell, target: center, score });
     }
   }
   if (!candidates.length) return null;
   candidates.sort((a, b) => b.score - a.score);
   return candidates[0];
+}
+
+function scoreAoe(state, ai, spell, center, baseDmg, dotDmg) {
+  const area = tilesInArea(spell.area, center);
+  let enemyHits = 0, allyHits = 0, killCount = 0, totalDmg = 0;
+  for (const tile of area) {
+    const f = state.fighters.find(f2 => f2.alive && f2.c === tile.c && f2.r === tile.r);
+    if (!f) continue;
+    if (f.id === ai.id) continue;
+    if (f.team === ai.team) { allyHits++; continue; }
+    enemyHits++;
+    totalDmg += baseDmg + dotDmg;
+    if (baseDmg >= f.hp) killCount++;
+  }
+  if (enemyHits === 0) return null;
+  return totalDmg + killCount * 50 + enemyHits * 5 - allyHits * 20 - spell.apCost * 0.5;
 }
 
 function approachTarget(state, working, target, occupied) {

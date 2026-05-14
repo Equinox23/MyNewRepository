@@ -172,6 +172,106 @@ const LIGHTNING = `
     <polygon points="-2,-16 -8,2 -2,2 -6,16 8,-2 2,-2 6,-16" fill="#fffac8" stroke="#7a5d0a" stroke-width="1.5"/>
   </g>`;
 
+const HORN = `
+  <g transform="translate(32 36)">
+    <path d="M-10 8 Q-18 -6 -4 -14 Q-2 -4 -6 10 Z" fill="#ecf0f1" stroke="#2c1a08" stroke-width="1.5"/>
+    <path d="M10 8 Q18 -6 4 -14 Q2 -4 6 10 Z" fill="#ecf0f1" stroke="#2c1a08" stroke-width="1.5"/>
+    <ellipse cx="0" cy="8" rx="10" ry="6" fill="#3a2a14"/>
+  </g>`;
+
+const CHARGE = `
+  <g transform="translate(32 36)">
+    <path d="M-16 4 Q-10 -8 4 -8 L4 -16 L20 -2 L4 12 L4 4 Q-4 6 -10 12 Z" fill="#ffffff" stroke="#2c1a08" stroke-width="1.5"/>
+  </g>`;
+
+const BEAK = `
+  <g transform="translate(32 36)">
+    <path d="M-10 -8 Q0 10 14 -8 Q10 6 0 6 Q-8 4 -10 -8 Z" fill="#f39c12" stroke="#7a4f0a" stroke-width="1.5"/>
+    <line x1="0" y1="-8" x2="0" y2="6" stroke="#7a4f0a" stroke-width="1"/>
+    <circle cx="-10" cy="-12" r="1.5" fill="#fff"/>
+    <circle cx="10" cy="-12" r="1.5" fill="#fff"/>
+  </g>`;
+
+const WIND = `
+  <g transform="translate(32 36)" stroke="#ffffff" stroke-width="3" fill="none" stroke-linecap="round">
+    <path d="M-18 -8 Q-4 -10 0 -4 Q4 -10 18 -8 Q14 -2 0 -2"/>
+    <path d="M-18 2 Q-4 0 4 6 Q-8 8 -18 6" stroke-width="2.5"/>
+    <path d="M-16 12 Q0 10 12 14" stroke-width="2"/>
+  </g>`;
+
+const SOUND_WAVES = `
+  <g transform="translate(32 36)" fill="none" stroke-linecap="round">
+    <circle cx="0" cy="0" r="4" fill="#ffffff"/>
+    <path d="M-10 -10 Q-14 0 -10 10" stroke="#ffffff" stroke-width="2.5"/>
+    <path d="M10 -10 Q14 0 10 10" stroke="#ffffff" stroke-width="2.5"/>
+    <path d="M-16 -16 Q-22 0 -16 16" stroke="#ffffff" stroke-width="2" opacity="0.6"/>
+    <path d="M16 -16 Q22 0 16 16" stroke="#ffffff" stroke-width="2" opacity="0.6"/>
+  </g>`;
+
+const ROCK = `
+  <g transform="translate(32 36)">
+    <polygon points="-12,8 -8,-10 6,-12 14,-2 10,12" fill="#a98660" stroke="#2c1a08" stroke-width="1.8"/>
+    <line x1="-6" y1="-4" x2="2" y2="4" stroke="#2c1a08" stroke-width="1"/>
+    <line x1="4" y1="-8" x2="8" y2="-2" stroke="#2c1a08" stroke-width="1"/>
+    <line x1="-4" y1="4" x2="4" y2="8" stroke="#2c1a08" stroke-width="1"/>
+  </g>`;
+
+const SHAKE = `
+  <g transform="translate(32 36)" stroke="#ffffff" stroke-width="2.5" fill="none" stroke-linecap="round">
+    <path d="M-18 -2 L-10 -8 L-2 -2 L6 -8 L14 -2"/>
+    <path d="M-18 8 L-10 2 L-2 8 L6 2 L14 8"/>
+    <line x1="-20" y1="-12" x2="-16" y2="-12" stroke-width="2"/>
+    <line x1="16" y1="-12" x2="20" y2="-12" stroke-width="2"/>
+    <line x1="-20" y1="14" x2="-16" y2="14" stroke-width="2"/>
+    <line x1="16" y1="14" x2="20" y2="14" stroke-width="2"/>
+  </g>`;
+
+const STONE_SHIELD = `
+  <g transform="translate(32 36)">
+    <path d="M-14 -14 L14 -14 L14 4 Q14 14 0 18 Q-14 14 -14 4 Z" fill="#a98660" stroke="#2c1a08" stroke-width="2"/>
+    <line x1="0" y1="-14" x2="0" y2="18" stroke="#2c1a08" stroke-width="1.2"/>
+    <line x1="-14" y1="-2" x2="14" y2="-2" stroke="#2c1a08" stroke-width="1.2"/>
+    <path d="M-6 -10 L-4 -2" stroke="#2c1a08" stroke-width="1"/>
+    <path d="M6 -10 L4 -2" stroke="#2c1a08" stroke-width="1"/>
+  </g>`;
+
+const FLAME = `
+  <g transform="translate(32 36)">
+    <path d="M0 16 Q-12 12 -10 0 Q-8 -8 -4 -8 Q-2 0 0 -4 Q2 -10 6 -16 Q12 -8 10 0 Q8 12 0 16 Z" fill="#e74c3c" stroke="#7a1a10" stroke-width="1.5"/>
+    <path d="M0 12 Q-4 10 -4 4 Q-2 -2 2 -4 Q6 4 0 12 Z" fill="#f39c12"/>
+    <ellipse cx="0" cy="8" rx="2" ry="3" fill="#fffac8" opacity="0.8"/>
+  </g>`;
+
+const BIG_FLAME = `
+  <g transform="translate(32 36)">
+    <path d="M-14 4 Q-12 -8 -2 -10 Q4 -16 8 -4 Q12 -8 10 4 Q14 -2 14 8 Q12 16 0 18 Q-12 16 -14 4 Z" fill="#e74c3c" stroke="#7a1a10" stroke-width="1.5"/>
+    <path d="M-6 4 Q-4 -4 4 -6 Q8 0 4 8 Q-2 12 -6 4 Z" fill="#f39c12"/>
+    <path d="M-2 6 Q0 0 4 2 Q4 8 -2 6 Z" fill="#fffac8"/>
+    <circle cx="-12" cy="0" r="2" fill="#f39c12" opacity="0.6"/>
+    <circle cx="12" cy="-2" r="2" fill="#f39c12" opacity="0.6"/>
+  </g>`;
+
+const SHELL_SHIELD = `
+  <g transform="translate(32 36)">
+    <path d="M-14 0 Q-14 -14 0 -14 Q14 -14 14 0 Q14 14 0 14 Q-14 14 -14 0 Z" fill="#bb8fce" stroke="#2c1a08" stroke-width="2"/>
+    <line x1="0" y1="-14" x2="0" y2="14" stroke="#2c1a08" stroke-width="1.5"/>
+    <path d="M-10 -8 Q-12 0 -10 8" stroke="#2c1a08" stroke-width="1.2" fill="none"/>
+    <path d="M10 -8 Q12 0 10 8" stroke="#2c1a08" stroke-width="1.2" fill="none"/>
+    <ellipse cx="-6" cy="-4" rx="3" ry="2" fill="#d2b4de"/>
+    <ellipse cx="6" cy="-4" rx="3" ry="2" fill="#d2b4de"/>
+  </g>`;
+
+const DIRT_HOOF = `
+  <g transform="translate(32 36)">
+    <path d="M-10 12 L-12 -8 L0 -10 L12 -8 L10 12 Z" fill="#3a2a14" stroke="#1a0d05" stroke-width="1.5"/>
+    <line x1="-2" y1="-10" x2="-2" y2="12" stroke="#1a0d05" stroke-width="1.5"/>
+    <circle cx="-12" cy="14" r="3" fill="#27ae60" opacity="0.8"/>
+    <circle cx="-6" cy="16" r="2" fill="#27ae60" opacity="0.6"/>
+    <circle cx="0" cy="14" r="3" fill="#27ae60" opacity="0.8"/>
+    <circle cx="6" cy="16" r="2" fill="#27ae60" opacity="0.6"/>
+    <circle cx="12" cy="14" r="3" fill="#27ae60" opacity="0.8"/>
+  </g>`;
+
 // Couleurs darkenees par defaut
 const PAIRS = {
   red:    ['#e74c3c', '#7c1f17'],
@@ -215,4 +315,25 @@ export const SPELL_ICONS = {
   poisonParalysant:withPair(PAIRS.purple,   POISON),
   ronceMultiple:   withPair(PAIRS.teal,     THORNS_CROSS),
   arbreVivant:     withPair(PAIRS.green,    TREE),
+
+  // CREATURES : BOUFTOU
+  coupDeCorne:     withPair(PAIRS.gold,     HORN),
+  charge:          withPair(PAIRS.orange,   CHARGE),
+  chargeRoyale:    withPair(PAIRS.gold,     CHARGE),
+  piedsSales:      withPair(PAIRS.brown,    DIRT_HOOF),
+
+  // CREATURES : TOFU
+  coupDeBec:       withPair(PAIRS.grey,     BEAK),
+  tornade:         withPair(PAIRS.blue,     WIND),
+  cri:             withPair(PAIRS.gold,     SOUND_WAVES),
+
+  // CREATURES : CRAQUELEUR
+  eclatDePierre:   withPair(PAIRS.brown,    ROCK),
+  tremblement:     withPair(PAIRS.brown,    SHAKE),
+  armurePierre:    withPair(PAIRS.brown,    STONE_SHIELD),
+
+  // CREATURES : SCARA
+  souffleFeu:      withPair(PAIRS.red,      FLAME),
+  souffleXxl:      withPair(PAIRS.red,      BIG_FLAME),
+  carapace:        withPair(PAIRS.purple,   SHELL_SHIELD),
 };

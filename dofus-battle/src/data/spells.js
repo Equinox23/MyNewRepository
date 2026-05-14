@@ -187,4 +187,125 @@ export const SPELLS = {
     color: 0x2ecc71,
     desc: '+5 armure (reduit les degats) pendant 3 tours.',
   },
+
+  // ---------- CREATURES : BOUFTOU ----------
+  coupDeCorne: {
+    id: 'coupDeCorne', name: 'Coup de Corne', short: 'CC',
+    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false, inLine: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 8, max: 12, element: 'neutre' }],
+    color: 0xf1c40f,
+    desc: 'Coup de corne au corps a corps. 8-12 degats.',
+  },
+  charge: {
+    id: 'charge', name: 'Charge', short: 'CH',
+    apCost: 4, range: { min: 1, max: 1 }, needsLOS: false, inLine: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [
+      { type: 'damage', min: 10, max: 15, element: 'neutre' },
+      { type: 'push', distance: 2 },
+    ],
+    color: 0xe67e22,
+    desc: 'Charge tete baissee. 10-15 degats + recule de 2 cases.',
+  },
+  chargeRoyale: {
+    id: 'chargeRoyale', name: 'Charge Royale', short: 'CR',
+    apCost: 5, range: { min: 1, max: 1 }, needsLOS: false, inLine: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [
+      { type: 'damage', min: 18, max: 25, element: 'neutre' },
+      { type: 'push', distance: 3 },
+    ],
+    color: 0xd35400,
+    desc: 'Charge royale. 18-25 degats + 3 cases de recul.',
+  },
+  piedsSales: {
+    id: 'piedsSales', name: 'Pieds Sales', short: 'PD',
+    apCost: 3, range: { min: 1, max: 3 }, needsLOS: true, inLine: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'dot', min: 5, max: 8, duration: 3, element: 'terre' }],
+    color: 0x6b4d2b,
+    desc: 'Empoisonne la cible (5-8 degats / tour pendant 3 tours).',
+  },
+
+  // ---------- CREATURES : TOFU ----------
+  coupDeBec: {
+    id: 'coupDeBec', name: 'Coup de Bec', short: 'CB2',
+    apCost: 3, range: { min: 1, max: 2 }, needsLOS: true, inLine: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 7, max: 10, element: 'air' }],
+    color: 0xecf0f1,
+    desc: 'Coup de bec rapide. 7-10 degats air.',
+  },
+  tornade: {
+    id: 'tornade', name: 'Tornade', short: 'TN',
+    apCost: 4, range: { min: 1, max: 4 }, needsLOS: true, inLine: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [
+      { type: 'damage', min: 8, max: 12, element: 'air' },
+      { type: 'push', distance: 2 },
+    ],
+    color: 0x3498db,
+    desc: 'Souffle violent. 8-12 degats + 2 cases de recul.',
+  },
+  cri: {
+    id: 'cri', name: 'Cri', short: 'CR2',
+    apCost: 4, range: { min: 0, max: 0 }, needsLOS: false, inLine: false,
+    target: 'self', area: { type: 'circle', size: 2 },
+    effects: [{ type: 'damage', min: 8, max: 12, element: 'air' }],
+    color: 0xf39c12,
+    desc: 'Cri en zone autour de soi (rayon 2). 8-12 degats.',
+  },
+
+  // ---------- CREATURES : CRAQUELEUR ----------
+  eclatDePierre: {
+    id: 'eclatDePierre', name: 'Eclat de Pierre', short: 'EP',
+    apCost: 4, range: { min: 2, max: 6 }, needsLOS: true, inLine: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 12, max: 18, element: 'terre' }],
+    color: 0x7a5d35,
+    desc: 'Projette un eclat de pierre. 12-18 degats terre.',
+  },
+  tremblement: {
+    id: 'tremblement', name: 'Tremblement', short: 'TR',
+    apCost: 5, range: { min: 0, max: 0 }, needsLOS: false, inLine: false,
+    target: 'self', area: { type: 'circle', size: 2 },
+    effects: [{ type: 'damage', min: 10, max: 14, element: 'terre' }],
+    color: 0x8a6d3b,
+    desc: 'Secoue la zone autour de soi (rayon 2). 10-14 degats.',
+  },
+  armurePierre: {
+    id: 'armurePierre', name: 'Armure de Pierre', short: 'AP',
+    apCost: 3, range: { min: 0, max: 0 }, needsLOS: false, inLine: false,
+    target: 'self', area: { type: 'single' },
+    effects: [{ type: 'buff', stat: 'armor', value: 8, duration: 4 }],
+    color: 0x6b4d2b,
+    desc: '+8 armure pendant 4 tours.',
+  },
+
+  // ---------- CREATURES : SCARA ----------
+  souffleFeu: {
+    id: 'souffleFeu', name: 'Souffle de Feu', short: 'SF',
+    apCost: 4, range: { min: 1, max: 5 }, needsLOS: true, inLine: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 14, max: 20, element: 'feu' }],
+    color: 0xe74c3c,
+    desc: 'Souffle de feu en ligne. 14-20 degats.',
+  },
+  souffleXxl: {
+    id: 'souffleXxl', name: 'Souffle XXL', short: 'SX',
+    apCost: 5, range: { min: 1, max: 4 }, needsLOS: true, inLine: false,
+    target: 'tile', area: { type: 'cross', size: 1 },
+    effects: [{ type: 'damage', min: 16, max: 24, element: 'feu' }],
+    color: 0xc0392b,
+    desc: 'Souffle de feu en croix. 16-24 degats sur toute la zone.',
+  },
+  carapace: {
+    id: 'carapace', name: 'Carapace', short: 'CA',
+    apCost: 3, range: { min: 0, max: 0 }, needsLOS: false, inLine: false,
+    target: 'self', area: { type: 'single' },
+    effects: [{ type: 'buff', stat: 'armor', value: 5, duration: 3 }],
+    color: 0x7d3c98,
+    desc: '+5 armure pendant 3 tours (carapace).',
+  },
 };
