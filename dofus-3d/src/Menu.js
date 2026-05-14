@@ -36,7 +36,7 @@ const CLASS_OPTIONS = [
   {
     id: 'roublard',
     name: 'Roublard',
-    desc: 'Assassin / artificier (7 PA, 5 PM, init 13). Bombes en croix, tirs precis, esquive et acceleration.',
+    desc: 'Assassin / artificier (8 PA, 4 PM, init 13). Bombes en croix, tirs precis, esquive et acceleration.',
     available: true,
     icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
       <defs>
