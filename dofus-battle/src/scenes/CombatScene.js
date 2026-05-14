@@ -81,7 +81,10 @@ export class CombatScene extends Phaser.Scene {
     // ---- Input ----
     this.input.mouse.disableContextMenu();
     // Zone tactile transparente couvrant la zone de jeu (entre top bar et bottom panel)
+    // Depth tres bas pour que les boutons HUD (zoom, sorts, fin de tour) restent
+    // prioritaires pour la detection de clic.
     const tapZone = this.add.rectangle(VIEW_W / 2, 330, VIEW_W, 540, 0xffffff, 0).setInteractive();
+    tapZone.setDepth(-100);
     this.addUi(tapZone); // ne pas zoomer
     tapZone.on('pointerdown', (p) => this.onMapPointerDown(p));
 
@@ -152,6 +155,18 @@ export class CombatScene extends Phaser.Scene {
     g.lineTo(p.x - TILE_W / 2, p.y + TILE_H / 2);
     g.closePath();
     g.fillPath();
+  }
+
+  strokeTile(g, c, r, color, alpha, width) {
+    const p = tileToScreen(c, r);
+    g.lineStyle(width, color, alpha);
+    g.beginPath();
+    g.moveTo(p.x, p.y);
+    g.lineTo(p.x + TILE_W / 2, p.y + TILE_H / 2);
+    g.lineTo(p.x, p.y + TILE_H);
+    g.lineTo(p.x - TILE_W / 2, p.y + TILE_H / 2);
+    g.closePath();
+    g.strokePath();
   }
 
   // ---- DESSIN MURS 3D ISO ----
@@ -541,10 +556,13 @@ export class CombatScene extends Phaser.Scene {
       }
     }
     if (this.isTouchPointer(p)) return;
+    // Le ciblage est purement base sur la position iso du curseur (le sol).
+    // Les sprites des combattants montent au-dessus de leur case ; un clic
+    // sur la tete d un perso resout donc a la case derriere (visuellement
+    // masquee), ce qui correspond a ce qu attend le joueur dans Dofus.
     const wp = this.mainCam.getWorldPoint(p.x, p.y);
     const t = screenToTile(wp.x, wp.y);
-    const f = this.findFighterAtScreen(p.x, p.y);
-    const hoverTile = f ? { c: f.c, r: f.r } : (inBounds(t.c, t.r) ? t : null);
+    const hoverTile = inBounds(t.c, t.r) ? t : null;
     if (!hoverTile) { if (this.hover) { this.hover = null; this.refreshHighlights(); } return; }
     if (!this.hover || this.hover.c !== hoverTile.c || this.hover.r !== hoverTile.r) {
       this.hover = hoverTile;
@@ -573,16 +591,14 @@ export class CombatScene extends Phaser.Scene {
       return;
     }
 
-    // Resoudre la tuile cible: priorite combattant cliquables
-    const f = this.findFighterAtScreen(p.x, p.y);
-    let t;
-    if (f) {
-      t = { c: f.c, r: f.r };
-    } else {
-      const wp = this.mainCam.getWorldPoint(p.x, p.y);
-      t = screenToTile(wp.x, wp.y);
-      if (!inBounds(t.c, t.r)) return;
-    }
+    // Resoudre la tuile cible uniquement par la position iso du curseur.
+    // Un clic au-dessus d un sprite (tete / casque) cible la case visuellement
+    // derriere ; il faut cliquer sur le diamant au sol pour cibler la case
+    // du personnage. Cela permet de cibler un sort sur une case occupee par
+    // un sprite plus en avant.
+    const wp = this.mainCam.getWorldPoint(p.x, p.y);
+    const t = screenToTile(wp.x, wp.y);
+    if (!inBounds(t.c, t.r)) return;
 
     if (this.touchMode) {
       if (this.pendingTile && this.pendingTile.c === t.c && this.pendingTile.r === t.r) {
@@ -601,23 +617,6 @@ export class CombatScene extends Phaser.Scene {
 
     if (this.selectedSpell) this.tryCastAt(t);
     else this.tryMoveTo(t);
-  }
-
-  findFighterAtScreen(sx, sy) {
-    const wp = this.mainCam.getWorldPoint(sx, sy);
-    // bbox de chaque sprite (en world coords)
-    const sorted = this.state.fighters.filter(f => f.alive).sort((a, b) => (b.c + b.r) - (a.c + a.r));
-    for (const f of sorted) {
-      const sp = f.gfx.sprite;
-      const w = sp.displayWidth, h = sp.displayHeight;
-      const cx = f.gfx.cont.x + sp.x;
-      const cy = f.gfx.cont.y + sp.y;
-      // Origine sprite (0.5, 1) : top-left = cx - w/2, cy - h
-      const left = cx - w / 2, right = cx + w / 2;
-      const top = cy - h, bottom = cy;
-      if (wp.x >= left && wp.x <= right && wp.y >= top && wp.y <= bottom) return f;
-    }
-    return null;
   }
 
   cancelAction() {
@@ -754,6 +753,18 @@ export class CombatScene extends Phaser.Scene {
     // Pieges allies (visibles pour le joueur)
     for (const trap of this.state.traps) {
       if (trap.ownerTeam === 'player') this.fillTile(g, trap.c, trap.r, 0x9b59b6, 0.5);
+    }
+
+    // Marqueur de cible : contour bien visible sur la case survolee, plus
+    // grand sur la case en attente de confirmation (mode tactile).
+    if (this.hover) {
+      this.strokeTile(hp, this.hover.c, this.hover.r, 0xffffff, 0.95, 3);
+    }
+    if (this.pendingTile && (!this.hover || this.pendingTile.c !== this.hover.c || this.pendingTile.r !== this.hover.r)) {
+      this.strokeTile(hp, this.pendingTile.c, this.pendingTile.r, 0xf1c40f, 0.95, 3);
+    } else if (this.pendingTile) {
+      // double contour pour signaler "tap encore pour confirmer"
+      this.strokeTile(hp, this.pendingTile.c, this.pendingTile.r, 0xf1c40f, 0.9, 2);
     }
   }
 
