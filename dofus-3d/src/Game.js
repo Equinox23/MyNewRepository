@@ -114,6 +114,7 @@ export class Game {
 
   async castSelf(caster, spell) {
     caster.pa -= spell.apCost;
+    this.hud.update(caster, this.mode, this.selectedSpellId);
     await this.applySpellEffects(caster, spell, { c: caster.c, r: caster.r });
   }
 
@@ -143,10 +144,13 @@ export class Game {
     }
     const cost = path.length - 1;
     if (cost > cur.pm) return;
-    cur.pm -= cost;
     this.busy = true;
     this.picker.setHover(null);
+    // Decompte PAS par PAS pour que le HUD diminue visuellement les PM
+    // a chaque case parcourue (au lieu d un seul saut a la fin).
     for (const step of path.slice(1)) {
+      cur.pm--;
+      this.hud.update(cur, this.mode, this.selectedSpellId);
       await cur.character.moveTo(step.c, step.r, 170);
       cur.c = step.c;
       cur.r = step.r;
@@ -162,6 +166,8 @@ export class Game {
     const reason = this.validateSpellTarget(cur, spell, c, r);
     if (reason) { this.hud.flash(reason, 900); return; }
     cur.pa -= spell.apCost;
+    // Mise a jour HUD AVANT l animation : on voit les PA chuter en direct.
+    this.hud.update(cur, this.mode, this.selectedSpellId);
     this.busy = true;
     this.picker.setHover(null);
     this.rangeOverlay.clear();
@@ -313,6 +319,7 @@ export class Game {
       usable.sort((a, b) => avgDmg(b) - avgDmg(a));
       const spell = usable[0];
       ai.pa -= spell.apCost;
+      this.hud.update(ai, this.mode, this.selectedSpellId);
       await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
       if (this.checkEnd()) return;
     }
@@ -355,10 +362,11 @@ export class Game {
     const maxSteps = Math.min(ai.pm, fullPath.length - 1);
     const steps = fullPath.slice(1, maxSteps + 1);
     for (const step of steps) {
+      ai.pm--;
+      this.hud.update(ai, this.mode, this.selectedSpellId);
       await ai.character.moveTo(step.c, step.r, 170);
       ai.c = step.c;
       ai.r = step.r;
-      ai.pm--;
     }
   }
 

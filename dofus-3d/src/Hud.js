@@ -37,14 +37,32 @@ export class Hud {
       }
       #hud-panel button { cursor: pointer; }
       #hud-panel.dragging button { pointer-events: none; }
-      #hud-panel .stats { min-width: 160px; }
+      #hud-panel .stats { min-width: 180px; }
       #hud-panel .name { font-size: 16px; color: #f1c40f; font-weight: bold; margin-bottom: 4px; }
-      #hud-panel .bars { font-size: 12px; line-height: 1.4; }
-      #hud-panel .bars span { display: inline-block; margin-right: 8px; }
-      #hud-panel .bars .hp { color: #2ecc71; }
-      #hud-panel .bars .pa { color: #3498db; }
-      #hud-panel .bars .pm { color: #f39c12; }
-      #hud-panel .bars .buff { color: #9b59b6; font-style: italic; }
+      #hud-panel .stat-row {
+        display: flex; gap: 8px; align-items: center;
+      }
+      #hud-panel .stat-icon {
+        position: relative;
+        width: 46px; height: 46px;
+        flex-shrink: 0;
+      }
+      #hud-panel .stat-icon svg {
+        width: 100%; height: 100%; display: block;
+        filter: drop-shadow(0 2px 3px rgba(0,0,0,0.45));
+      }
+      #hud-panel .stat-icon .value {
+        position: absolute; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        font: bold 12px "Trebuchet MS", sans-serif;
+        color: #fff;
+        text-shadow: 1px 1px 2px #000, 0 0 3px #000, 0 0 4px rgba(0,0,0,0.7);
+        pointer-events: none;
+        line-height: 1;
+      }
+      #hud-panel .stat-icon.stat-pm .value { transform: translateX(-3px); }
+      #hud-panel .buffs { font-size: 12px; margin-top: 4px; line-height: 1.4; }
+      #hud-panel .buff { color: #d6a3f0; font-style: italic; }
       #hud-panel .actions { display: flex; gap: 6px; align-items: center; }
       #hud-panel .btn {
         background: #2c3e50; border: 2px solid #6a7090; color: #fff;
@@ -149,17 +167,51 @@ export class Hud {
     `;
     document.head.appendChild(css);
 
+    const heartSvg = `
+      <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="hp-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ff7088"/>
+            <stop offset="1" stop-color="#7c1f17"/>
+          </linearGradient>
+        </defs>
+        <path d="M16 28 C2 18 2 7 9 7 C12 7 15 9 16 12 C17 9 20 7 23 7 C30 7 30 18 16 28 Z"
+              fill="url(#hp-grad)" stroke="#3a0e09" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`;
+    const starSvg = `
+      <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="pa-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#7dc6f3"/>
+            <stop offset="1" stop-color="#1a4d6e"/>
+          </linearGradient>
+        </defs>
+        <polygon points="16 3 19.3 12 29 12.5 21.4 18.7 24 28 16 22.5 8 28 10.6 18.7 3 12.5 12.7 12"
+                 fill="url(#pa-grad)" stroke="#0c2336" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`;
+    const arrowSvg = `
+      <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="pm-grad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#6ee7b6"/>
+            <stop offset="1" stop-color="#0d6b3e"/>
+          </linearGradient>
+        </defs>
+        <polygon points="3 11 18 11 18 4 30 16 18 28 18 21 3 21"
+                 fill="url(#pm-grad)" stroke="#063820" stroke-width="2" stroke-linejoin="round"/>
+      </svg>`;
+
     const panel = document.createElement('div');
     panel.id = 'hud-panel';
     panel.innerHTML = `
       <div class="stats">
         <div class="name" id="hud-name">-</div>
-        <div class="bars">
-          <span class="hp">PV <span id="hud-hp">-</span></span>
-          <span class="pa">PA <span id="hud-pa">-</span></span>
-          <span class="pm">PM <span id="hud-pm">-</span></span>
+        <div class="stat-row">
+          <div class="stat-icon stat-hp" title="Points de Vie">${heartSvg}<span class="value" id="hud-hp">-</span></div>
+          <div class="stat-icon stat-pa" title="Points d Action">${starSvg}<span class="value" id="hud-pa">-</span></div>
+          <div class="stat-icon stat-pm" title="Points de Mouvement">${arrowSvg}<span class="value" id="hud-pm">-</span></div>
         </div>
-        <div class="bars" id="hud-buffs" style="margin-top: 2px;"></div>
+        <div class="buffs" id="hud-buffs"></div>
       </div>
       <div class="actions">
         <button class="btn" id="btn-move">Deplacer (M)</button>
