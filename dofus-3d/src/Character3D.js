@@ -39,7 +39,7 @@ const BUILDERS = {
 };
 
 const HP_BAR_Y = {
-  iop: 1.55,
+  iop: 1.95,
   osamodas: 1.55,
   roublard: 1.55,
   xelor: 2.05,

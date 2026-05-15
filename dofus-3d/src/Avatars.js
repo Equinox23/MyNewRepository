@@ -38,7 +38,7 @@ const BUILDERS = {
 // Cadrage par classe pour bien tenir dans la vignette (les modeles
 // n ont pas tous la meme taille).
 const FRAME = {
-  iop: { y: 0.85, dist: 2.3, height: 1.0 },
+  iop: { y: 0.95, dist: 2.7, height: 1.15 },
   osamodas: { y: 0.85, dist: 2.4, height: 1.0 },
   roublard: { y: 0.85, dist: 2.3, height: 1.0 },
   xelor: { y: 1.0, dist: 2.8, height: 1.1 },
