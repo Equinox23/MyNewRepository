@@ -182,8 +182,10 @@ export class Game {
     for (const f of this.fighters) f.character.setActive(f === cur);
     this.mode = 'move';
     this.selectedSpellId = null;
-    cur._bombPlacedThisTurn = false;
+    cur._bombsPlacedThisTurn = 0;
     cur._ralentiHits = new Set(); // cibles deja ralenties ce tour
+    cur._castCounts = {};         // nb de lancers par sort ce tour
+    this._pendingCast = null;     // confirmation de sort en 2 clics
     this.hud.update(cur, this.mode, null);
     this.hud.flash(`Tour ${this.turn.round}  -  ${cur.name}`, 1200);
     this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, cur);
@@ -230,6 +232,7 @@ export class Game {
     if (cur.team !== 'player' || cur.def.ai) return;
     this.mode = mode;
     if (mode !== 'spell') this.selectedSpellId = null;
+    this._pendingCast = null;
     this.refreshRangeOverlay();
     this.hud.update(cur, this.mode, this.selectedSpellId);
   }
@@ -252,6 +255,12 @@ export class Game {
       this.hud.flash('Cette creature est deja invoquee', 900);
       return;
     }
+    if (spell.maxCastsPerTurn
+        && (cur._castCounts && cur._castCounts[spell.id] || 0) >= spell.maxCastsPerTurn) {
+      this.hud.flash(`${spell.name} : deja lance ${spell.maxCastsPerTurn} fois ce tour`, 900);
+      return;
+    }
+    this._pendingCast = null;
     if (spell.target === 'self') {
       this.busy = true;
       this.castSelf(cur, spell).finally(() => {
@@ -334,12 +343,29 @@ export class Game {
     const reason = this.validateSpellTarget(cur, spell, c, r);
     if (reason) {
       this.hud.flash(reason, 900);
+      this._pendingCast = null;
       // Sur mobile, taper une case non ciblable equivaut au clic droit
       // PC : on revient en mode deplacement (etat de base).
       if (isTouch) this.setMode('move');
       return;
     }
+    // Sorts en 2 clics (ex : Aimantation) : le 1er clic affiche l apercu
+    // de la zone d effet, le 2eme sur la MEME case lance reellement.
+    if (spell.confirmCast) {
+      if (!this._pendingCast || this._pendingCast.spellId !== spell.id
+          || this._pendingCast.c !== c || this._pendingCast.r !== r) {
+        this._pendingCast = { spellId: spell.id, c, r };
+        this.showCastPreview(cur, spell, c, r);
+        this.hud.flash('Touchez a nouveau la case pour confirmer', 1200);
+        return;
+      }
+      this._pendingCast = null;
+    }
     cur.pa -= spell.apCost;
+    if (spell.maxCastsPerTurn) {
+      cur._castCounts = cur._castCounts || {};
+      cur._castCounts[spell.id] = (cur._castCounts[spell.id] || 0) + 1;
+    }
     if (spell.cooldown) cur.setCooldown(spell.id, spell.cooldown);
     cur.character.popCost(spell.apCost, 'pa');
     // Ralentissement : on memorise la cible pour ne pas la re-ralentir
@@ -380,6 +406,11 @@ export class Game {
         && caster._ralentiHits && caster._ralentiHits.has(targetFighter)) {
       return 'Deja ralenti ce tour';
     }
+    // Limite de lancers par tour (ex : Bond du Felin, 3x max).
+    if (spell.maxCastsPerTurn
+        && (caster._castCounts && caster._castCounts[spell.id] || 0) >= spell.maxCastsPerTurn) {
+      return 'Sort epuise ce tour';
+    }
     if (spell.target === 'ally') {
       if (!targetFighter || targetFighter.team !== caster.team) return 'Pas d allie';
       if (spell.targetFilter === 'bomb' && !targetFighter.isBomb) return 'Cible : une bombe';
@@ -402,8 +433,8 @@ export class Game {
       }
       if (spell.effects.some(e => e.type === 'placeBomb')) {
         const myBombs = this.fighters.filter(f => f.alive && f.isBomb && f.bombOwner === caster);
-        if (myBombs.length >= 2) return 'Max 2 bombes deja en place';
-        if (caster._bombPlacedThisTurn) return 'Deja une bombe posee ce tour';
+        if (myBombs.length >= 3) return 'Max 3 bombes deja en place';
+        if ((caster._bombsPlacedThisTurn || 0) >= 2) return 'Deja 2 bombes posees ce tour';
       }
       if (spell.effects.some(e => e.type === 'moveBomb')) {
         const myBombs = this.fighters.filter(f => f.alive && f.isBomb && f.bombOwner === caster);
@@ -720,6 +751,11 @@ export class Game {
       case 'debuff_pa': {
         const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
         if (!tf) return;
+        // Malus probabiliste (ex : Griffe de Ceangal, 20%).
+        if (effect.chance !== undefined && Math.random() >= effect.chance) {
+          this.hud.log && this.hud.log(`${spell.name} : pas de malus de PA`, 'cast');
+          return;
+        }
         let amount = effect.value !== undefined ? effect.value
           : (effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1)));
         // Vol de PA (Horloge) : on ne peut prendre que ce qu il reste
@@ -743,7 +779,7 @@ export class Game {
         // Reduction immediate + malus persistant (vol de temps du Xelor) :
         // la cible commencera son prochain tour amputee de ces PA.
         tf.pa = Math.max(0, tf.pa - amount);
-        tf.buffs.push({ bonusPa: -amount, duration: 2 });
+        tf.buffs.push({ bonusPa: -amount, duration: effect.turns ? effect.turns + 1 : 2 });
         tf.character.popText('-' + amount + ' PA', '#7ec6ff', {
           fontSize: 22, dx: 0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42,
         });
@@ -830,7 +866,7 @@ export class Game {
         bomb.bombAge = 0;
         bomb.character.setBombFuse(bomb.def.fuseMax);
         this.fighters.push(bomb);
-        caster._bombPlacedThisTurn = true;
+        caster._bombsPlacedThisTurn = (caster._bombsPlacedThisTurn || 0) + 1;
         // VFX de pose : petit portail rouge + apparition zoom.
         if (this.vfx) this.vfx.portal(target.c, target.r, { color: 0xc0392b, duration: 0.55 });
         bomb.character.group.scale.setScalar(0.01);
@@ -927,6 +963,50 @@ export class Game {
         }
         caster.character.flashGlow(0xff5a1f, 500);
         await this.explodeBomb(bomb);
+        return;
+      }
+      case 'knockback': {
+        // Repousse la cible en ligne droite, loin du lanceur.
+        const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
+        if (!tf || tf === caster) return;
+        const dc0 = tf.c - caster.c, dr0 = tf.r - caster.r;
+        let sc = 0, sr = 0;
+        if (Math.abs(dc0) >= Math.abs(dr0)) sc = Math.sign(dc0) || 1;
+        else sr = Math.sign(dr0) || 1;
+        let destC = tf.c, destR = tf.r;
+        for (let step = 1; step <= (effect.distance || 1); step++) {
+          const cc = tf.c + sc * step, cr = tf.r + sr * step;
+          if (!this.map3d.inBounds(cc, cr)) break;
+          if (this.map3d.isWall(cc, cr)) break;
+          if (this.map3d.isWater(cc, cr) && !this.map3d.isBridge(cc, cr)) break;
+          if (this.fighters.some(f => f.alive && f !== tf && f.c === cc && f.r === cr)) break;
+          destC = cc; destR = cr;
+        }
+        if (destC === tf.c && destR === tf.r) {
+          this.hud.log && this.hud.log(`${tf.name} ne peut pas etre repousse`, 'cast');
+          return;
+        }
+        if (this.vfx) this.vfx.flash(tf.c, tf.r, { color: 0xffd166, duration: 0.25 });
+        let cc = tf.c, cr = tf.r;
+        while (cc !== destC || cr !== destR) {
+          cc += sc; cr += sr;
+          await tf.character.moveTo(cc, cr, 110);
+        }
+        tf.c = destC; tf.r = destR;
+        this.hud.log && this.hud.log(`${caster.name} repousse ${tf.name}`, 'cast');
+        return;
+      }
+      case 'chanceStrike': {
+        // Coup de Griffe du Chaton : 50% degats, 50% soin de la cible.
+        if (Math.random() < 0.5) {
+          this.hud.log && this.hud.log(`${spell.name} : la griffe mord !`, 'attack');
+          await this.applyEffect(
+            { type: 'damage', min: effect.dmgMin, max: effect.dmgMax }, caster, spell, target);
+        } else {
+          this.hud.log && this.hud.log(`${spell.name} : coup manque, la cible est soignee`, 'heal');
+          await this.applyEffect(
+            { type: 'heal', min: effect.healMin, max: effect.healMax }, caster, spell, target);
+        }
         return;
       }
     }
@@ -1122,6 +1202,25 @@ export class Game {
     }
   }
 
+  // Apercu de la zone d effet d un sort a confirmer (Aimantation) :
+  // affiche la croix d attraction des bombes autour de la case visee.
+  showCastPreview(caster, spell, c, r) {
+    const magnet = spell.effects.find(e => e.type === 'magnetBombs');
+    if (!magnet) return;
+    const pull = magnet.pullRange || 5;
+    const tiles = [{ c, r }];
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      for (let i = 1; i <= pull; i++) {
+        const cc = c + dc * i, cr = r + dr * i;
+        if (!this.map3d.inBounds(cc, cr)) break;
+        if (this.map3d.isWall(cc, cr)) break;
+        tiles.push({ c: cc, r: cr });
+      }
+    }
+    this.rangeOverlay.clear();
+    this.rangeOverlay.paint(tiles, 0xc0392b, 0.40);
+  }
+
   // ---------- IA ----------
   async runAI() {
     if (this.ended) return;
@@ -1140,6 +1239,7 @@ export class Game {
       champignonRoyal: () => this.runChampignonRoyal(ai),
       craqueleur: () => this.runCraqueleur(ai),
       dragounet: () => this.runDragounet(ai),
+      chaton: () => this.runChaton(ai),
     };
     const fn = dispatch[profile] || dispatch.aggressive;
     await fn();
@@ -1153,7 +1253,7 @@ export class Game {
   aiAttackSpells(ai) {
     return ai.spells.filter(s =>
       !ai.isOnCooldown(s.id) &&
-      s.effects.some(e => e.type === 'damage' || e.type === 'debuff_pm' || e.type === 'debuff_pa' || e.type === 'dot') &&
+      s.effects.some(e => e.type === 'damage' || e.type === 'debuff_pm' || e.type === 'debuff_pa' || e.type === 'dot' || e.type === 'chanceStrike') &&
       (s.target === 'enemy' || s.target === 'tile')
     );
   }
@@ -1348,6 +1448,23 @@ export class Game {
     }
     // 2. Soin d un allie blesse a portee (Dragosoin), s il reste des PA.
     await this.aiTryHeal(ai);
+  }
+
+  // CHATON BLANC (invocation Ecaflip) : felin joueur. Fonce sur le hero
+  // ennemi le plus proche et griffe au corps a corps tant qu il peut.
+  async runChaton(ai) {
+    const spells = this.aiAttackSpells(ai);
+    if (spells.length === 0) return;
+    const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
+    if (!target) return;
+    if (ai.pm > 0 && this._dist(ai, target) > 1) {
+      await this.aiApproach(ai, target, 1);
+      await this.aiPause(320);
+    }
+    if (this.ended) return;
+    await this.aiAttackLoop(ai, target, spells);
+    if (this.ended) return;
+    await this.aiRepositionTowardHero(ai, spells);
   }
 
   async runAggressive(ai) {
@@ -1831,6 +1948,7 @@ function spellScore(spell) {
     if (e.type === 'debuff_pm') score += (e.value || 0) * 3;
     if (e.type === 'debuff_pa') score += (e.value || 0) * 4;
     if (e.type === 'dot') score += ((e.min + e.max) / 2) * (e.duration || 1);
+    if (e.type === 'chanceStrike') score += ((e.dmgMin + e.dmgMax) / 2) * 0.5;
   }
   return score;
 }
@@ -1842,6 +1960,7 @@ function maxDamageOf(spell) {
   for (const e of spell.effects) {
     if (e.type === 'damage') dmg += e.max;
     if (e.type === 'dot') dmg += e.max * (e.duration || 1);
+    if (e.type === 'chanceStrike') dmg += e.dmgMax;
   }
   return dmg;
 }

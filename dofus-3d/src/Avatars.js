@@ -16,6 +16,7 @@ import { buildTofuRoyal } from './models/tofuRoyal.js';
 import { buildChampignon } from './models/champignon.js';
 import { buildChampignonRoyal } from './models/champignonRoyal.js';
 import { buildDragounetRouge } from './models/dragounetRouge.js';
+import { buildChatonBlanc } from './models/chatonBlanc.js';
 
 const BUILDERS = {
   iop: buildIop,
@@ -27,6 +28,7 @@ const BUILDERS = {
   bouftouRoyal: buildBouftouRoyal,
   craqueleur: buildCraqueleur,
   dragounetRouge: buildDragounetRouge,
+  chatonBlanc: buildChatonBlanc,
   crapaud: buildCrapaud,
   crapaudChef: buildCrapaudChef,
   chafer: buildChafer,
@@ -51,6 +53,7 @@ const FRAME = {
   crapaud: { y: 0.35, dist: 1.7, height: 0.55 },
   crapaudChef: { y: 0.55, dist: 2.0, height: 0.9 },
   dragounetRouge: { y: 0.6, dist: 2.3, height: 0.95 },
+  chatonBlanc: { y: 0.6, dist: 2.2, height: 0.95 },
   chafer: { y: 0.85, dist: 2.5, height: 1.1 },
   chaferRoyal: { y: 1.15, dist: 3.4, height: 1.4 },
   tofu: { y: 0.45, dist: 1.9, height: 0.7 },

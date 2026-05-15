@@ -10,6 +10,9 @@
 //  - 'buff'           { duration, damageMult?, bonusPa?, bonusPm?, shield? }
 //  - 'summon'         { creatureId }
 //  - 'debuff_pm'      { value }  -> retire N PM a la cible
+//  - 'debuff_pa'      { value | min,max, chance?, turns?, steal? }
+//  - 'knockback'      { distance }  -> repousse la cible en ligne droite
+//  - 'chanceStrike'   { dmgMin,dmgMax, healMin,healMax }  -> 50% degats / 50% soin
 //
 // Aire : { type: 'single' } | { type: 'line', length } | { type: 'cross', size }.
 // Cooldown : nombre de tours entre deux casts (decremente au debut du
@@ -212,6 +215,26 @@ const ICON_SPEAR = `
     <line x1="4" y1="24" x2="9" y2="29"/>
   </svg>`;
 
+const ICON_PULSAR = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="16" cy="16" r="3" fill="currentColor"/>
+    <circle cx="16" cy="16" r="8" opacity="0.7"/>
+    <circle cx="16" cy="16" r="13" opacity="0.4"/>
+    <polyline points="24 8, 28 4, 24 4"/>
+    <polyline points="8 24, 4 28, 8 28"/>
+  </svg>`;
+
+const ICON_KITTEN = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="7 4, 12 12, 4 12" fill="currentColor"/>
+    <polygon points="25 4, 28 12, 20 12" fill="currentColor"/>
+    <circle cx="16" cy="18" r="9" fill="currentColor"/>
+    <circle cx="12" cy="16" r="1.5" fill="#fff"/>
+    <circle cx="20" cy="16" r="1.5" fill="#fff"/>
+    <line x1="6" y1="19" x2="11" y2="20" stroke="#fff"/>
+    <line x1="26" y1="19" x2="21" y2="20" stroke="#fff"/>
+  </svg>`;
+
 // Couleurs canoniques par categorie.
 export const SPELL_CATEGORY_COLOR = {
   attack: '#c0392b',
@@ -261,18 +284,18 @@ export const SPELLS = {
   poserBombe: {
     id: 'poserBombe', name: 'Poser une Bombe', short: 'PB', icon: ICON_BOMB,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 5, range: { min: 1, max: 3 }, needsLOS: false,
+    apCost: 4, range: { min: 1, max: 3 }, needsLOS: false,
     target: 'tile', area: { type: 'single' },
     effects: [{ type: 'placeBomb' }],
-    desc: 'Pose une bombe sur une case libre (50 PV, bloque la vue). Explose dans 3 tours en zone rayon 2 pour 50 degats, +75% par tour ecoule. Max 2 bombes sur le terrain, 1 pose par tour.',
+    desc: 'Pose une bombe sur une case libre (50 PV, bloque la vue). Explose dans 3 tours en zone rayon 2 pour 50 degats, +75% par tour ecoule. Max 3 bombes sur le terrain, 2 posees par tour.',
   },
   aimantation: {
     id: 'aimantation', name: 'Aimantation', short: 'AI', icon: ICON_BOMB_MOVE,
     category: 'move', color: SPELL_CATEGORY_COLOR.move,
-    apCost: 3, range: { min: 1, max: 6 }, needsLOS: false,
-    target: 'any', area: { type: 'single' },
+    apCost: 3, range: { min: 0, max: 6 }, needsLOS: false,
+    target: 'any', area: { type: 'single' }, confirmCast: true,
     effects: [{ type: 'magnetBombs', pullRange: 5 }],
-    desc: 'Attire vos bombes alignees en croix avec la case visee (a 5 cases max) jusqu a 1 case de celle-ci. A lancer sur un combattant ou une bombe, jamais dans le vide.',
+    desc: 'Attire vos bombes alignees en croix avec la case visee (a 5 cases max) jusqu a 1 case de celle-ci. Peut etre lancee sur soi-meme. Le 1er clic affiche la croix d attraction, le 2eme sur la meme case lance le sort.',
   },
   detonationManuelle: {
     id: 'detonationManuelle', name: 'Detonation', short: 'DT', icon: ICON_DETONATE,
@@ -292,6 +315,17 @@ export const SPELLS = {
     cooldown: 3,
     effects: [{ type: 'buff', shield: 0.5, duration: 3 }],
     desc: 'Pose un bouclier (-50% degats reçus) sur une de vos bombes pendant 3 tours.',
+  },
+  pulsar: {
+    id: 'pulsar', name: 'Pulsar', short: 'PU', icon: ICON_PULSAR,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 5, range: { min: 1, max: 6 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [
+      { type: 'damage', min: 40, max: 60 },
+      { type: 'knockback', distance: 2 },
+    ],
+    desc: 'Onde de choc : 40-60 degats et repousse la cible de 2 cases. Portee 6.',
   },
 
   // ---------- OSAMODAS ----------
@@ -489,12 +523,15 @@ export const SPELLS = {
 
   // ---------- ECAFLIP ----------
   griffeFeline: {
-    id: 'griffeFeline', name: 'Griffe Feline', short: 'GF', icon: ICON_CLAW,
+    id: 'griffeFeline', name: 'Griffe de Ceangal', short: 'GC', icon: ICON_CLAW,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 8, max: 28 }],
-    desc: 'Coup de griffe a la chance : degats tres variables (8-28).',
+    effects: [
+      { type: 'damage', min: 20, max: 70 },
+      { type: 'debuff_pa', value: 1, chance: 0.2, turns: 10 },
+    ],
+    desc: 'Coup de griffe acere : 20-70 degats, 20% de chance de retirer 1 PA a la cible pendant 10 tours.',
   },
   pileOuFace: {
     id: 'pileOuFace', name: 'Pile ou Face', short: 'PF', icon: ICON_COIN,
@@ -505,7 +542,7 @@ export const SPELLS = {
     desc: 'Lance une piece : degats totalement aleatoires (5-45).',
   },
   roueChance: {
-    id: 'roueChance', name: 'Roue de la Chance', short: 'RC', icon: ICON_BOOST,
+    id: 'roueChance', name: 'Roue de la Fortune', short: 'RF', icon: ICON_BOOST,
     category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
@@ -516,10 +553,27 @@ export const SPELLS = {
   bondDuFelin: {
     id: 'bondDuFelin', name: 'Bond du Felin', short: 'BF', icon: ICON_JUMP,
     category: 'move', color: SPELL_CATEGORY_COLOR.move,
-    apCost: 3, range: { min: 1, max: 5 }, needsLOS: false,
-    target: 'tile', area: { type: 'single' },
+    apCost: 1, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'tile', area: { type: 'single' }, maxCastsPerTurn: 3,
     effects: [{ type: 'teleport' }],
-    desc: 'Bond felin sur une case libre.',
+    desc: 'Bond felin sur une case adjacente libre. Coute 1 PA, jusqu a 3 fois par tour.',
+  },
+  invocationChaton: {
+    id: 'invocationChaton', name: 'Invocation du Chaton', short: 'IK', icon: ICON_SUMMON,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'tile', area: { type: 'single' },
+    cooldown: 7,
+    effects: [{ type: 'summon', creatureId: 'chatonBlanc' }],
+    desc: 'Invoque un Chaton Blanc sur une case adjacente libre.',
+  },
+  coupDeGriffe: {
+    id: 'coupDeGriffe', name: 'Coup de Griffe', short: 'CG', icon: ICON_KITTEN,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'chanceStrike', dmgMin: 10, dmgMax: 90, healMin: 20, healMax: 40 }],
+    desc: 'Griffure chanceuse : 50% de chance d infliger 10-90 degats, 50% de soigner la cible de 20-40.',
   },
 
   // ---------- CHAFER (squelette) ----------
@@ -629,9 +683,21 @@ export function spellEffectLines(spell) {
       }
       case 'debuff_pa': {
         const amt = eff.value !== undefined ? `${eff.value}` : `${eff.min}-${eff.max}`;
-        lines.push(`Cible perd ${amt} PA (au prochain tour)`);
+        if (eff.chance !== undefined) {
+          const turnTxt = eff.turns ? `${eff.turns} tours` : 'au prochain tour';
+          lines.push(`${Math.round(eff.chance * 100)}% : cible perd ${amt} PA (${turnTxt})`);
+        } else {
+          lines.push(`Cible perd ${amt} PA (au prochain tour)`);
+        }
         break;
       }
+      case 'knockback':
+        lines.push(`Repousse la cible de ${eff.distance || 1} cases`);
+        break;
+      case 'chanceStrike':
+        lines.push(`50% : degats ${eff.dmgMin}-${eff.dmgMax}`);
+        lines.push(`50% : soigne ${eff.healMin}-${eff.healMax}`);
+        break;
       case 'dot':
         lines.push(`Poison : ${eff.min}-${eff.max} degats pendant ${eff.duration} tours`);
         break;

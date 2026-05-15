@@ -20,7 +20,7 @@ export const DEFS = {
     name: 'Roublard',
     role: 'Artificier',
     hp: 100, pa: 8, pm: 4, initiative: 13,
-    spellIds: ['poserBombe', 'aimantation', 'detonationManuelle', 'bouclierBombe'],
+    spellIds: ['poserBombe', 'aimantation', 'detonationManuelle', 'bouclierBombe', 'pulsar'],
   },
   bombeRoublard: {
     name: 'Bombe',
@@ -92,7 +92,14 @@ export const DEFS = {
     name: 'Ecaflip',
     role: 'Joueur',
     hp: 100, pa: 8, pm: 4, initiative: 12,
-    spellIds: ['griffeFeline', 'pileOuFace', 'roueChance', 'bondDuFelin'],
+    spellIds: ['griffeFeline', 'pileOuFace', 'roueChance', 'bondDuFelin', 'invocationChaton'],
+  },
+  chatonBlanc: {
+    name: 'Chaton Blanc',
+    role: 'Invocation',
+    hp: 100, pa: 7, pm: 5, initiative: 12,
+    spellIds: ['coupDeGriffe'],
+    ai: 'chaton',
   },
 
   // ---------- CHAFER (squelettes) ----------
