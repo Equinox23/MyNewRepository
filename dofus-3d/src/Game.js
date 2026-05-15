@@ -776,10 +776,14 @@ export class Game {
           return;
         }
         if (this.vfx) this.vfx.debuffCloud({ c: tf.c, r: tf.r }, { color: 0x4a6f9a });
-        // Reduction immediate ; le malus persistant n est applique que si
-        // l effet n est pas marque comme limite au tour en cours.
-        tf.pa = Math.max(0, tf.pa - amount);
-        if (!effect.currentTurnOnly) {
+        // currentTurnOnly (sorts du Xelor) : retrait differé applique
+        // au prochain tour de la cible uniquement, sans toucher a son
+        // affichage actuel. Sinon : reduction immediate + malus
+        // persistant via le systeme de buffs.
+        if (effect.currentTurnOnly) {
+          tf.pendingPaDebuff = (tf.pendingPaDebuff || 0) + amount;
+        } else {
+          tf.pa = Math.max(0, tf.pa - amount);
           tf.buffs.push({ bonusPa: -amount, duration: effect.turns ? effect.turns + 1 : 2 });
         }
         tf.character.popText('-' + amount + ' PA', '#7ec6ff', {
