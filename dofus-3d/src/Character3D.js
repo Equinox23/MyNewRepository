@@ -40,10 +40,10 @@ const BUILDERS = {
 
 const HP_BAR_Y = {
   iop: 1.95,
-  osamodas: 1.55,
-  roublard: 1.55,
-  xelor: 2.05,
-  ecaflip: 1.55,
+  osamodas: 2.00,
+  roublard: 1.80,
+  xelor: 2.35,
+  ecaflip: 1.90,
   bouftou: 1.30,
   bouftouRoyal: 1.95,
   craqueleur: 1.55,

@@ -39,10 +39,10 @@ const BUILDERS = {
 // n ont pas tous la meme taille).
 const FRAME = {
   iop: { y: 0.95, dist: 2.7, height: 1.15 },
-  osamodas: { y: 0.85, dist: 2.4, height: 1.0 },
-  roublard: { y: 0.85, dist: 2.3, height: 1.0 },
-  xelor: { y: 1.0, dist: 2.8, height: 1.1 },
-  ecaflip: { y: 0.85, dist: 2.4, height: 1.0 },
+  osamodas: { y: 0.95, dist: 2.7, height: 1.15 },
+  roublard: { y: 0.90, dist: 2.5, height: 1.10 },
+  xelor: { y: 1.05, dist: 3.0, height: 1.30 },
+  ecaflip: { y: 0.95, dist: 2.7, height: 1.15 },
   bouftou: { y: 0.55, dist: 2.1, height: 0.8 },
   bouftouRoyal: { y: 0.75, dist: 2.6, height: 1.0 },
   craqueleur: { y: 0.55, dist: 2.0, height: 0.8 },
