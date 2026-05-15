@@ -1313,15 +1313,15 @@ export class Game {
     await this.runRelentlessMelee(ai, 1);
   }
 
-  // CHAFER ROYAL : officier squelette. Il se rend invisible des qu il
-  // ne peut pas frapper sa cible depuis sa position courante (pas a
-  // portee d attaque / hors d atteinte avec ses PM), puis avance cache.
-  // Une fois au contact, il combat de maniere acharnee.
+  // CHAFER ROYAL : officier squelette. Tant qu il n est pas au contact
+  // d un ennemi (pas a portee de melee), il se rend invisible pour
+  // avancer cache. Une fois au corps a corps, il combat sans relache.
   async runChaferRoyal(ai) {
     const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
-    const spells = this.aiAttackSpells(ai);
-    if (target && spells.length > 0
-        && this.usableSpellsOn(ai, target, spells).length === 0) {
+    // Pas de cible adjacente -> il tente de devenir invisible (le sort
+    // est ignore par aiTryInvisibility s il est deja invisible ou en
+    // recharge).
+    if (!target || this._dist(ai, target) > 1) {
       await this.aiTryInvisibility(ai);
       if (this.ended) return;
     }
