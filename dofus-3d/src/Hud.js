@@ -276,6 +276,7 @@ export class Hud {
       #turn-order {
         position: fixed; left: 50%; top: 16px; transform: translateX(-50%);
         display: flex; align-items: center; gap: 6px;
+        flex-wrap: wrap; justify-content: center; max-width: 92vw;
         background: rgba(12, 12, 20, 0.85);
         border: 2px solid #444a66; border-radius: 12px;
         padding: 8px 12px;

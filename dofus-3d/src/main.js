@@ -70,7 +70,7 @@ const menu = new Menu(selection => {
   menu.hide();
   document.body.style.cursor = POINTER_CURSOR;
   game.setup({
-    playerClasses: [selection.classId],
+    playerClasses: selection.playerClasses,
     combatId: selection.combatId,
     mapId: selection.mapId,
   });

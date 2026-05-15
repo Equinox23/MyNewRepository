@@ -189,6 +189,37 @@ const CLASS_OPTIONS = [
       <text x="49" y="44" font-size="10" font-weight="bold" text-anchor="middle" fill="#c0392b" transform="rotate(18 49 40)">A</text>
     </svg>`,
   },
+  {
+    id: 'pandawa',
+    name: 'Pandawa',
+    desc: 'Bambouseur fetard (8 PA, 4 PM, 110 PV). Coups puissants, vagues en zone et soins au lait de bambou.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
+      <line x1="9" y1="52" x2="13" y2="12" stroke="#6aa84a" stroke-width="3.5" stroke-linecap="round"/>
+      <ellipse cx="13" cy="12" rx="4" ry="2.4" fill="#4f8a32" transform="rotate(-35 13 12)"/>
+      <ellipse cx="26" cy="55" rx="6.5" ry="4.5" fill="#262329"/>
+      <ellipse cx="38" cy="55" rx="6.5" ry="4.5" fill="#262329"/>
+      <rect x="19" y="33" width="26" height="22" rx="9" fill="#f1ede1" stroke="#3a3038" stroke-width="2"/>
+      <ellipse cx="32" cy="46" rx="8" ry="9" fill="#fbf8ef"/>
+      <circle cx="17" cy="40" r="6.5" fill="#262329"/>
+      <circle cx="47" cy="40" r="6.5" fill="#262329"/>
+      <rect x="40" y="38" width="16" height="19" rx="3" fill="#8a5a2b" stroke="#4a2f12" stroke-width="1.6" transform="rotate(14 48 47)"/>
+      <line x1="41" y1="43" x2="56" y2="47" stroke="#b9893f" stroke-width="1.6" transform="rotate(14 48 47)"/>
+      <line x1="40" y1="51" x2="55" y2="55" stroke="#b9893f" stroke-width="1.6" transform="rotate(14 48 47)"/>
+      <circle cx="32" cy="20" r="15" fill="#f1ede1" stroke="#3a3038" stroke-width="2"/>
+      <circle cx="20" cy="7" r="6.5" fill="#262329"/>
+      <circle cx="44" cy="7" r="6.5" fill="#262329"/>
+      <ellipse cx="26" cy="19" rx="4.6" ry="6.4" fill="#262329" transform="rotate(-22 26 19)"/>
+      <ellipse cx="38" cy="19" rx="4.6" ry="6.4" fill="#262329" transform="rotate(22 38 19)"/>
+      <circle cx="26" cy="19" r="2.1" fill="#fff"/>
+      <circle cx="38" cy="19" r="2.1" fill="#fff"/>
+      <ellipse cx="32" cy="26" rx="5.5" ry="4" fill="#fbf8ef"/>
+      <circle cx="32" cy="24.5" r="1.8" fill="#16121a"/>
+      <circle cx="22" cy="27" r="2.6" fill="#e88a8a" opacity="0.8"/>
+      <circle cx="42" cy="27" r="2.6" fill="#e88a8a" opacity="0.8"/>
+    </svg>`,
+  },
 ];
 
 const COMBAT_OPTIONS = [
@@ -473,19 +504,24 @@ export class Menu {
   constructor(onStart, audio) {
     this.onStart = onStart;
     this.audio = audio || null;
+    this.mode = null;        // 'solo' | 'multi'
+    this.view = 'home';      // 'home' | 'steps'
     this.selection = {
-      classId: 'iop',
+      classIds: ['iop'],
       combatId: 'bouftou',
       mapId: 'foret',
     };
-    this.step = 0; // 0 = classe, 1 = combat, 2 = carte
+    this.step = 0; // 0 = classe(s), 1 = combat, 2 = carte
     this.steps = [
-      { key: 'classId', title: 'Choisis ton heros', options: CLASS_OPTIONS },
+      { key: 'class', title: 'Choisis ton heros', options: CLASS_OPTIONS },
       { key: 'combatId', title: 'Choisis ton combat', options: COMBAT_OPTIONS },
       { key: 'mapId', title: 'Choisis ton terrain', options: MAP_OPTIONS },
     ];
     this.build();
   }
+
+  // Nombre max de heros selectionnables selon le mode.
+  maxHeroes() { return this.mode === 'multi' ? 3 : 1; }
 
   build() {
     const css = document.createElement('style');
@@ -619,6 +655,44 @@ export class Menu {
         position: absolute; bottom: 6px; right: 8px;
         font-size: 9px; font-weight: bold; letter-spacing: 0.5px;
       }
+      #menu-root .menu-option .opt-num {
+        position: absolute; top: 6px; left: 6px;
+        width: 22px; height: 22px; border-radius: 50%;
+        background: #f1c40f; color: #14182a;
+        font-size: 13px; font-weight: bold;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.6);
+      }
+
+      /* Ecran d accueil : choix du mode */
+      #menu-root .menu-modes {
+        display: flex; gap: 18px; justify-content: center; flex-wrap: wrap;
+        padding: 10px 0;
+      }
+      #menu-root .menu-mode {
+        width: 240px;
+        background: linear-gradient(180deg, #1f2536 0%, #161a28 100%);
+        border: 2px solid #444a66; border-radius: 16px;
+        padding: 22px 16px; cursor: pointer; color: #fff;
+        font-family: inherit; text-align: center;
+        transition: transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+      }
+      #menu-root .menu-mode:hover {
+        border-color: #f1c40f; transform: translateY(-4px);
+        box-shadow: 0 0 18px rgba(241, 196, 15, 0.4);
+      }
+      #menu-root .menu-mode .mm-icon { height: 72px; margin-bottom: 8px; }
+      #menu-root .menu-mode .mm-icon svg { height: 100%; }
+      #menu-root .menu-mode .mm-name {
+        font-size: 19px; font-weight: bold; color: #f1c40f; margin-bottom: 4px;
+      }
+      #menu-root .menu-mode .mm-desc { font-size: 12px; color: #c7c7bd; line-height: 1.35; }
+      @media (pointer: coarse), (max-width: 768px) {
+        #menu-root .menu-mode { width: 44%; padding: 14px 8px; }
+        #menu-root .menu-mode .mm-icon { height: 52px; }
+        #menu-root .menu-mode .mm-name { font-size: 15px; }
+        #menu-root .menu-mode .mm-desc { display: none; }
+      }
 
       /* Barre de navigation */
       #menu-root .menu-nav {
@@ -729,7 +803,58 @@ export class Menu {
       this.goNext();
     });
 
-    this.renderStage();
+    this.render();
+  }
+
+  // Affiche soit l ecran d accueil (mode), soit la selection guidee.
+  render() {
+    if (this.view === 'home') this.renderHome();
+    else this.renderStage();
+  }
+
+  // Ecran d accueil : choix Solo / Multi.
+  renderHome() {
+    const soloIcon = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="32" cy="20" r="11" fill="#f1c40f"/>
+      <path d="M14 56 Q14 36 32 36 Q50 36 50 56 Z" fill="#f1c40f"/></svg>`;
+    const multiIcon = `<svg viewBox="0 0 96 64" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="20" cy="24" r="9" fill="#6678c4"/>
+      <path d="M6 56 Q6 40 20 40 Q34 40 34 56 Z" fill="#6678c4"/>
+      <circle cx="76" cy="24" r="9" fill="#6678c4"/>
+      <path d="M62 56 Q62 40 76 40 Q90 40 90 56 Z" fill="#6678c4"/>
+      <circle cx="48" cy="18" r="12" fill="#f1c40f"/>
+      <path d="M30 58 Q30 36 48 36 Q66 36 66 58 Z" fill="#f1c40f"/></svg>`;
+    this.subEl.innerHTML = 'Choisis ton mode de jeu';
+    this.stepsEl.innerHTML = '';
+    this.stageEl.innerHTML = `
+      <div class="menu-stage-title">Mode de jeu</div>
+      <div class="menu-modes">
+        <button class="menu-mode" data-mode="solo">
+          <div class="mm-icon">${soloIcon}</div>
+          <div class="mm-name">Mode Solo</div>
+          <div class="mm-desc">Un seul heros a controler. Combat classique.</div>
+        </button>
+        <button class="menu-mode" data-mode="multi">
+          <div class="mm-icon">${multiIcon}</div>
+          <div class="mm-name">Mode Multi</div>
+          <div class="mm-desc">Jusqu a 3 heros a controler. Les combats s etoffent en consequence.</div>
+        </button>
+      </div>
+    `;
+    this.stageEl.querySelectorAll('.menu-mode').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.audio && this.audio.sfx('uiSelect');
+        this.mode = btn.dataset.mode;
+        if (this.mode === 'solo' && this.selection.classIds.length > 1) {
+          this.selection.classIds = [this.selection.classIds[0]];
+        }
+        this.view = 'steps';
+        this.step = 0;
+        this.renderStage();
+      });
+    });
+    this.backBtn.style.visibility = 'hidden';
+    this.nextBtn.style.display = 'none';
   }
 
   // Bilan global des etoiles (toutes classes x tous combats).
@@ -746,7 +871,13 @@ export class Menu {
   }
 
   goNext() {
+    if (this.view !== 'steps') return;
     if (this.step < 2) {
+      // L etape "heros" exige au moins un personnage selectionne.
+      if (this.step === 0 && this.selection.classIds.length === 0) {
+        this.audio && this.audio.sfx('uiError');
+        return;
+      }
       // En passant a l etape "terrain", on propose par defaut la carte
       // maison du monstre choisi (bonus etoile d or).
       if (this.step === 1) {
@@ -757,7 +888,11 @@ export class Menu {
       this.renderStage();
     } else {
       this.hideOptionTooltip();
-      this.onStart && this.onStart({ ...this.selection });
+      this.onStart && this.onStart({
+        playerClasses: this.selection.classIds.slice(),
+        combatId: this.selection.combatId,
+        mapId: this.selection.mapId,
+      });
     }
   }
 
@@ -765,6 +900,10 @@ export class Menu {
     if (this.step > 0) {
       this.step--;
       this.renderStage();
+    } else {
+      // Depuis la 1re etape, on revient a l ecran d accueil (choix du mode).
+      this.view = 'home';
+      this.render();
     }
   }
 
@@ -785,28 +924,45 @@ export class Menu {
         <div class="menu-dot">${i < this.step ? '&#10003;' : (i + 1)}</div>${labels[i]}</div>`;
     }).join('');
 
+    let title = step.title;
+    if (step.key === 'class') {
+      title = this.mode === 'multi'
+        ? `Choisis tes heros (${this.selection.classIds.length}/3)`
+        : 'Choisis ton heros';
+    }
     this.stageEl.innerHTML = `
-      <div class="menu-stage-title">${step.title}</div>
+      <div class="menu-stage-title">${title}</div>
       <div class="menu-options">
         ${step.options.map(o => this.renderOption(step.key, o)).join('')}
       </div>
     `;
     this.wireOptions();
 
-    this.backBtn.style.visibility = this.step === 0 ? 'hidden' : 'visible';
+    // La 1re etape garde "Retour" : il ramene a l ecran d accueil.
+    this.backBtn.style.visibility = 'visible';
+    this.nextBtn.style.display = '';
     this.nextBtn.textContent = this.step === 2 ? 'COMBATTRE' : 'Suivant';
     this.nextBtn.classList.toggle('fight', this.step === 2);
     this.nextBtn.classList.toggle('primary', this.step !== 2);
   }
 
   renderOption(key, o) {
-    const selected = o.id === this.selection[key] ? 'selected' : '';
+    let selected = '';
     let badge = '';
-    if (key === 'combatId') {
-      // Etoile de progression : meilleure obtenue avec le heros choisi.
-      const star = getStar(this.selection.classId, o.id);
+    if (key === 'class') {
+      const idx = this.selection.classIds.indexOf(o.id);
+      if (idx >= 0) {
+        selected = 'selected';
+        // En multi, un pastille numerotee indique l ordre de selection.
+        if (this.mode === 'multi') badge = `<div class="opt-num">${idx + 1}</div>`;
+      }
+    } else if (key === 'combatId') {
+      if (o.id === this.selection.combatId) selected = 'selected';
+      // Etoile de progression : meilleure obtenue avec le 1er heros choisi.
+      const star = getStar(this.selection.classIds[0], o.id);
       badge = `<div class="opt-star ${star || ''}">${starSvg(star || 'empty', 30)}</div>`;
     } else if (key === 'mapId') {
+      if (o.id === this.selection.mapId) selected = 'selected';
       // Etoile indicative : or sur la carte maison du monstre choisi.
       const combat = COMBAT_OPTIONS.find(c => c.id === this.selection.combatId);
       const home = !!(combat && combat.homeMap === o.id);
@@ -825,6 +981,30 @@ export class Menu {
     `;
   }
 
+  // Ajoute / retire un heros de la selection (mode multi : 1 a 3).
+  _toggleClass(id) {
+    if (this.mode === 'solo') {
+      this.selection.classIds = [id];
+      this.audio && this.audio.sfx('uiSelect');
+      return;
+    }
+    const ids = this.selection.classIds;
+    const idx = ids.indexOf(id);
+    if (idx >= 0) {
+      if (ids.length > 1) {
+        ids.splice(idx, 1);
+        this.audio && this.audio.sfx('uiClick');
+      } else {
+        this.audio && this.audio.sfx('uiError'); // au moins 1 heros
+      }
+    } else if (ids.length < 3) {
+      ids.push(id);
+      this.audio && this.audio.sfx('uiSelect');
+    } else {
+      this.audio && this.audio.sfx('uiError'); // 3 heros maximum
+    }
+  }
+
   wireOptions() {
     this.stageEl.querySelectorAll('.menu-option').forEach(btn => {
       let lpTimer = null;
@@ -833,12 +1013,18 @@ export class Menu {
       btn.addEventListener('click', (e) => {
         if (lpFired) { lpFired = false; e.preventDefault(); return; }
         if (btn.disabled) return;
-        this.audio && this.audio.sfx('uiSelect');
         const key = btn.dataset.key;
-        this.selection[key] = btn.dataset.value;
-        this.stageEl.querySelectorAll('.menu-option').forEach(b => {
-          b.classList.toggle('selected', b.dataset.value === btn.dataset.value);
-        });
+        const value = btn.dataset.value;
+        if (key === 'class') {
+          this._toggleClass(value);
+        } else {
+          this.audio && this.audio.sfx('uiSelect');
+          this.selection[key] = value;
+        }
+        // On redessine l etape : met a jour les selections, le compteur
+        // de heros et les etoiles dependant du choix.
+        this.hideOptionTooltip();
+        this.renderStage();
       });
       btn.addEventListener('pointerenter', (e) => {
         if (e.pointerType !== 'mouse') return;
@@ -898,10 +1084,11 @@ export class Menu {
 
   show() {
     if (!this.root) return;
-    // On revient toujours a la 1re etape et on rafraichit les etoiles
-    // (la progression a pu changer apres un combat).
+    // On revient toujours a l ecran d accueil (choix du mode) et on
+    // rafraichit les etoiles (la progression a pu changer apres un combat).
+    this.view = 'home';
     this.step = 0;
-    this.renderStage();
+    this.render();
     this.root.style.display = 'flex';
   }
 

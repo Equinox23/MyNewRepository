@@ -101,6 +101,12 @@ export const DEFS = {
     spellIds: ['coupDeGriffe'],
     ai: 'chaton',
   },
+  pandawa: {
+    name: 'Pandawa',
+    role: 'Bambouseur',
+    hp: 110, pa: 8, pm: 4, initiative: 10,
+    spellIds: ['picole', 'tirPandatak', 'karcham', 'vaguePandawa', 'laitDeBambou'],
+  },
 
   // ---------- CHAFER (squelettes) ----------
   chafer: {

@@ -36,8 +36,25 @@ export const COMBATS = {
   },
 };
 
-const PLAYER_SPAWNS = [{ c: 3, r: 7 }, { c: 2, r: 5 }, { c: 2, r: 9 }];
-const ENEMY_SPAWNS  = [{ c: 11, r: 7 }, { c: 12, r: 5 }, { c: 12, r: 9 }, { c: 13, r: 7 }];
+const PLAYER_SPAWNS = [
+  { c: 3, r: 7 }, { c: 2, r: 5 }, { c: 2, r: 9 },
+];
+const ENEMY_SPAWNS = [
+  { c: 11, r: 7 }, { c: 12, r: 5 }, { c: 12, r: 9 }, { c: 13, r: 7 },
+  { c: 13, r: 4 }, { c: 13, r: 10 }, { c: 10, r: 6 }, { c: 10, r: 8 },
+];
+
+// Composition ennemie adaptee au nombre de heros du joueur : plus on est
+// nombreux, plus le combat amene de cretures (et de boss "royaux").
+function buildEnemyComposition(combat, playerCount) {
+  const base = (combat && combat.enemyComposition) || ['bouftou'];
+  const minion = base[0];
+  const royal = base[base.length - 1];
+  const comp = base.slice();
+  if (playerCount >= 2) comp.push(minion, minion);
+  if (playerCount >= 3) comp.push(minion, royal);
+  return comp;
+}
 
 export class Game {
   constructor({ scene3d, map3d, picker, hud, rangeOverlay, vfx, audio }) {
@@ -77,21 +94,21 @@ export class Game {
 
     const playerClasses = config.playerClasses || ['iop'];
     const enemyComposition = config.enemyComposition
-      || (COMBATS[config.combatId] && COMBATS[config.combatId].enemyComposition)
-      || ['bouftou'];
+      || buildEnemyComposition(COMBATS[config.combatId], playerClasses.length);
 
-    playerClasses.forEach((cls, i) => {
-      const pos = PLAYER_SPAWNS[i % PLAYER_SPAWNS.length];
-      const f = new Fighter(cls, 'player', pos.c, pos.r);
-      f.character = new Character3D(this.scene3d.scene, cls, 'player', pos.c, pos.r);
+    // Placement : on cherche une case libre et marchable autour de chaque
+    // ancre de spawn (les compositions etendues depassent le nb d ancres).
+    const occupied = new Set();
+    const spawn = (cls, team, anchors, i) => {
+      const a = anchors[i % anchors.length];
+      const pos = this._findFreeSpawn(a.c, a.r, occupied) || a;
+      occupied.add(pos.c + ',' + pos.r);
+      const f = new Fighter(cls, team, pos.c, pos.r);
+      f.character = new Character3D(this.scene3d.scene, cls, team, pos.c, pos.r);
       this.fighters.push(f);
-    });
-    enemyComposition.forEach((cls, i) => {
-      const pos = ENEMY_SPAWNS[i % ENEMY_SPAWNS.length];
-      const f = new Fighter(cls, 'enemy', pos.c, pos.r);
-      f.character = new Character3D(this.scene3d.scene, cls, 'enemy', pos.c, pos.r);
-      this.fighters.push(f);
-    });
+    };
+    playerClasses.forEach((cls, i) => spawn(cls, 'player', PLAYER_SPAWNS, i));
+    enemyComposition.forEach((cls, i) => spawn(cls, 'enemy', ENEMY_SPAWNS, i));
 
     // Boosts de map : applique des buffs permanents aux creatures concernees.
     this.applyMapBoosts(config.mapId);
@@ -128,6 +145,25 @@ export class Game {
       if (boost.bonusPa) f.pa += boost.bonusPa;
       if (boost.bonusPm) f.pm += boost.bonusPm;
     }
+  }
+
+  // Cherche une case libre et marchable (sol ou pont) au plus pres de
+  // l ancre donnee, en spirale. `occupied` evite les superpositions.
+  _findFreeSpawn(ac, ar, occupied) {
+    for (let radius = 0; radius <= 12; radius++) {
+      for (let dc = -radius; dc <= radius; dc++) {
+        for (let dr = -radius; dr <= radius; dr++) {
+          if (Math.max(Math.abs(dc), Math.abs(dr)) !== radius) continue;
+          const c = ac + dc, r = ar + dr;
+          if (!this.map3d.inBounds(c, r)) continue;
+          const t = this.map3d.getTileType(c, r);
+          if (t !== 0 && t !== 3) continue;
+          if (occupied.has(c + ',' + r)) continue;
+          return { c, r };
+        }
+      }
+    }
+    return null;
   }
 
   cleanup() {
@@ -2009,10 +2045,11 @@ export class Game {
       // maison du monstre, argent sinon).
       let starResult = null;
       if (winner === 'player' && combat && this.config) {
-        const classId = (this.config.playerClasses && this.config.playerClasses[0])
-          || this.config.classId;
-        if (classId) {
-          starResult = (this.config.mapId === combat.homeMap) ? 'gold' : 'silver';
+        starResult = (this.config.mapId === combat.homeMap) ? 'gold' : 'silver';
+        // En multi, chaque heros engage recoit l etoile.
+        const classes = this.config.playerClasses
+          || (this.config.classId ? [this.config.classId] : []);
+        for (const classId of classes) {
           recordWin(classId, this.config.combatId, starResult);
         }
       }

@@ -229,6 +229,30 @@ const ICON_SPEAR = `
     <line x1="4" y1="24" x2="9" y2="29"/>
   </svg>`;
 
+const ICON_FLASK = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 11 H21 V25 Q21 28 15.5 28 Q10 28 10 25 Z" fill="currentColor"/>
+    <path d="M21 14 H25 Q26 14 26 16 V19 Q26 21 24 21 H21"/>
+    <path d="M11 11 Q13 6 16 9 Q19 6 21 11" fill="currentColor"/>
+    <line x1="13" y1="17" x2="18" y2="17" stroke="#fff"/>
+  </svg>`;
+
+const ICON_BARREL = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M9 5 Q4 16 9 27 H23 Q28 16 23 5 Z" fill="currentColor"/>
+    <line x1="6.5" y1="12" x2="25.5" y2="12" stroke="#fff" stroke-width="1.6"/>
+    <line x1="6.5" y1="20" x2="25.5" y2="20" stroke="#fff" stroke-width="1.6"/>
+    <line x1="16" y1="5" x2="16" y2="27" stroke="#fff" stroke-width="1.4" opacity="0.7"/>
+  </svg>`;
+
+const ICON_WAVE = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M3 11 Q8 5 13 11 Q18 17 23 11 Q26 7 29 11"/>
+    <path d="M3 19 Q8 13 13 19 Q18 25 23 19 Q26 15 29 19"/>
+    <path d="M3 27 Q8 21 13 27 Q18 33 23 27"/>
+  </svg>`;
+
+
 const ICON_PULSAR = `
   <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="16" cy="16" r="3" fill="currentColor"/>
@@ -613,6 +637,52 @@ export const SPELLS = {
     target: 'enemy', area: { type: 'single' },
     effects: [{ type: 'chanceStrike', dmgMin: 10, dmgMax: 90, healMin: 20, healMax: 40 }],
     desc: 'Griffure chanceuse : 50% de chance d infliger 10-90 degats, 50% de soigner la cible de 20-40.',
+  },
+
+  // ---------- PANDAWA ----------
+  picole: {
+    id: 'picole', name: 'Picole', short: 'PI', icon: ICON_FLASK,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
+    target: 'self', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'buff', damageMult: 0.4, duration: 3 }],
+    desc: 'Le Pandawa s enivre : +40% degats pendant 3 tours. Cumulable.',
+  },
+  tirPandatak: {
+    id: 'tirPandatak', name: 'Tir Pandatak', short: 'TP', icon: ICON_FIST,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [
+      { type: 'damage', min: 30, max: 45 },
+      { type: 'knockback', distance: 2 },
+    ],
+    desc: 'Un grand coup de pied : 30-45 degats et repousse la cible de 2 cases.',
+  },
+  karcham: {
+    id: 'karcham', name: 'Karcham', short: 'KA', icon: ICON_BARREL,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 5 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 22, max: 34 }],
+    desc: 'Lance son tonneau sur un ennemi (portee 5) : 22-34 degats.',
+  },
+  vaguePandawa: {
+    id: 'vaguePandawa', name: 'Vague', short: 'VG', icon: ICON_WAVE,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 5, range: { min: 1, max: 4 }, needsLOS: true,
+    target: 'tile', area: { type: 'circle', radius: 1 },
+    effects: [{ type: 'damage', min: 18, max: 28 }],
+    desc: 'Deferle une vague en zone (rayon 1) : 18-28 degats a tout ce qu elle touche.',
+  },
+  laitDeBambou: {
+    id: 'laitDeBambou', name: 'Lait de Bambou', short: 'LB', icon: ICON_HEAL_CROSS,
+    category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
+    apCost: 4, range: { min: 1, max: 4 }, needsLOS: true,
+    target: 'ally', area: { type: 'single' },
+    effects: [{ type: 'heal_percent', percent: 0.28 }],
+    desc: 'Offre un lait de bambou apaisant : soigne 28% des PV max d un allie.',
   },
 
   // ---------- CHAFER (squelette) ----------
