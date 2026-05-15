@@ -131,6 +131,55 @@ const CLASS_OPTIONS = [
       <circle cx="50" cy="12" r="2" fill="#d4a017"/>
     </svg>`,
   },
+  {
+    id: 'xelor',
+    name: 'Xelor',
+    desc: 'Maitre du temps (8 PA, 4 PM). Vole les PA des ennemis et les empeche d agir.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
+      <!-- robe bleu nuit -->
+      <polygon points="32 28, 50 58, 14 58" fill="#1f2a55" stroke="#101737" stroke-width="2"/>
+      <rect x="29" y="30" width="6" height="26" fill="#d9b44a"/>
+      <!-- cadran horloge -->
+      <circle cx="32" cy="40" r="8" fill="#6fd6ff" stroke="#d9b44a" stroke-width="2"/>
+      <line x1="32" y1="40" x2="32" y2="35" stroke="#101737" stroke-width="1.5"/>
+      <line x1="32" y1="40" x2="36" y2="42" stroke="#101737" stroke-width="1.5"/>
+      <!-- tete -->
+      <circle cx="32" cy="22" r="10" fill="#e7c9a6" stroke="#3a2a18" stroke-width="1.5"/>
+      <circle cx="28" cy="22" r="1.6" fill="#6fd6ff"/>
+      <circle cx="36" cy="22" r="1.6" fill="#6fd6ff"/>
+      <!-- chapeau pointu large bord -->
+      <ellipse cx="32" cy="13" rx="20" ry="3.5" fill="#101737"/>
+      <path d="M20 13 Q30 -6 40 4 Q38 9 32 11 Z" fill="#1f2a55" stroke="#101737" stroke-width="1.5"/>
+      <circle cx="40" cy="4" r="2.5" fill="#d9b44a"/>
+    </svg>`,
+  },
+  {
+    id: 'ecaflip',
+    name: 'Ecaflip',
+    desc: 'Joueur felin (8 PA, 4 PM). Mise sur la chance : degats tres variables et coups de poker.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
+      <!-- corps + gilet rouge -->
+      <rect x="20" y="34" width="24" height="22" rx="4" fill="#d9803a" stroke="#7a4418" stroke-width="2"/>
+      <path d="M22 34 L22 54 L32 50 L42 54 L42 34 Z" fill="#b02a2a" stroke="#7a1818" stroke-width="1.5"/>
+      <circle cx="36" cy="40" r="1.5" fill="#e8c14a"/>
+      <circle cx="36" cy="46" r="1.5" fill="#e8c14a"/>
+      <!-- tete feline -->
+      <circle cx="32" cy="22" r="13" fill="#d9803a" stroke="#7a4418" stroke-width="2"/>
+      <polygon points="20 12, 24 2, 28 12" fill="#d9803a" stroke="#7a4418" stroke-width="1.5"/>
+      <polygon points="44 12, 40 2, 36 12" fill="#d9803a" stroke="#7a4418" stroke-width="1.5"/>
+      <ellipse cx="32" cy="26" rx="7" ry="5" fill="#f2dcb0"/>
+      <polygon points="32 25, 30 28, 34 28" fill="#2a1a14"/>
+      <ellipse cx="27" cy="20" rx="2.6" ry="3.4" fill="#3ad17a"/>
+      <ellipse cx="37" cy="20" rx="2.6" ry="3.4" fill="#3ad17a"/>
+      <!-- carte a jouer -->
+      <rect x="42" y="30" width="14" height="20" rx="2" fill="#f6f0e0" stroke="#7a4418" stroke-width="1.5" transform="rotate(18 49 40)"/>
+      <text x="49" y="44" font-size="10" font-weight="bold" text-anchor="middle" fill="#c0392b" transform="rotate(18 49 40)">A</text>
+    </svg>`,
+  },
 ];
 
 const COMBAT_OPTIONS = [
@@ -194,6 +243,79 @@ const COMBAT_OPTIONS = [
       <rect x="26" y="11" width="12" height="3" fill="#c0392b"/>
     </svg>`,
   },
+  {
+    id: 'chafer',
+    name: 'Patrouille de Chafers',
+    desc: '3 Chafers + 1 Chafer Royal. Fantassins squelettes au corps a corps.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
+      <!-- cage thoracique -->
+      <rect x="26" y="30" width="12" height="20" rx="2" fill="#e9e3cf" stroke="#8a8268" stroke-width="1.5"/>
+      <line x1="26" y1="36" x2="38" y2="36" stroke="#8a8268" stroke-width="1.5"/>
+      <line x1="26" y1="42" x2="38" y2="42" stroke="#8a8268" stroke-width="1.5"/>
+      <!-- crane -->
+      <circle cx="32" cy="20" r="11" fill="#e9e3cf" stroke="#8a8268" stroke-width="1.5"/>
+      <ellipse cx="27" cy="20" rx="3" ry="4" fill="#6fe6ff"/>
+      <ellipse cx="37" cy="20" rx="3" ry="4" fill="#6fe6ff"/>
+      <rect x="27" y="27" width="10" height="4" fill="#b8ad8e"/>
+      <!-- casque a pointe -->
+      <path d="M21 16 Q21 6 32 5 Q43 6 43 16 Z" fill="#3a4046" stroke="#23272c" stroke-width="1.5"/>
+      <polygon points="30 5, 34 5, 32 -3" fill="#23272c"/>
+      <!-- lance -->
+      <line x1="48" y1="54" x2="44" y2="8" stroke="#b8ad8e" stroke-width="2.5"/>
+      <polygon points="44 8, 41 14, 47 14" fill="#e9e3cf"/>
+    </svg>`,
+  },
+  {
+    id: 'tofu',
+    name: 'Volee de Tofus',
+    desc: '3 Tofus + 1 Tofu Royal. Oiseaux rapides et impulsifs.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="32" cy="60" rx="20" ry="3" fill="#000" opacity="0.4"/>
+      <ellipse cx="22" cy="52" rx="4" ry="2" fill="#d9762a"/>
+      <ellipse cx="42" cy="52" rx="4" ry="2" fill="#d9762a"/>
+      <!-- corps rond -->
+      <circle cx="32" cy="34" r="20" fill="#f2c93a" stroke="#b8841a" stroke-width="2"/>
+      <ellipse cx="32" cy="40" rx="11" ry="9" fill="#fde89a"/>
+      <!-- ailes -->
+      <ellipse cx="12" cy="36" rx="6" ry="11" fill="#d9a324"/>
+      <ellipse cx="52" cy="36" rx="6" ry="11" fill="#d9a324"/>
+      <!-- touffe -->
+      <polygon points="26 15, 32 2, 38 15" fill="#d9a324"/>
+      <!-- yeux geants -->
+      <circle cx="24" cy="30" r="8" fill="#fff" stroke="#b8841a" stroke-width="1.5"/>
+      <circle cx="40" cy="30" r="8" fill="#fff" stroke="#b8841a" stroke-width="1.5"/>
+      <circle cx="25" cy="32" r="4" fill="#1a1a22"/>
+      <circle cx="39" cy="32" r="4" fill="#1a1a22"/>
+      <!-- bec -->
+      <polygon points="32 38, 26 44, 38 44" fill="#e8762a" stroke="#a8551a" stroke-width="1"/>
+    </svg>`,
+  },
+  {
+    id: 'champignon',
+    name: 'Colonie de Champignons',
+    desc: '3 Champignons + 1 Champignon Royal. Empoisonnent a distance.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="32" cy="60" rx="20" ry="3" fill="#000" opacity="0.4"/>
+      <!-- pied -->
+      <path d="M22 56 L24 32 L40 32 L42 56 Z" fill="#e6dcc0" stroke="#b0a684" stroke-width="2"/>
+      <ellipse cx="32" cy="40" rx="9" ry="3" fill="#c9a98c"/>
+      <circle cx="28" cy="46" r="2" fill="#1a1a22"/>
+      <circle cx="36" cy="46" r="2" fill="#1a1a22"/>
+      <!-- chapeau -->
+      <path d="M8 34 Q32 2 56 34 Z" fill="#8e3b34" stroke="#5a221e" stroke-width="2"/>
+      <ellipse cx="20" cy="26" rx="4" ry="2.5" fill="#f3ead2"/>
+      <ellipse cx="34" cy="18" rx="4.5" ry="3" fill="#f3ead2"/>
+      <ellipse cx="44" cy="27" rx="3.5" ry="2.5" fill="#f3ead2"/>
+      <!-- spores -->
+      <circle cx="12" cy="14" r="2.5" fill="#9be86a"/>
+      <circle cx="52" cy="12" r="2" fill="#9be86a"/>
+      <circle cx="48" cy="6" r="1.5" fill="#9be86a"/>
+    </svg>`,
+  },
 ];
 
 const MAP_OPTIONS = [
@@ -240,6 +362,71 @@ const MAP_OPTIONS = [
       <!-- vagues -->
       <line x1="24" y1="8" x2="32" y2="8" stroke="#eaf3f7" stroke-width="1"/>
       <line x1="20" y1="48" x2="28" y2="48" stroke="#eaf3f7" stroke-width="1"/>
+    </svg>`,
+  },
+  {
+    id: 'cimetiere',
+    name: 'Cimetiere',
+    desc: 'Necropole de pierres tombales. Chafers +30% degats ici.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="64" height="64" fill="#4a4658"/>
+      <rect x="0" y="40" width="64" height="24" fill="#2a2d24"/>
+      <!-- lune -->
+      <circle cx="50" cy="14" r="8" fill="#e6e2d0"/>
+      <circle cx="46" cy="11" r="7" fill="#4a4658"/>
+      <!-- croix -->
+      <rect x="12" y="26" width="5" height="22" fill="#8b8d92"/>
+      <rect x="6" y="32" width="17" height="5" fill="#8b8d92"/>
+      <!-- dalle arrondie -->
+      <path d="M28 48 L28 30 Q28 22 36 22 Q44 22 44 30 L44 48 Z" fill="#8b8d92" stroke="#5f6066" stroke-width="1.5"/>
+      <rect x="34" y="30" width="4" height="10" fill="#5f6066"/>
+      <rect x="32" y="33" width="8" height="3" fill="#5f6066"/>
+      <!-- petite dalle -->
+      <rect x="50" y="38" width="9" height="12" fill="#8b8d92" stroke="#5f6066" stroke-width="1"/>
+    </svg>`,
+  },
+  {
+    id: 'falaise',
+    name: 'Falaise Venteuse',
+    desc: 'Plateau rocheux balaye par le vent. Tofus +2 PA ici.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="64" height="64" fill="#bcd4e6"/>
+      <rect x="0" y="44" width="64" height="20" fill="#6a5a3e"/>
+      <!-- pics rocheux -->
+      <polygon points="10 44, 20 14, 30 44" fill="#8a7a5a" stroke="#4a3e28" stroke-width="1.5"/>
+      <polygon points="34 44, 46 22, 58 44" fill="#9a8a68" stroke="#4a3e28" stroke-width="1.5"/>
+      <!-- rochers -->
+      <ellipse cx="14" cy="50" rx="6" ry="4" fill="#7a6a4e" stroke="#3a3020" stroke-width="1"/>
+      <ellipse cx="48" cy="52" rx="5" ry="3.5" fill="#7a6a4e" stroke="#3a3020" stroke-width="1"/>
+      <!-- rafales de vent -->
+      <path d="M6 16 Q18 12 26 18" stroke="#fff" stroke-width="2" fill="none" opacity="0.8"/>
+      <path d="M4 26 Q16 22 22 28" stroke="#fff" stroke-width="2" fill="none" opacity="0.6"/>
+      <path d="M38 10 Q50 6 58 12" stroke="#fff" stroke-width="2" fill="none" opacity="0.7"/>
+    </svg>`,
+  },
+  {
+    id: 'marais',
+    name: 'Marais',
+    desc: 'Marecage verdatre parseme de flaques. Champignons +1 PM ici.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="64" height="64" fill="#6e7a52"/>
+      <rect x="0" y="38" width="64" height="26" fill="#2c3a1c"/>
+      <!-- flaques verdatres -->
+      <ellipse cx="18" cy="30" rx="12" ry="7" fill="#4a6a38" stroke="#2c3a1c" stroke-width="1.5"/>
+      <ellipse cx="46" cy="46" rx="14" ry="8" fill="#42602f" stroke="#2c3a1c" stroke-width="1.5"/>
+      <ellipse cx="40" cy="22" rx="9" ry="5" fill="#53703e" stroke="#2c3a1c" stroke-width="1"/>
+      <!-- nenuphars -->
+      <circle cx="16" cy="29" r="3.5" fill="#3b8a3a"/>
+      <circle cx="44" cy="45" r="4" fill="#3b8a3a"/>
+      <circle cx="44" cy="45" r="1.6" fill="#fff4c8"/>
+      <!-- champignons epars -->
+      <path d="M50 16 Q56 8 62 16 Z" fill="#8e3b34"/>
+      <rect x="54" y="16" width="4" height="7" fill="#e6dcc0"/>
+      <path d="M6 50 Q11 44 16 50 Z" fill="#8e3b34"/>
+      <rect x="9" y="50" width="3.5" height="6" fill="#e6dcc0"/>
     </svg>`,
   },
 ];

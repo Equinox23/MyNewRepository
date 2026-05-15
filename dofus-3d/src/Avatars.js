@@ -7,16 +7,32 @@ import { buildCraqueleur } from './models/craqueleur.js';
 import { buildCrapaud } from './models/crapaud.js';
 import { buildCrapaudChef } from './models/crapaudChef.js';
 import { buildRoublard } from './models/roublard.js';
+import { buildXelor } from './models/xelor.js';
+import { buildEcaflip } from './models/ecaflip.js';
+import { buildChafer } from './models/chafer.js';
+import { buildChaferRoyal } from './models/chaferRoyal.js';
+import { buildTofu } from './models/tofu.js';
+import { buildTofuRoyal } from './models/tofuRoyal.js';
+import { buildChampignon } from './models/champignon.js';
+import { buildChampignonRoyal } from './models/champignonRoyal.js';
 
 const BUILDERS = {
   iop: buildIop,
   osamodas: buildOsamodas,
   roublard: buildRoublard,
+  xelor: buildXelor,
+  ecaflip: buildEcaflip,
   bouftou: buildBouftou,
   bouftouRoyal: buildBouftouRoyal,
   craqueleur: buildCraqueleur,
   crapaud: buildCrapaud,
   crapaudChef: buildCrapaudChef,
+  chafer: buildChafer,
+  chaferRoyal: buildChaferRoyal,
+  tofu: buildTofu,
+  tofuRoyal: buildTofuRoyal,
+  champignon: buildChampignon,
+  champignonRoyal: buildChampignonRoyal,
 };
 
 // Cadrage par classe pour bien tenir dans la vignette (les modeles
@@ -25,11 +41,19 @@ const FRAME = {
   iop: { y: 0.85, dist: 2.3, height: 1.0 },
   osamodas: { y: 0.85, dist: 2.4, height: 1.0 },
   roublard: { y: 0.85, dist: 2.3, height: 1.0 },
+  xelor: { y: 1.0, dist: 2.8, height: 1.1 },
+  ecaflip: { y: 0.85, dist: 2.4, height: 1.0 },
   bouftou: { y: 0.55, dist: 2.1, height: 0.8 },
   bouftouRoyal: { y: 0.75, dist: 2.6, height: 1.0 },
   craqueleur: { y: 0.55, dist: 2.0, height: 0.8 },
   crapaud: { y: 0.35, dist: 1.7, height: 0.55 },
   crapaudChef: { y: 0.55, dist: 2.0, height: 0.9 },
+  chafer: { y: 0.85, dist: 2.5, height: 1.1 },
+  chaferRoyal: { y: 1.15, dist: 3.4, height: 1.4 },
+  tofu: { y: 0.45, dist: 1.9, height: 0.7 },
+  tofuRoyal: { y: 0.65, dist: 2.6, height: 0.95 },
+  champignon: { y: 0.6, dist: 2.3, height: 0.95 },
+  champignonRoyal: { y: 0.85, dist: 3.0, height: 1.2 },
 };
 
 // Cache : classId -> dataURL.

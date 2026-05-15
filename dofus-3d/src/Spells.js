@@ -163,6 +163,55 @@ const ICON_DETONATE = `
     <circle cx="16" cy="16" r="3" fill="#fff"/>
   </svg>`;
 
+const ICON_HOURGLASS = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="5" x2="24" y2="5"/>
+    <line x1="8" y1="27" x2="24" y2="27"/>
+    <path d="M9 5 Q9 14 16 16 Q23 14 23 5" fill="currentColor"/>
+    <path d="M9 27 Q9 18 16 16 Q23 18 23 27" fill="currentColor"/>
+  </svg>`;
+
+const ICON_GEAR = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="16" cy="16" r="5" fill="currentColor"/>
+    <path d="M16 3 v4 M16 25 v4 M3 16 h4 M25 16 h4 M7 7 l3 3 M22 22 l3 3 M7 25 l3 -3 M22 10 l3 -3"/>
+  </svg>`;
+
+const ICON_COIN = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="16" cy="16" r="11" fill="currentColor"/>
+    <text x="16" y="22" font-size="14" font-weight="bold" text-anchor="middle" fill="#fff" stroke="none">?</text>
+  </svg>`;
+
+const ICON_CLAW = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 4 Q12 18 10 28"/>
+    <path d="M14 3 Q18 18 16 29"/>
+    <path d="M22 4 Q24 18 23 28"/>
+  </svg>`;
+
+const ICON_FEATHER = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M26 5 Q8 9 7 27 Q22 24 26 5 Z" fill="currentColor"/>
+    <line x1="7" y1="27" x2="17" y2="14" stroke="#fff"/>
+  </svg>`;
+
+const ICON_SPORE = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="16" cy="17" r="6" fill="currentColor"/>
+    <circle cx="8" cy="8" r="3" fill="currentColor"/>
+    <circle cx="25" cy="9" r="2.5" fill="currentColor"/>
+    <circle cx="24" cy="24" r="2" fill="currentColor"/>
+    <circle cx="7" cy="23" r="2.5" fill="currentColor"/>
+  </svg>`;
+
+const ICON_SPEAR = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="6" y1="26" x2="24" y2="8"/>
+    <polygon points="24 8, 28 4, 27 11, 21 11" fill="currentColor"/>
+    <line x1="4" y1="24" x2="9" y2="29"/>
+  </svg>`;
+
 // Couleurs canoniques par categorie.
 export const SPELL_CATEGORY_COLOR = {
   attack: '#c0392b',
@@ -359,6 +408,135 @@ export const SPELLS = {
     target: 'ally', area: { type: 'single' },
     effects: [{ type: 'buff', shield: 0.3, duration: 3 }],
     desc: 'Renforce la peau d un allie : -30% degats reçus pendant 3 tours.',
+  },
+
+  // ---------- XELOR ----------
+  aiguilleGlacee: {
+    id: 'aiguilleGlacee', name: 'Aiguille Glacee', short: 'AG', icon: ICON_LINE,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 13, max: 18 }],
+    desc: 'Plante une aiguille du cadran a distance.',
+  },
+  volTemporel: {
+    id: 'volTemporel', name: 'Vol Temporel', short: 'VT', icon: ICON_HOURGLASS,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 5 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [
+      { type: 'damage', min: 12, max: 16 },
+      { type: 'debuff_pa', value: 2 },
+    ],
+    desc: 'Vole le temps de la cible : degats + elle perd 2 PA.',
+  },
+  engrenage: {
+    id: 'engrenage', name: 'Engrenage', short: 'EN', icon: ICON_GEAR,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'debuff_pa', value: 3 }],
+    desc: 'Bloque les rouages de la cible : elle perd 3 PA.',
+  },
+  bondTemporel: {
+    id: 'bondTemporel', name: 'Bond Temporel', short: 'BT', icon: ICON_JUMP,
+    category: 'move', color: SPELL_CATEGORY_COLOR.move,
+    apCost: 2, range: { min: 1, max: 6 }, needsLOS: false,
+    target: 'tile', area: { type: 'single' },
+    effects: [{ type: 'teleport' }],
+    desc: 'Se teleporte a travers le temps sur une case libre.',
+  },
+
+  // ---------- ECAFLIP ----------
+  griffeFeline: {
+    id: 'griffeFeline', name: 'Griffe Feline', short: 'GF', icon: ICON_CLAW,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 8, max: 28 }],
+    desc: 'Coup de griffe a la chance : degats tres variables (8-28).',
+  },
+  pileOuFace: {
+    id: 'pileOuFace', name: 'Pile ou Face', short: 'PF', icon: ICON_COIN,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 6 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 5, max: 45 }],
+    desc: 'Lance une piece : degats totalement aleatoires (5-45).',
+  },
+  roueChance: {
+    id: 'roueChance', name: 'Roue de la Chance', short: 'RC', icon: ICON_BOOST,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
+    target: 'self', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'buff', damageMult: 0.5, duration: 2 }],
+    desc: 'Tente sa chance : +50% degats pendant 2 tours.',
+  },
+  bondDuFelin: {
+    id: 'bondDuFelin', name: 'Bond du Felin', short: 'BF', icon: ICON_JUMP,
+    category: 'move', color: SPELL_CATEGORY_COLOR.move,
+    apCost: 3, range: { min: 1, max: 5 }, needsLOS: false,
+    target: 'tile', area: { type: 'single' },
+    effects: [{ type: 'teleport' }],
+    desc: 'Bond felin sur une case libre.',
+  },
+
+  // ---------- CHAFER (squelette) ----------
+  coupDeLance: {
+    id: 'coupDeLance', name: 'Coup de Lance', short: 'CL', icon: ICON_SPEAR,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 16, max: 22 }],
+    desc: 'Coup de lance discipline au corps a corps.',
+  },
+  chargeOsseuse: {
+    id: 'chargeOsseuse', name: 'Charge Osseuse', short: 'CO', icon: ICON_FIST,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 5, range: { min: 1, max: 2 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 26, max: 34 }],
+    desc: 'Charge osseuse devastatrice (1 a 2 cases).',
+  },
+
+  // ---------- TOFU (oiseau) ----------
+  coupDeBec: {
+    id: 'coupDeBec', name: 'Coup de Bec', short: 'CB', icon: ICON_FEATHER,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 2, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 9, max: 13 }],
+    desc: 'Picore vivement la cible. Peu couteux : picore en rafale.',
+  },
+  bourrasque: {
+    id: 'bourrasque', name: 'Bourrasque', short: 'BO', icon: ICON_FEATHER,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 2, max: 5 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [
+      { type: 'damage', min: 16, max: 22 },
+      { type: 'debuff_pm', value: 2 },
+    ],
+    desc: 'Souffle une rafale : degats + la cible perd 2 PM.',
+  },
+
+  // ---------- CHAMPIGNON ----------
+  sporeToxique: {
+    id: 'sporeToxique', name: 'Spore Toxique', short: 'ST', icon: ICON_SPORE,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 5 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'dot', min: 6, max: 9, duration: 3 }],
+    desc: 'Projette une spore : empoisonne la cible sur 3 tours.',
+  },
+  nuageDeSpores: {
+    id: 'nuageDeSpores', name: 'Nuage de Spores', short: 'NS', icon: ICON_SPORE,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 5, range: { min: 1, max: 4 }, needsLOS: true,
+    target: 'tile', area: { type: 'circle', radius: 1 },
+    effects: [{ type: 'damage', min: 14, max: 20 }],
+    desc: 'Liberе un nuage de spores : degats en zone (rayon 1).',
   },
 };
 

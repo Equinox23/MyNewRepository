@@ -66,6 +66,51 @@ const CASCADE_LILY_PADS = [
   { c: 10, r: 11 },
 ];
 
+// Helper : grille a partir d une liste de murs [c, r].
+function gridFromWalls(walls) {
+  const grid = [];
+  for (let r = 0; r < MAP_SIZE; r++) grid.push(new Array(MAP_SIZE).fill(0));
+  for (const [c, r] of walls) grid[r][c] = 1;
+  return grid;
+}
+
+// Cimetiere : pierres tombales eparpillees.
+const CIMETIERE_GRID = gridFromWalls([
+  [5, 2], [9, 2], [3, 4], [11, 4], [6, 4], [10, 4],
+  [4, 6], [8, 6], [7, 8], [5, 10], [10, 10], [3, 10],
+  [11, 10], [6, 12], [9, 12],
+]);
+
+// Falaise venteuse : rochers epars + un eperon central.
+const FALAISE_GRID = gridFromWalls([
+  [4, 2], [10, 2], [2, 4], [12, 4], [6, 5], [8, 5],
+  [7, 7], [2, 10], [12, 10], [6, 11], [8, 11],
+  [4, 13], [10, 13],
+]);
+
+// Marais : flaques d eau stagnante reparties hors des couloirs de spawn.
+const MARAIS_GRID = (() => {
+  const grid = [];
+  for (let r = 0; r < MAP_SIZE; r++) grid.push(new Array(MAP_SIZE).fill(0));
+  const water = [
+    [6, 1], [7, 1], [6, 2], [7, 2],
+    [8, 5], [9, 5], [8, 6], [9, 6],
+    [4, 9], [5, 9], [4, 10], [5, 10],
+    [9, 11], [10, 11], [9, 12], [10, 12],
+    [7, 13], [8, 13],
+  ];
+  for (const [c, r] of water) grid[r][c] = 2;
+  return grid;
+})();
+
+// Nenuphars decoratifs du marais.
+const MARAIS_LILY_PADS = [
+  { c: 7, r: 1 },
+  { c: 8, r: 6 },
+  { c: 5, r: 9 },
+  { c: 9, r: 12 },
+];
+
 export const MAPS = {
   foret: {
     name: 'Foret',
@@ -85,6 +130,35 @@ export const MAPS = {
     waterfall: { c: 5, r: 0 }, // chute d eau a l extremite nord (cols 3-7)
     lilyPads: CASCADE_LILY_PADS,
   },
+  cimetiere: {
+    name: 'Cimetiere',
+    grid: CIMETIERE_GRID,
+    style: 'graveyard',
+    wallStyle: 'tombstone',
+    hasBackgroundForest: false,
+    groundColor: 0x2a2d24,
+    bgColor: 0x4a4658,
+  },
+  falaise: {
+    name: 'Falaise Venteuse',
+    grid: FALAISE_GRID,
+    style: 'cliff',
+    wallStyle: 'rock',
+    hasBackgroundForest: false,
+    groundColor: 0x6a5a3e,
+    bgColor: 0xbcd4e6,
+  },
+  marais: {
+    name: 'Marais',
+    grid: MARAIS_GRID,
+    style: 'swamp',
+    wallStyle: 'rock',
+    hasBackgroundForest: false,
+    groundColor: 0x2c3a1c,
+    bgColor: 0x6e7a52,
+    lilyPads: MARAIS_LILY_PADS,
+    murkyWater: true, // eau verdatre stagnante
+  },
 };
 
 // Boosts permanents donnes a certaines creatures sur certaines cartes.
@@ -96,6 +170,18 @@ export const MAP_BOOSTS = {
   cascade: {
     crapaud: { damageMult: 0.3 },
     crapaudChef: { damageMult: 0.3 },
+  },
+  cimetiere: {
+    chafer: { damageMult: 0.3 },
+    chaferRoyal: { damageMult: 0.3 },
+  },
+  falaise: {
+    tofu: { bonusPa: 2 },
+    tofuRoyal: { bonusPa: 2 },
+  },
+  marais: {
+    champignon: { bonusPm: 1 },
+    champignonRoyal: { bonusPm: 1 },
   },
 };
 
@@ -225,10 +311,16 @@ export class Map3D {
         row.push(tile);
 
         if (isWall) {
-          // Foret : alternance arbre / rocher. Cascade : que des rochers.
+          // Decor du mur selon la carte : arbre/rocher (foret),
+          // pierre tombale (cimetiere), sinon rocher.
           const seed = (c + 1) * 113 + (r + 1) * 271 + wallIdx * 31;
-          const useTree = map.style === 'forest' && (wallIdx % 3) !== 0;
-          const model = useTree ? buildTree(seed) : buildRock(seed);
+          let model;
+          if (map.wallStyle === 'tombstone') {
+            model = buildTombstone(seed);
+          } else {
+            const useTree = map.style === 'forest' && (wallIdx % 3) !== 0;
+            model = useTree ? buildTree(seed) : buildRock(seed);
+          }
           model.position.set(c, 0.05, r);
           const s = 0.85 + ((seed % 100) / 100) * 0.35;
           model.scale.setScalar(s);
@@ -242,10 +334,11 @@ export class Map3D {
   }
 
   buildWaterTile(c, r) {
-    // Nuances de bleu : on choisit une couleur dans une petite palette,
-    // pseudo-aleatoirement a partir des coordonnees pour avoir un rendu
-    // stable (pas de scintillement entre frames).
-    const palette = [0x1d6f93, 0x2b8aab, 0x3aa1c2, 0x4cb3d1, 0x217fa0];
+    // Nuances de bleu (ou de vert pour un marais), choisies de maniere
+    // pseudo-aleatoire et stable a partir des coordonnees.
+    const bluePalette = [0x1d6f93, 0x2b8aab, 0x3aa1c2, 0x4cb3d1, 0x217fa0];
+    const murkyPalette = [0x3e5a32, 0x4a6a38, 0x355028, 0x53703e, 0x42602f];
+    const palette = (this.config && this.config.murkyWater) ? murkyPalette : bluePalette;
     const hash = ((c * 73) ^ (r * 137)) >>> 0;
     const color = palette[hash % palette.length];
     const waterMat = new THREE.MeshStandardMaterial({
@@ -455,4 +548,62 @@ function mulberry32(seed) {
     t = (t + Math.imul(t ^ (t >>> 7), t | 61)) ^ t;
     return (((t ^ (t >>> 14)) >>> 0) / 4294967296);
   };
+}
+
+// Pierre tombale : dalle de pierre arrondie, legerement inclinee,
+// posee sur un petit socle, avec une croix gravee. `seed` varie la
+// forme (croix ou dalle simple) et l inclinaison.
+function buildTombstone(seed) {
+  const g = new THREE.Group();
+  const stoneMat = new THREE.MeshStandardMaterial({ color: 0x8b8d92, roughness: 0.95 });
+  const stoneDkMat = new THREE.MeshStandardMaterial({ color: 0x5f6066, roughness: 0.95 });
+  const mossMat = new THREE.MeshStandardMaterial({ color: 0x4a6a38, roughness: 1 });
+
+  // Socle.
+  const base = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.12, 0.44), stoneDkMat);
+  base.position.y = 0.06;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  g.add(base);
+
+  const isCross = (seed % 3) === 0;
+  if (isCross) {
+    // Croix de pierre.
+    const vert = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.80, 0.16), stoneMat);
+    vert.position.y = 0.52;
+    vert.castShadow = true;
+    g.add(vert);
+    const horiz = new THREE.Mesh(new THREE.BoxGeometry(0.50, 0.16, 0.15), stoneMat);
+    horiz.position.y = 0.66;
+    horiz.castShadow = true;
+    g.add(horiz);
+  } else {
+    // Dalle arrondie.
+    const slab = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.66, 0.14), stoneMat);
+    slab.position.y = 0.42;
+    slab.castShadow = true;
+    g.add(slab);
+    const topRound = new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.23, 0.14, 16, 1, false, 0, Math.PI), stoneMat);
+    topRound.rotation.x = Math.PI / 2;
+    topRound.rotation.z = Math.PI;
+    topRound.position.set(0, 0.75, 0);
+    g.add(topRound);
+    // Croix gravee.
+    const eg = new THREE.MeshStandardMaterial({ color: 0x4a4b50, roughness: 1 });
+    const cv = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.26, 0.02), eg);
+    cv.position.set(0, 0.52, 0.08);
+    g.add(cv);
+    const ch = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.06, 0.02), eg);
+    ch.position.set(0, 0.58, 0.08);
+    g.add(ch);
+  }
+  // Touffe de mousse au pied.
+  const moss = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), mossMat);
+  moss.position.set(((seed % 5) - 2) * 0.08, 0.10, 0.20);
+  moss.scale.set(1, 0.45, 1);
+  g.add(moss);
+
+  // Legere inclinaison "abandonnee".
+  g.rotation.z = ((seed % 7) - 3) * 0.03;
+  return g;
 }

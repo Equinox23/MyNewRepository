@@ -14,6 +14,18 @@ export const COMBATS = {
     name: 'Crapauds de la mare',
     enemyComposition: ['crapaud', 'crapaud', 'crapaud', 'crapaudChef'],
   },
+  chafer: {
+    name: 'Patrouille de Chafers',
+    enemyComposition: ['chafer', 'chafer', 'chafer', 'chaferRoyal'],
+  },
+  tofu: {
+    name: 'Volee de Tofus',
+    enemyComposition: ['tofu', 'tofu', 'tofu', 'tofuRoyal'],
+  },
+  champignon: {
+    name: 'Colonie de Champignons',
+    enemyComposition: ['champignon', 'champignon', 'champignon', 'champignonRoyal'],
+  },
 };
 
 const PLAYER_SPAWNS = [{ c: 3, r: 7 }, { c: 2, r: 5 }, { c: 2, r: 9 }];
@@ -408,7 +420,12 @@ export class Game {
         const isLine = spell.area && spell.area.type === 'line';
         const isCross = spell.area && spell.area.type === 'cross';
         const isCircle = spell.area && spell.area.type === 'circle';
-        const isRanged = dist > 1 && !isLine && !isCircle;
+        // Une zone lancee de loin (ex : Nuage de Spores) reste un tir a
+        // distance ; lancee au contact (ex : Frappe du Craqueleur) c est
+        // une frappe sismique avec bond.
+        const isRangedCircle = isCircle && dist > 1;
+        const isMeleeCircle = isCircle && dist <= 1;
+        const isRanged = dist > 1 && !isLine && !isMeleeCircle;
 
         // VFX d entree selon le pattern du sort.
         let lunge = null;
@@ -424,10 +441,9 @@ export class Game {
           this.vfx && this.vfx.shockwave(target.c, target.r, { color: 0xb88455, radius: 1.8 });
           this.vfx && this.vfx.punchImpact({ c: target.c, r: target.r });
           await new Promise(r => setTimeout(r, 180));
-        } else if (isCircle) {
-          // Frappe sismique en zone : le craqueleur plonge sur la case
-          // cible (corps a corps) puis une grosse onde de choc se
-          // propage tout autour.
+        } else if (isMeleeCircle) {
+          // Frappe sismique en zone au corps a corps : le caster plonge
+          // sur la case cible puis une grosse onde de choc se propage.
           lunge = caster.character.lungeTo(firstCell.c, firstCell.r, 300);
           const radius = (spell.area && spell.area.radius) || 2;
           this.vfx && this.vfx.shockwave(target.c, target.r, {
@@ -435,6 +451,22 @@ export class Game {
           });
           this.vfx && this.vfx.punchImpact({ c: target.c, r: target.r });
           await new Promise(r => setTimeout(r, 220));
+        } else if (isRangedCircle) {
+          // Zone projetee a distance (Nuage de Spores) : projectile puis
+          // onde de choc a l impact, le caster ne bouge pas.
+          caster.character.faceToward(target.c, target.r);
+          const radius = (spell.area && spell.area.radius) || 1;
+          if (this.vfx) {
+            await this.vfx.projectile(
+              { c: caster.c, r: caster.r },
+              { c: target.c, r: target.r },
+              { color: 0x9be86a, glow: 1, radius: 0.2, arcHeight: 1.6 },
+            );
+            this.vfx.shockwave(target.c, target.r, {
+              color: 0x7bc24a, radius: radius + 0.8, duration: 0.65,
+            });
+          }
+          await new Promise(r => setTimeout(r, 150));
         } else if (isRanged) {
           // Projectile selon le sort (crachat = vert, generique = orange).
           caster.character.faceToward(target.c, target.r);
@@ -952,11 +984,155 @@ export class Game {
     if (this.ended) return;
     const ai = this.turn.current();
     const profile = ai.def.ai || 'aggressive';
-    if (profile === 'aggressive') await this.runAggressive(ai);
-    else if (profile === 'fearful') await this.runFearful(ai);
+    // Dispatch : chaque monstre a son IA dediee (cf. methodes runXxx),
+    // ce qui permet de les modifier independamment.
+    const dispatch = {
+      aggressive: () => this.runAggressive(ai),
+      fearful: () => this.runFearful(ai),
+      chafer: () => this.runChafer(ai),
+      chaferRoyal: () => this.runChaferRoyal(ai),
+      tofu: () => this.runTofu(ai),
+      tofuRoyal: () => this.runTofuRoyal(ai),
+      champignon: () => this.runChampignon(ai),
+      champignonRoyal: () => this.runChampignonRoyal(ai),
+    };
+    const fn = dispatch[profile] || dispatch.aggressive;
+    await fn();
     if (this.ended) return;
     this.busy = false;
     this._advanceTurn();
+  }
+
+  // Sorts d attaque disponibles d une IA (hors cooldown, ciblant
+  // ennemi/case, infligeant degats / debuff / poison).
+  aiAttackSpells(ai) {
+    return ai.spells.filter(s =>
+      !ai.isOnCooldown(s.id) &&
+      s.effects.some(e => e.type === 'damage' || e.type === 'debuff_pm' || e.type === 'debuff_pa' || e.type === 'dot') &&
+      (s.target === 'enemy' || s.target === 'tile')
+    );
+  }
+
+  _dist(a, b) {
+    return Math.abs(a.c - b.c) + Math.abs(a.r - b.r);
+  }
+
+  // Hero (vrai personnage) ennemi le plus proche, ou null.
+  pickClosestHero(ai) {
+    const heroes = this.fighters
+      .filter(f => f.alive && f.team !== ai.team && !f.isBomb && !f.isSummon)
+      .map(f => ({ f, d: this._dist(ai, f) }))
+      .sort((a, b) => a.d - b.d);
+    return heroes.length ? heroes[0].f : null;
+  }
+
+  // ===== IA dediees aux monstres =====
+
+  // CHAFER : fantassin squelette. Discipline et bourrin : fonce en
+  // ligne droite sur la cible la plus faible et frappe au corps a corps.
+  async runChafer(ai) {
+    const target = this.pickWeakestTarget(ai);
+    if (!target) return;
+    const spells = this.aiAttackSpells(ai);
+    if (spells.length === 0) return;
+    if (ai.pm > 0 && this._dist(ai, target) > 1) {
+      await this.aiApproach(ai, target, 1);
+      await this.aiPause(450);
+    }
+    if (this.ended) return;
+    await this.aiAttackLoop(ai, target, spells);
+    if (this.ended) return;
+    await this.aiRepositionTowardHero(ai, spells);
+  }
+
+  // CHAFER ROYAL : officier. Identique au fantassin mais dispose de la
+  // Charge Osseuse (portee 2) : il s approche jusqu a la portee la plus
+  // courte de ses sorts.
+  async runChaferRoyal(ai) {
+    const target = this.pickWeakestTarget(ai);
+    if (!target) return;
+    const spells = this.aiAttackSpells(ai);
+    if (spells.length === 0) return;
+    const reach = spells.reduce((m, s) => Math.min(m, s.range.max), Infinity);
+    if (ai.pm > 0 && this._dist(ai, target) > reach) {
+      await this.aiApproach(ai, target, reach);
+      await this.aiPause(450);
+    }
+    if (this.ended) return;
+    await this.aiAttackLoop(ai, target, spells);
+    if (this.ended) return;
+    await this.aiRepositionTowardHero(ai, spells);
+  }
+
+  // TOFU : oiseau impulsif et rapide. Charge le hero LE PLUS PROCHE
+  // (pas le plus faible : il est impatient) et picore en rafale.
+  async runTofu(ai) {
+    const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
+    if (!target) return;
+    const spells = this.aiAttackSpells(ai);
+    if (spells.length === 0) return;
+    if (ai.pm > 0 && this._dist(ai, target) > 1) {
+      await this.aiApproach(ai, target, 1);
+      await this.aiPause(360);
+    }
+    if (this.ended) return;
+    await this.aiAttackLoop(ai, target, spells);
+    if (this.ended) return;
+    await this.aiRepositionTowardHero(ai, spells);
+  }
+
+  // TOFU ROYAL : Tofu geant. Dispose de Bourrasque (portee 2-5) en plus
+  // du Coup de Bec : il s approche a la portee la plus courte utile.
+  async runTofuRoyal(ai) {
+    const target = this.pickWeakestTarget(ai);
+    if (!target) return;
+    const spells = this.aiAttackSpells(ai);
+    if (spells.length === 0) return;
+    const reach = spells.reduce((m, s) => Math.min(m, s.range.max), Infinity);
+    if (ai.pm > 0 && this._dist(ai, target) > reach) {
+      await this.aiApproach(ai, target, reach);
+      await this.aiPause(420);
+    }
+    if (this.ended) return;
+    await this.aiAttackLoop(ai, target, spells);
+    if (this.ended) return;
+    await this.aiRepositionTowardHero(ai, spells);
+  }
+
+  // CHAMPIGNON : sporifere lent (2 PM). Reste a distance, empoisonne.
+  // Zone de confort = portee max de ses spores.
+  async runChampignon(ai) {
+    const target = this.pickWeakestTarget(ai);
+    if (!target) return;
+    const spells = this.aiAttackSpells(ai);
+    if (spells.length === 0) return;
+    const maxRange = spells.reduce((m, s) => Math.max(m, s.range.max), 0);
+    if (ai.pm > 0) {
+      await this.aiPositionAtRange(ai, target, maxRange, maxRange);
+      await this.aiPause(450);
+    }
+    if (this.ended) return;
+    await this.aiAttackLoop(ai, target, spells);
+    if (this.ended) return;
+    await this.aiRepositionTowardHero(ai, spells);
+  }
+
+  // CHAMPIGNON ROYAL : mycelien royal. Meme tactique que le champignon
+  // mais dispose en plus du Nuage de Spores (zone). Reste a distance.
+  async runChampignonRoyal(ai) {
+    const target = this.pickWeakestTarget(ai);
+    if (!target) return;
+    const spells = this.aiAttackSpells(ai);
+    if (spells.length === 0) return;
+    const maxRange = spells.reduce((m, s) => Math.max(m, s.range.max), 0);
+    if (ai.pm > 0) {
+      await this.aiPositionAtRange(ai, target, maxRange, maxRange);
+      await this.aiPause(450);
+    }
+    if (this.ended) return;
+    await this.aiAttackLoop(ai, target, spells);
+    if (this.ended) return;
+    await this.aiRepositionTowardHero(ai, spells);
   }
 
   async runAggressive(ai) {

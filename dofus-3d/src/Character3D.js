@@ -8,30 +8,54 @@ import { buildCrapaud } from './models/crapaud.js';
 import { buildCrapaudChef } from './models/crapaudChef.js';
 import { buildRoublard } from './models/roublard.js';
 import { buildBombeRoublard } from './models/bombeRoublard.js';
+import { buildXelor } from './models/xelor.js';
+import { buildEcaflip } from './models/ecaflip.js';
+import { buildChafer } from './models/chafer.js';
+import { buildChaferRoyal } from './models/chaferRoyal.js';
+import { buildTofu } from './models/tofu.js';
+import { buildTofuRoyal } from './models/tofuRoyal.js';
+import { buildChampignon } from './models/champignon.js';
+import { buildChampignonRoyal } from './models/champignonRoyal.js';
 import { HpBar3D } from './HpBar3D.js';
 
 const BUILDERS = {
   iop: buildIop,
   osamodas: buildOsamodas,
   roublard: buildRoublard,
+  xelor: buildXelor,
+  ecaflip: buildEcaflip,
   bouftou: buildBouftou,
   bouftouRoyal: buildBouftouRoyal,
   craqueleur: buildCraqueleur,
   crapaud: buildCrapaud,
   crapaudChef: buildCrapaudChef,
   bombeRoublard: buildBombeRoublard,
+  chafer: buildChafer,
+  chaferRoyal: buildChaferRoyal,
+  tofu: buildTofu,
+  tofuRoyal: buildTofuRoyal,
+  champignon: buildChampignon,
+  champignonRoyal: buildChampignonRoyal,
 };
 
 const HP_BAR_Y = {
   iop: 1.55,
   osamodas: 1.55,
   roublard: 1.55,
+  xelor: 2.05,
+  ecaflip: 1.55,
   bouftou: 1.30,
   bouftouRoyal: 1.95,
   craqueleur: 1.55,
   crapaud: 1.10,
   crapaudChef: 1.80,
   bombeRoublard: 1.20,
+  chafer: 1.60,
+  chaferRoyal: 2.30,
+  tofu: 1.05,
+  tofuRoyal: 1.55,
+  champignon: 1.25,
+  champignonRoyal: 1.80,
 };
 
 export class Character3D {

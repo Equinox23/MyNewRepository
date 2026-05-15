@@ -73,6 +73,70 @@ export const DEFS = {
     ai: 'fearful',
     isAquatic: true,
   },
+
+  // ---------- HEROS ----------
+  xelor: {
+    name: 'Xelor',
+    role: 'Maitre du temps',
+    hp: 100, pa: 8, pm: 4, initiative: 10,
+    spellIds: ['aiguilleGlacee', 'volTemporel', 'engrenage', 'bondTemporel'],
+  },
+  ecaflip: {
+    name: 'Ecaflip',
+    role: 'Joueur',
+    hp: 100, pa: 8, pm: 4, initiative: 12,
+    spellIds: ['griffeFeline', 'pileOuFace', 'roueChance', 'bondDuFelin'],
+  },
+
+  // ---------- CHAFER (squelettes) ----------
+  chafer: {
+    name: 'Chafer',
+    role: 'Fantassin',
+    hp: 130, pa: 5, pm: 4, initiative: 9,
+    spellIds: ['coupDeLance'],
+    ai: 'chafer',
+  },
+  chaferRoyal: {
+    name: 'Chafer Royal',
+    role: 'Officier squelette',
+    hp: 380, pa: 8, pm: 4, initiative: 8,
+    spellIds: ['coupDeLance', 'chargeOsseuse'],
+    ai: 'chaferRoyal',
+  },
+
+  // ---------- TOFU (oiseaux) ----------
+  tofu: {
+    name: 'Tofu',
+    role: 'Oiseau',
+    hp: 85, pa: 6, pm: 5, initiative: 13,
+    spellIds: ['coupDeBec'],
+    ai: 'tofu',
+  },
+  tofuRoyal: {
+    name: 'Tofu Royal',
+    role: 'Roi des Tofus',
+    hp: 300, pa: 8, pm: 5, initiative: 11,
+    spellIds: ['coupDeBec', 'bourrasque'],
+    ai: 'tofuRoyal',
+  },
+
+  // ---------- CHAMPIGNON ----------
+  champignon: {
+    name: 'Champignon',
+    role: 'Sporifere',
+    hp: 150, pa: 4, pm: 2, initiative: 7,
+    spellIds: ['sporeToxique'],
+    ai: 'champignon',
+    isAquatic: true,
+  },
+  champignonRoyal: {
+    name: 'Champignon Royal',
+    role: 'Mycelien royal',
+    hp: 420, pa: 7, pm: 2, initiative: 6,
+    spellIds: ['sporeToxique', 'nuageDeSpores'],
+    ai: 'champignonRoyal',
+    isAquatic: true,
+  },
 };
 
 export class Fighter {
