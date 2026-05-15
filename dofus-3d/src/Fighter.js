@@ -176,6 +176,9 @@ export class Fighter {
     this.character = null;
     // Buffs : { duration, damageMult?, bonusPa?, bonusPm?, shield?, dot?, permanent? }
     this.buffs = [];
+    // Retrait de PA differé : consomme au prochain startTurn de la cible
+    // (utilise par les sorts du Xelor : Horloge, Ralentissement).
+    this.pendingPaDebuff = 0;
     this.spellCooldowns = {};
     // Specifique aux bombes posees par le Roublard.
     this.isBomb = !!def.isBomb;
@@ -207,13 +210,17 @@ export class Fighter {
     this.buffs = this.buffs
       .map(b => b.permanent ? b : { ...b, duration: b.duration - 1 })
       .filter(b => b.permanent || b.duration > 0);
-    // Applique les bonus / malus PA / PM des buffs actifs. Un malus
-    // (bonusPa/Pm negatif, ex : vol de PA d un Xelor) persiste donc
-    // jusqu au debut du tour de la cible : si on lui retire 5 PA et
-    // qu elle en a 5, elle commence son tour a 0.
+    // Applique les bonus / malus PA / PM des buffs actifs.
     for (const b of this.buffs) {
       if (b.bonusPa) this.pa += b.bonusPa;
       if (b.bonusPm) this.pm += b.bonusPm;
+    }
+    // Consomme le retrait de PA differé (sorts du Xelor) : la cible
+    // commence son tour amputee une seule fois, puis revient a la
+    // normale au tour suivant.
+    if (this.pendingPaDebuff) {
+      this.pa -= this.pendingPaDebuff;
+      this.pendingPaDebuff = 0;
     }
     this.pa = Math.max(0, this.pa);
     this.pm = Math.max(0, this.pm);

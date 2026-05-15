@@ -524,7 +524,7 @@ export const SPELLS = {
     apCost: 1, range: { min: 1, max: 8 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
     effects: [{ type: 'debuff_pa', value: 2, currentTurnOnly: true }],
-    desc: 'Retire 2 PA a un adversaire pour le tour en cours. Portee 8.',
+    desc: 'Retire 2 PA a un adversaire pour son prochain tour. Portee 8.',
   },
   devouement: {
     id: 'devouement', name: 'Devouement', short: 'DV', icon: ICON_BOOST,
@@ -715,9 +715,7 @@ export function spellEffectLines(spell) {
       }
       case 'debuff_pa': {
         const amt = eff.value !== undefined ? `${eff.value}` : `${eff.min}-${eff.max}`;
-        const turnTxt = eff.currentTurnOnly
-          ? 'ce tour-ci'
-          : (eff.turns ? `${eff.turns} tours` : 'au prochain tour');
+        const turnTxt = eff.turns ? `${eff.turns} tours` : 'au prochain tour';
         if (eff.chance !== undefined) {
           lines.push(`${Math.round(eff.chance * 100)}% : cible perd ${amt} PA (${turnTxt})`);
         } else {
