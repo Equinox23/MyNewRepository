@@ -129,6 +129,7 @@ export const MAPS = {
     bgColor: 0xa4c4cc,
     waterfall: { c: 5, r: 0 }, // chute d eau a l extremite nord (cols 3-7)
     lilyPads: CASCADE_LILY_PADS,
+    flow: { x: 0.42, z: 1.25 }, // courant : la riviere coule vers le sud-est
   },
   cimetiere: {
     name: 'Cimetiere',
@@ -185,6 +186,15 @@ export const MAP_BOOSTS = {
   },
 };
 
+// Aspect des touffes d herbe selon le style de carte.
+const GRASS_STYLE = {
+  forest:    { density: 42, colors: [0x6fae46, 0x5d9a3a, 0x7cbf4e, 0x4f8a31] },
+  river:     { density: 32, colors: [0x6aa848, 0x5a9038, 0x76b850] },
+  graveyard: { density: 22, colors: [0x6a6a44, 0x55552f, 0x7a6a40] },
+  cliff:     { density: 18, colors: [0xb9aa60, 0xa89a55, 0xc7b96a] },
+  swamp:     { density: 34, colors: [0x5f8a3e, 0x6e7a3a, 0x4f7030] },
+};
+
 export class Map3D {
   constructor(scene, mapId = 'foret') {
     this.scene = scene;
@@ -193,6 +203,8 @@ export class Map3D {
     // pouvoir le retirer proprement lors du rebuild.
     this.spawned = [];
     this.tileGroup = null;
+    // Elements animes (eau, herbe, cascade, nuages).
+    this.anim = { water: [], waterfall: [], grass: [], clouds: [] };
     this.rebuild(mapId);
   }
 
@@ -203,6 +215,7 @@ export class Map3D {
     this.currentMapId = mapId;
     this.mapData = map.grid;
     this.config = map;
+    this.anim = { water: [], waterfall: [], grass: [], clouds: [] };
 
     // Ambiance: change le ciel et le fog (le main passe via scene.background
     // directement, mais Map3D peut aussi customiser le ground exterieur).
@@ -215,9 +228,43 @@ export class Map3D {
 
     this.buildGround(map);
     this.buildTiles(map);
-    if (map.hasBackgroundForest) this.buildBackgroundForest();
+    this.buildBackgroundDecor(map);
     if (map.waterfall) this.buildWaterfall(map.waterfall);
     if (map.lilyPads) this.buildLilyPads(map.lilyPads);
+  }
+
+  // Anime les elements vivants de la carte. Appele chaque frame depuis
+  // la boucle de rendu principale.
+  update(dt, time) {
+    if (!this.anim) return;
+    // Eau : ondulation verticale douce + derive de l ecume.
+    for (const w of this.anim.water) {
+      w.mesh.position.y = w.baseY + Math.sin(time * 1.6 + w.phase) * 0.02;
+      for (const f of w.streaks) {
+        f.t += dt;
+        const k = (f.t % f.dur) / f.dur;
+        f.mesh.position.x = f.x0 + f.dx * k;
+        f.mesh.position.z = f.z0 + f.dz * k;
+        f.mesh.material.opacity = Math.sin(k * Math.PI) * 0.5;
+      }
+    }
+    // Cascade : gouttes qui tombent en boucle.
+    for (const d of this.anim.waterfall) {
+      d.mesh.position.y -= d.speed * dt;
+      if (d.mesh.position.y < d.minY) {
+        d.mesh.position.y = d.maxY;
+      }
+    }
+    // Herbe : balancement sous le vent (rafales globales + phase locale).
+    const gust = Math.sin(time * 0.9) * 0.06;
+    for (const g of this.anim.grass) {
+      g.mesh.rotation.z = g.base + Math.sin(time * 2.5 + g.phase) * 0.17 + gust;
+    }
+    // Nuages : derive lente, bouclage de part et d autre de la carte.
+    for (const c of this.anim.clouds) {
+      c.mesh.position.x += c.speed * dt;
+      if (c.mesh.position.x > c.wrapMax) c.mesh.position.x = c.wrapMin;
+    }
   }
 
   cleanup() {
@@ -327,10 +374,43 @@ export class Map3D {
           model.rotation.y = (seed % 360) * Math.PI / 180;
           this.tileGroup.add(model);
           wallIdx++;
+        } else {
+          // Touffe d herbe sur le sol : elle ondule sous le vent.
+          this.maybeAddGrass(map, c, r, hash);
         }
       }
       this.tiles.push(row);
     }
+  }
+
+  // Pose une touffe d herbe sur une case de sol (probabilite et teinte
+  // dependent de la carte). Enregistre la touffe pour l animation vent.
+  maybeAddGrass(map, c, r, hash) {
+    const cfg = GRASS_STYLE[map.style] || GRASS_STYLE.forest;
+    // ~density% des cases de sol reçoivent une touffe (pseudo-aleatoire).
+    if (((hash >> 5) % 100) >= cfg.density) return;
+    const blades = 2 + ((hash >> 2) % 2);  // 2 a 3 brins
+    const tuft = new THREE.Group();
+    for (let i = 0; i < blades; i++) {
+      const palIdx = (hash + i * 7) % cfg.colors.length;
+      const mat = new THREE.MeshStandardMaterial({ color: cfg.colors[palIdx], roughness: 1 });
+      const h = 0.20 + ((hash + i * 13) % 12) * 0.012;
+      const blade = new THREE.Mesh(new THREE.ConeGeometry(0.022, h, 5), mat);
+      blade.position.set(
+        ((((hash + i * 31) % 20) - 10) / 10) * 0.22,
+        h / 2,
+        ((((hash + i * 53) % 20) - 10) / 10) * 0.22,
+      );
+      blade.rotation.z = ((((hash + i * 17) % 14) - 7) / 7) * 0.25;
+      tuft.add(blade);
+    }
+    tuft.position.set(c, 0.05, r);
+    this.tileGroup.add(tuft);
+    this.anim.grass.push({
+      mesh: tuft,
+      base: tuft.rotation.z,
+      phase: (hash % 628) / 100,
+    });
   }
 
   buildWaterTile(c, r) {
@@ -338,7 +418,8 @@ export class Map3D {
     // pseudo-aleatoire et stable a partir des coordonnees.
     const bluePalette = [0x1d6f93, 0x2b8aab, 0x3aa1c2, 0x4cb3d1, 0x217fa0];
     const murkyPalette = [0x3e5a32, 0x4a6a38, 0x355028, 0x53703e, 0x42602f];
-    const palette = (this.config && this.config.murkyWater) ? murkyPalette : bluePalette;
+    const murky = !!(this.config && this.config.murkyWater);
+    const palette = murky ? murkyPalette : bluePalette;
     const hash = ((c * 73) ^ (r * 137)) >>> 0;
     const color = palette[hash % palette.length];
     const waterMat = new THREE.MeshStandardMaterial({
@@ -350,20 +431,39 @@ export class Map3D {
     water.rotation.x = -Math.PI / 2;
     water.position.set(c, -0.03, r);
     water.receiveShadow = true;
-    // Petits reflets blancs aleatoires pour donner de la vie.
-    const foamMat = new THREE.MeshBasicMaterial({ color: 0xeaf3f7, transparent: true, opacity: 0.55 });
-    const foam = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.06), foamMat);
-    foam.rotation.x = -Math.PI / 2;
-    foam.position.set(c + ((hash % 7) - 3) * 0.04, -0.02, r + ((hash % 5) - 2) * 0.04);
-    water.add(foam);
-    // Deuxieme reflet plus petit, orientation differente.
-    if ((hash >> 3) % 3 === 0) {
-      const foam2 = new THREE.Mesh(new THREE.PlaneGeometry(0.20, 0.05), foamMat);
-      foam2.rotation.x = -Math.PI / 2;
-      foam2.rotation.z = Math.PI / 4;
-      foam2.position.set(c + ((hash % 5) - 2) * 0.05, -0.02, r - ((hash % 4) - 2) * 0.05);
-      water.add(foam2);
+
+    // Stries d ecume qui derivent : vers l aval pour une riviere
+    // (config.flow), quasi immobiles et scintillantes pour un marais.
+    const flow = this.config && this.config.flow;
+    const streaks = [];
+    const nStreaks = murky ? 1 : 2;
+    for (let i = 0; i < nStreaks; i++) {
+      const foamMat = new THREE.MeshBasicMaterial({
+        color: murky ? 0xcfe0b0 : 0xeaf3f7, transparent: true, opacity: 0.0,
+      });
+      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.07), foamMat);
+      m.rotation.x = -Math.PI / 2;
+      m.rotation.z = ((hash + i * 19) % 100) / 100 * Math.PI;
+      const ox = ((((hash + i * 31) % 16) - 8) / 8) * 0.30;
+      const oz = ((((hash + i * 53) % 16) - 8) / 8) * 0.30;
+      const dx = flow ? flow.x : 0;
+      const dz = flow ? flow.z : 0;
+      m.position.set(c + ox - dx / 2, -0.012, r + oz - dz / 2);
+      this.tileGroup.add(m);
+      streaks.push({
+        mesh: m,
+        x0: c + ox - dx / 2, z0: r + oz - dz / 2,
+        dx, dz,
+        t: ((hash + i * 137) % 300) / 100,
+        dur: murky ? 5.0 : 2.6,
+      });
     }
+    this.anim.water.push({
+      mesh: water,
+      baseY: -0.03,
+      phase: (hash % 628) / 100,
+      streaks,
+    });
     return water;
   }
 
@@ -424,6 +524,23 @@ export class Map3D {
       grp.add(droplet);
     }
 
+    // Gouttes qui devalent en continu le rideau d eau (animees).
+    const dropMat = new THREE.MeshBasicMaterial({ color: 0xdff2fb });
+    for (let i = 0; i < 18; i++) {
+      const drop = new THREE.Mesh(new THREE.SphereGeometry(0.055, 6, 5), dropMat);
+      drop.scale.set(1, 2.0, 1);
+      const dx = (((i * 97) % 100) / 100 - 0.5) * 4.2;
+      const y0 = ((i * 53) % 100) / 100 * 2.6;
+      drop.position.set(pos.c + dx, y0, pos.r - 0.86);
+      grp.add(drop);
+      this.anim.waterfall.push({
+        mesh: drop,
+        speed: 2.0 + ((i * 31) % 100) / 100 * 1.6,
+        minY: -0.05,
+        maxY: 2.6,
+      });
+    }
+
     this.scene.add(grp);
     this.spawned.push(grp);
   }
@@ -467,31 +584,77 @@ export class Map3D {
     }
   }
 
-  buildBackgroundForest() {
-    const rngBase = mulberry32(424242);
+  // Decor exterieur au plateau, propre a chaque theme de carte.
+  buildBackgroundDecor(map) {
+    switch (map.style) {
+      case 'forest':
+        this._scatterRing(buildTree, 130, { seedBase: 424242, scale: [0.9, 1.8] });
+        break;
+      case 'river':
+        this._scatterRing(buildTree, 60, { seedBase: 71717, scale: [0.9, 1.7] });
+        this._scatterRing(buildPeak, 8, { seedBase: 313, minD: 17, maxD: 27, scale: [2.0, 3.6] });
+        this._buildClouds(6);
+        break;
+      case 'graveyard':
+        this._scatterRing(buildDeadTree, 78, { seedBase: 99001, scale: [0.9, 1.7] });
+        this._scatterRing(buildTombstone, 24, { seedBase: 5151, minD: 9, maxD: 15, scale: [0.8, 1.4] });
+        break;
+      case 'cliff':
+        this._scatterRing(buildPeak, 28, { seedBase: 8080, minD: 11, maxD: 27, scale: [2.4, 5.2] });
+        this._buildClouds(16);
+        break;
+      case 'swamp':
+        this._scatterRing(buildDeadTree, 54, { seedBase: 33221, scale: [0.9, 1.6] });
+        this._scatterRing(buildReed, 64, { seedBase: 7777, minD: 9, maxD: 18, scale: [0.8, 1.5] });
+        break;
+    }
+  }
+
+  // Disperse `count` props (builder(seed)) en couronne autour du plateau.
+  _scatterRing(builder, count, opts = {}) {
+    const rng = mulberry32(opts.seedBase || 12345);
     const center = (MAP_SIZE - 1) / 2;
-    const minDist = MAP_SIZE / 2 + 1.5;
-    const maxDist = MAP_SIZE / 2 + 14;
-    let placed = 0;
-    let attempts = 0;
-    while (placed < 130 && attempts < 800) {
+    const minD = opts.minD !== undefined ? opts.minD : MAP_SIZE / 2 + 1.5;
+    const maxD = opts.maxD !== undefined ? opts.maxD : MAP_SIZE / 2 + 14;
+    const [sMin, sMax] = opts.scale || [0.9, 1.6];
+    let placed = 0, attempts = 0;
+    while (placed < count && attempts < count * 6) {
       attempts++;
-      const angle = rngBase() * Math.PI * 2;
-      const dist = minDist + rngBase() * (maxDist - minDist);
-      const x = center + Math.cos(angle) * dist;
-      const z = center + Math.sin(angle) * dist;
-      const jx = x + (rngBase() - 0.5) * 1.5;
-      const jz = z + (rngBase() - 0.5) * 1.5;
-      const seed = Math.floor(rngBase() * 1e7);
-      const tree = buildTree(seed);
-      tree.position.set(jx, 0, jz);
-      const s = 0.9 + rngBase() * 0.9;
-      tree.scale.setScalar(s);
-      tree.rotation.y = rngBase() * Math.PI * 2;
-      tree.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
-      this.scene.add(tree);
-      this.spawned.push(tree);
+      const angle = rng() * Math.PI * 2;
+      const dist = minD + rng() * (maxD - minD);
+      const x = center + Math.cos(angle) * dist + (rng() - 0.5) * 1.6;
+      const z = center + Math.sin(angle) * dist + (rng() - 0.5) * 1.6;
+      const prop = builder(Math.floor(rng() * 1e7));
+      prop.position.set(x, 0, z);
+      const s = sMin + rng() * (sMax - sMin);
+      prop.scale.setScalar(s);
+      prop.rotation.y = rng() * Math.PI * 2;
+      prop.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+      this.scene.add(prop);
+      this.spawned.push(prop);
       placed++;
+    }
+  }
+
+  // Nuages qui derivent lentement dans le ciel.
+  _buildClouds(count) {
+    const center = (MAP_SIZE - 1) / 2;
+    const rng = mulberry32(80808);
+    for (let i = 0; i < count; i++) {
+      const cloud = buildCloud(Math.floor(rng() * 1e7));
+      const y = 9 + rng() * 8;
+      const x = center + (rng() - 0.5) * 60;
+      const z = center + (rng() - 0.5) * 60;
+      cloud.position.set(x, y, z);
+      cloud.scale.setScalar(1.4 + rng() * 2.6);
+      this.scene.add(cloud);
+      this.spawned.push(cloud);
+      this.anim.clouds.push({
+        mesh: cloud,
+        speed: 0.3 + rng() * 0.6,
+        wrapMin: center - 36,
+        wrapMax: center + 36,
+      });
     }
   }
 
@@ -605,5 +768,94 @@ function buildTombstone(seed) {
 
   // Legere inclinaison "abandonnee".
   g.rotation.z = ((seed % 7) - 3) * 0.03;
+  return g;
+}
+
+// Arbre mort : tronc tordu et sombre, quelques branches nues.
+function buildDeadTree(seed) {
+  const g = new THREE.Group();
+  const barkMat = new THREE.MeshStandardMaterial({ color: 0x2e261c, roughness: 1 });
+  const trunkH = 1.6 + (seed % 10) * 0.12;
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.18, trunkH, 7), barkMat);
+  trunk.position.y = trunkH / 2;
+  trunk.rotation.z = ((seed % 9) - 4) * 0.025;
+  g.add(trunk);
+  // Branches nues.
+  const nBranch = 3 + (seed % 3);
+  for (let i = 0; i < nBranch; i++) {
+    const len = 0.5 + ((seed + i * 23) % 10) * 0.06;
+    const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.06, len, 5), barkMat);
+    const a = (i / nBranch) * Math.PI * 2 + (seed % 10) * 0.1;
+    const h = trunkH * (0.55 + ((i * 7) % 4) * 0.1);
+    branch.position.set(Math.cos(a) * 0.18, h, Math.sin(a) * 0.18);
+    branch.rotation.set(Math.PI / 2 - 0.6, 0, -a + Math.PI / 2);
+    g.add(branch);
+    // Petite ramille au bout.
+    const twig = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.025, len * 0.5, 4), barkMat);
+    twig.position.set(Math.cos(a) * (0.18 + len * 0.5), h + len * 0.4, Math.sin(a) * (0.18 + len * 0.5));
+    twig.rotation.set(Math.PI / 2 - 1.0, 0, -a + Math.PI / 2);
+    g.add(twig);
+  }
+  return g;
+}
+
+// Pic rocheux : silhouette de montagne lointaine.
+function buildPeak(seed) {
+  const g = new THREE.Group();
+  const rockMat = new THREE.MeshStandardMaterial({ color: 0x5a5f68, roughness: 1 });
+  const snowMat = new THREE.MeshStandardMaterial({ color: 0xe9eef2, roughness: 0.9 });
+  const h = 3.0 + (seed % 12) * 0.25;
+  const base = new THREE.Mesh(new THREE.ConeGeometry(1.5, h, 6 + (seed % 3)), rockMat);
+  base.position.y = h / 2;
+  base.rotation.y = (seed % 12) * 0.5;
+  g.add(base);
+  // Calotte neigeuse au sommet.
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.55, h * 0.28, 6 + (seed % 3)), snowMat);
+  cap.position.y = h * 0.86;
+  cap.rotation.y = base.rotation.y;
+  g.add(cap);
+  return g;
+}
+
+// Touffe de roseaux : tiges fines avec un epi sombre (typha).
+function buildReed(seed) {
+  const g = new THREE.Group();
+  const stemMat = new THREE.MeshStandardMaterial({ color: 0x6a7a38, roughness: 1 });
+  const headMat = new THREE.MeshStandardMaterial({ color: 0x4a3320, roughness: 0.95 });
+  const n = 4 + (seed % 4);
+  for (let i = 0; i < n; i++) {
+    const h = 0.9 + ((seed + i * 17) % 12) * 0.07;
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.03, h, 5), stemMat);
+    const ox = ((((seed + i * 31) % 16) - 8) / 8) * 0.30;
+    const oz = ((((seed + i * 53) % 16) - 8) / 8) * 0.30;
+    stem.position.set(ox, h / 2, oz);
+    stem.rotation.z = ((((seed + i * 7) % 12) - 6) / 6) * 0.18;
+    g.add(stem);
+    // Epi de roseau.
+    const head = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.18, 4, 8), headMat);
+    head.position.set(ox, h + 0.05, oz);
+    g.add(head);
+  }
+  return g;
+}
+
+// Nuage : amas de spheres blanches aplaties.
+function buildCloud(seed) {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0xf4f7fb, roughness: 1, transparent: true, opacity: 0.92,
+  });
+  const puffs = 4 + (seed % 4);
+  for (let i = 0; i < puffs; i++) {
+    const rad = 0.55 + ((seed + i * 29) % 10) * 0.06;
+    const puff = new THREE.Mesh(new THREE.SphereGeometry(rad, 10, 8), mat);
+    puff.position.set(
+      ((((seed + i * 41) % 20) - 10) / 10) * 1.5,
+      ((((seed + i * 13) % 8) - 4) / 8) * 0.4,
+      ((((seed + i * 67) % 20) - 10) / 10) * 0.7,
+    );
+    puff.scale.set(1, 0.62, 1);
+    g.add(puff);
+  }
   return g;
 }

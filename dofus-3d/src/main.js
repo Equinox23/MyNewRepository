@@ -252,6 +252,7 @@ function loop(now) {
     if (f.alive) f.character.update(dt, now / 1000);
   }
   vfx.update(dt);
+  map3d.update(dt, now / 1000);
   scene3d.render();
   requestAnimationFrame(loop);
 }
