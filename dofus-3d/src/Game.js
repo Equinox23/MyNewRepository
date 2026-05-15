@@ -1044,7 +1044,8 @@ export class Game {
     }
     await this.aiPause(400);
     if (maxRange > 1) {
-      await this.aiPositionAtRange(ai, hero, Math.max(maxRange - 1, 3), maxRange);
+      // IA a distance : zone de confort = portee max exacte.
+      await this.aiPositionAtRange(ai, hero, maxRange, maxRange);
     } else {
       await this.aiApproach(ai, hero, 1);
     }
@@ -1071,10 +1072,11 @@ export class Game {
     if (attackSpells.length === 0) return;
     const maxRange = attackSpells.reduce((m, s) => Math.max(m, s.range.max), 0);
 
-    // 2. Repositionnement : ideal = max-1, sans aller plus pres que 3
+    // 2. Repositionnement : zone de confort = exactement la portee
+    //    max d attaque. Plus loin -> on se rapproche (agressif) ; plus
+    //    pres -> on recule (craintif).
     if (ai.pm > 0) {
-      const ideal = Math.max(maxRange - 1, 3);
-      const moved = await this.aiPositionAtRange(ai, target, ideal, maxRange);
+      const moved = await this.aiPositionAtRange(ai, target, maxRange, maxRange);
       if (this.ended) return;
       if (moved) await this.aiPause(500);
     }
@@ -1310,21 +1312,27 @@ export class Game {
     const occ = this.computeOccupied(ai);
     const blocked = (c, r) => this.map3d.isBlockedFor(c, r, ai);
     const result = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, ai.pm, blocked);
-    const scoreDist = (d) => {
-      if (d > maxDist) return 1000 + d;
-      if (d < 1) return 200 - d;
-      return Math.abs(d - idealDist);
+    const mapData = this.map3d.getData();
+    const blockers = this.bombBlockers();
+    // Score d une case (plus bas = mieux) :
+    //  - sur la cible (d < 1)        : a eviter absolument.
+    //  - hors de portee (d > maxDist): case d APPROCHE -> on veut le d
+    //    le plus petit (se rapprocher). Pas de LOS exigee ici.
+    //  - dans la portee              : case de TIR -> on vise idealDist
+    //    et la ligne de vue est obligatoire.
+    const scoreCell = (c, r, d) => {
+      if (d < 1) return 1e6;
+      if (d > maxDist) return 1e4 + d;          // approche : minimise d
+      if (!hasLOS(mapData, c, r, target.c, target.r, blockers)) return 9e5;
+      return Math.abs(d - idealDist);            // tir : vise idealDist
     };
     let best = { c: ai.c, r: ai.r };
     const initialDist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
-    let bestScore = scoreDist(initialDist);
+    let bestScore = scoreCell(ai.c, ai.r, initialDist);
     for (const [key, d] of result.dist.entries()) {
       const [c, r] = key.split(',').map(Number);
       const distToTarget = Math.abs(c - target.c) + Math.abs(r - target.r);
-      if (distToTarget > maxDist) continue;
-      // On veut conserver une ligne de vue sur la cible
-      if (!hasLOS(this.map3d.getData(), c, r, target.c, target.r, this.bombBlockers())) continue;
-      const s = scoreDist(distToTarget);
+      const s = scoreCell(c, r, distToTarget);
       if (s < bestScore) { bestScore = s; best = { c, r }; }
     }
     if (best.c === ai.c && best.r === ai.r) return false;
