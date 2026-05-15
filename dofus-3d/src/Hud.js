@@ -1211,7 +1211,11 @@ export class Hud {
     for (const slot of this.spellSlots) {
       const cd = (fighter.spellCooldowns && fighter.spellCooldowns[slot.spell.id]) || 0;
       const isAutonomous = !!fighter.def.ai;
-      const usable = isPlayer && !isAutonomous && cd === 0 && fighter.pa >= slot.spell.apCost;
+      // Sort d invocation grise si la creature du meme type est en vie.
+      const locked = isPlayer && this.isSpellLocked
+        && this.isSpellLocked(fighter, slot.spell);
+      const usable = isPlayer && !isAutonomous && !locked
+        && cd === 0 && fighter.pa >= slot.spell.apCost;
       slot.btn.disabled = !usable;
       slot.btn.classList.toggle('cooldown', cd > 0);
       slot.btn.classList.toggle('active',

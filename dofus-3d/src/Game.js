@@ -58,6 +58,8 @@ export class Game {
     this.hud.on('onMove', () => this.setMode('move'));
     this.hud.on('onSpellSlot', (slot) => this.selectSpellSlot(slot));
     this.hud.on('onEnd', () => this.endTurn());
+    // Permet au HUD de griser un sort d invocation deja "consomme".
+    this.hud.isSpellLocked = (fighter, spell) => this.isSummonBlocked(fighter, spell);
   }
 
   setup(config) {
@@ -246,6 +248,10 @@ export class Game {
       this.hud.flash('Pas assez de PA pour ' + spell.name, 900);
       return;
     }
+    if (this.isSummonBlocked(cur, spell)) {
+      this.hud.flash('Cette creature est deja invoquee', 900);
+      return;
+    }
     if (spell.target === 'self') {
       this.busy = true;
       this.castSelf(cur, spell).finally(() => {
@@ -405,6 +411,17 @@ export class Game {
       }
     }
     return null;
+  }
+
+  // Un sort d invocation est bloque tant qu une creature du meme type,
+  // appartenant au lanceur, est encore en vie (1 de chaque max).
+  isSummonBlocked(caster, spell) {
+    const summonEff = spell && spell.effects && spell.effects.find(e => e.type === 'summon');
+    if (!summonEff) return false;
+    return this.fighters.some(f =>
+      f.alive && f.classId === summonEff.creatureId &&
+      (f.summonOwner === caster || f.team === caster.team)
+    );
   }
 
   // Set des positions qui bloquent la ligne de vue : bombes ET
@@ -784,6 +801,7 @@ export class Game {
             (Math.abs(b.c - target.c) + Math.abs(b.r - target.r))
           )[0];
         if (closestEnemy) summon.character.faceToward(closestEnemy.c, closestEnemy.r);
+        summon.summonOwner = caster;
         this.fighters.push(summon);
         // L invocation joue juste apres son invocateur.
         this.turn.addFighter(summon, caster);
@@ -1309,26 +1327,27 @@ export class Game {
   // allie blesse (Dragosoin), puis se place a ~5 cases d un ennemi,
   // ALIGNE pour pouvoir cracher sa Dragoflamme en ligne droite.
   async runDragounet(ai) {
-    // 1. Soutien : soigne un allie blesse si possible.
-    if (ai.spells.some(s => s.effects.some(e => e.type === 'heal' || e.type === 'heal_percent'))) {
-      const healed = await this.aiTryHeal(ai);
-      if (this.ended) return;
-      if (healed) await this.aiPause(420);
-    }
-    const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
-    if (!target) return;
     const spells = this.aiAttackSpells(ai);
-    if (spells.length === 0) return;
-    const maxRange = spells.reduce((m, s) => Math.max(m, s.range.max), 0);
-    // 2. Positionnement : zone de confort a 5 cases, aligne (Dragoflamme).
-    if (ai.pm > 0) {
+    const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
+    const maxRange = spells.reduce((m, s) => Math.max(m, s.range.max), 0) || 8;
+    // 1. Positionnement : zone de confort a 5 cases, aligne (Dragoflamme).
+    if (target && ai.pm > 0 && spells.length > 0) {
       const moved = await this.aiPositionAtRange(ai, target, 5, maxRange, true);
       if (this.ended) return;
       if (moved) await this.aiPause(450);
     }
-    if (this.ended) return;
-    // 3. Crache la Dragoflamme tant que c est possible.
-    await this.aiAttackLoop(ai, target, spells);
+    // Le Dragounet PREFERE soigner, mais frappe toujours 1 fois un
+    // ennemi avant de soigner si un ennemi est a portee. Si aucun soin
+    // n est possible, il frappe autant de fois que possible.
+    const wantsHeal = this.hasHealableAlly(ai);
+    if (target && spells.length > 0
+        && this.usableSpellsOn(ai, target, spells).length > 0) {
+      await this.aiAttackLoop(ai, target, spells, wantsHeal ? 1 : Infinity);
+      if (this.ended) return;
+      if (wantsHeal) await this.aiPause(350);
+    }
+    // 2. Soin d un allie blesse a portee (Dragosoin), s il reste des PA.
+    await this.aiTryHeal(ai);
   }
 
   async runAggressive(ai) {
@@ -1465,9 +1484,10 @@ export class Game {
     return new Promise(r => setTimeout(r, ms));
   }
 
-  async aiAttackLoop(ai, mainTarget, attackSpells) {
+  async aiAttackLoop(ai, mainTarget, attackSpells, maxCasts = Infinity) {
     let first = true;
-    while (ai.alive) {
+    let casts = 0;
+    while (ai.alive && casts < maxCasts) {
       // Choix de la cible de cette passe :
       //  1. Une bombe / invocation en portee qu on peut ACHEVER ce tour
       //     (nettoyage : exception a la priorite "frapper un hero").
@@ -1500,36 +1520,69 @@ export class Game {
       ai.character.popCost(spell.apCost, 'pa');
       this.hud.update(ai, this.mode, this.selectedSpellId);
       await this.applySpellEffects(ai, spell, { c: pick.c, r: pick.r });
+      casts++;
       if (this.checkEnd()) return;
     }
   }
 
-  async aiTryHeal(ai) {
+  // Y a-t-il un allie blesse soignable depuis la position courante ?
+  hasHealableAlly(ai) {
     const healSpells = ai.spells.filter(s =>
-      !ai.isOnCooldown(s.id) &&
+      !ai.isOnCooldown(s.id) && ai.pa >= s.apCost &&
       s.effects.some(e => e.type === 'heal' || e.type === 'heal_percent') &&
       s.target === 'ally'
     );
     if (healSpells.length === 0) return false;
     const wounded = this.fighters.filter(f =>
-      f.alive && f.team === ai.team && f !== ai && f.hp < f.maxHp * 0.7
-    ).sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
-    if (wounded.length === 0) return false;
-    for (const target of wounded) {
-      for (const spell of healSpells) {
-        if (ai.pa < spell.apCost) continue;
-        const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
-        if (dist < spell.range.min || dist > spell.range.max) continue;
-        if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r, this.losBlockers())) continue;
-        ai.pa -= spell.apCost;
-        if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
-        ai.character.popCost(spell.apCost, 'pa');
-        this.hud.update(ai, this.mode, this.selectedSpellId);
-        await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
+      f.alive && f.team === ai.team && f !== ai && !f.isBomb && f.hp < f.maxHp * 0.7
+    );
+    for (const w of wounded) {
+      for (const s of healSpells) {
+        const d = this._dist(ai, w);
+        if (d < s.range.min || d > s.range.max) continue;
+        if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, w.c, w.r, this.losBlockers())) continue;
         return true;
       }
     }
     return false;
+  }
+
+  // Soigne les allies blesses tant que c est possible (PA + portee).
+  async aiTryHeal(ai) {
+    let healedAny = false;
+    let guard = 0;
+    while (guard++ < 12) {
+      const healSpells = ai.spells.filter(s =>
+        !ai.isOnCooldown(s.id) && ai.pa >= s.apCost &&
+        s.effects.some(e => e.type === 'heal' || e.type === 'heal_percent') &&
+        s.target === 'ally'
+      );
+      if (healSpells.length === 0) break;
+      const wounded = this.fighters.filter(f =>
+        f.alive && f.team === ai.team && f !== ai && !f.isBomb && f.hp < f.maxHp * 0.7
+      ).sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
+      if (wounded.length === 0) break;
+      let cast = false;
+      for (const target of wounded) {
+        for (const spell of healSpells) {
+          const dist = this._dist(ai, target);
+          if (dist < spell.range.min || dist > spell.range.max) continue;
+          if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r, this.losBlockers())) continue;
+          if (healedAny) await this.aiPause(320);
+          ai.pa -= spell.apCost;
+          if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
+          ai.character.popCost(spell.apCost, 'pa');
+          this.hud.update(ai, this.mode, this.selectedSpellId);
+          await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
+          cast = true;
+          healedAny = true;
+          break;
+        }
+        if (cast) break;
+      }
+      if (!cast || this.ended) break;
+    }
+    return healedAny;
   }
 
   async aiTryShield(ai) {

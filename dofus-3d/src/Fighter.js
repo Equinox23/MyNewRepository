@@ -60,7 +60,7 @@ export const DEFS = {
   dragounetRouge: {
     name: 'Dragounet Rouge',
     role: 'Invocation',
-    hp: 70, pa: 8, pm: 4, initiative: 8,
+    hp: 70, pa: 5, pm: 3, initiative: 8,
     spellIds: ['dragoflamme', 'dragosoin'],
     ai: 'dragounet',
   },
