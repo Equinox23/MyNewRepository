@@ -230,6 +230,21 @@ export class Fighter {
     }
   }
 
+  endTurn() {
+    // Nettoie les buffs qui n auront plus d effet sur les tours
+    // suivants (duration <= 1, non permanents) : ils seraient filtres
+    // au prochain startTurn de toute façon. On evite ainsi qu un
+    // malus "deja termine" (ex : Crachat, Ralentissement) continue
+    // d apparaitre dans l infobulle entre les tours. Les effets long
+    // terme (Griffe de Ceangal, Concentration) restent visibles.
+    this.buffs = this.buffs.filter(b => b.permanent || b.duration > 1);
+    // Reinitialise PA / PM affiches : un combattant idle apparait
+    // "frais" sauf si un buff long terme reduit son maximum. Le
+    // pendingPaDebuff reste : il s appliquera au prochain startTurn.
+    this.pa = this.effectiveMaxPa;
+    this.pm = this.effectiveMaxPm;
+  }
+
   // Applique les DoT actifs et renvoie le total de degats subis ce tour.
   // Appele par Game.startTurn pour pouvoir gerer la mort eventuelle.
   tickDots() {

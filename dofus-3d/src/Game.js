@@ -232,6 +232,10 @@ export class Game {
 
   _advanceTurn() {
     if (this.ended) return;
+    // Cloture le tour du combattant courant (nettoie les buffs courts,
+    // reinitialise les PA/PM affiches) avant de passer au suivant.
+    const prev = this.turn.current();
+    if (prev && prev.alive && prev.endTurn) prev.endTurn();
     this.turn.advance();
     this.startTurn();
   }
