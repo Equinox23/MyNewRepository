@@ -231,6 +231,13 @@ const ICON_HASTE = `
     <polygon points="16 7, 16 25, 27 16" fill="currentColor"/>
   </svg>`;
 
+const ICON_GHOST = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M7 27 V13 Q7 4 16 4 Q25 4 25 13 V27 L21 24 L18 27 L16 24 L14 27 L11 24 Z" fill="currentColor"/>
+    <circle cx="12" cy="14" r="2" fill="#fff"/>
+    <circle cx="20" cy="14" r="2" fill="#fff"/>
+  </svg>`;
+
 const ICON_KITTEN = `
   <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <polygon points="7 4, 12 12, 4 12" fill="currentColor"/>
@@ -602,13 +609,22 @@ export const SPELLS = {
     effects: [{ type: 'damage', min: 16, max: 22 }],
     desc: 'Coup de lance discipline au corps a corps.',
   },
-  chargeOsseuse: {
-    id: 'chargeOsseuse', name: 'Charge Osseuse', short: 'CO', icon: ICON_FIST,
+  coupDeLanceRoyal: {
+    id: 'coupDeLanceRoyal', name: 'Coup de Lance', short: 'CL', icon: ICON_SPEAR,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 5, range: { min: 1, max: 2 }, needsLOS: false,
+    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 26, max: 34 }],
-    desc: 'Charge osseuse devastatrice (1 a 2 cases).',
+    effects: [{ type: 'damage', min: 20, max: 35 }],
+    desc: 'Coup de lance royal au corps a corps.',
+  },
+  invisibilite: {
+    id: 'invisibilite', name: 'Invisibilite', short: 'IV', icon: ICON_GHOST,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 4, range: { min: 0, max: 0 }, needsLOS: false,
+    target: 'self', area: { type: 'single' },
+    cooldown: 5,
+    effects: [{ type: 'buff', invisible: true, duration: 3 }],
+    desc: 'Le lanceur devient invisible pendant 3 tours : il ne peut plus etre pris pour cible.',
   },
 
   // ---------- TOFU (oiseau) ----------
@@ -687,6 +703,7 @@ export function spellEffectLines(spell) {
         if (eff.bonusPm) parts.push(`+${eff.bonusPm} PM`);
         if (eff.shield) parts.push(`-${Math.round(eff.shield * 100)}% degats reçus`);
         if (eff.reflect) parts.push(`renvoie ${Math.round(eff.reflect * 100)}% des degats`);
+        if (eff.invisible) parts.push('invisible');
         lines.push(`${parts.join(', ')} pendant ${eff.duration} tours${eff.damageMult ? ' (cumulable)' : ''}`);
         break;
       }

@@ -114,7 +114,7 @@ export const DEFS = {
     name: 'Chafer Royal',
     role: 'Officier squelette',
     hp: 380, pa: 8, pm: 4, initiative: 8,
-    spellIds: ['coupDeLance', 'chargeOsseuse'],
+    spellIds: ['coupDeLanceRoyal', 'invisibilite'],
     ai: 'chaferRoyal',
   },
 
@@ -185,6 +185,12 @@ export class Fighter {
 
   get spells() {
     return this.def.spellIds.map(id => SPELLS[id]).filter(Boolean);
+  }
+
+  // Vrai tant qu un buff d invisibilite est actif : le combattant ne
+  // peut alors plus etre pris pour cible directe.
+  get invisible() {
+    return this.buffs.some(b => b.invisible);
   }
 
   // Max effectif PA / PM = base + buffs additifs (bonus ou malus).

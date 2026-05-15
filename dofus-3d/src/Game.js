@@ -190,6 +190,9 @@ export class Game {
 
     cur.startTurn();
     for (const f of this.fighters) f.character.setActive(f === cur);
+    // Synchronise le rendu fantomatique : l invisibilite expire au
+    // debut du tour de son porteur (decrement des buffs).
+    if (cur.character.setGhost) cur.character.setGhost(cur.invisible);
     this.mode = 'move';
     this.selectedSpellId = null;
     cur._bombsPlacedThisTurn = 0;
@@ -408,6 +411,10 @@ export class Game {
       if (dc !== 0 && dr !== 0) return 'Doit etre en ligne droite';
     }
     const targetFighter = this.fighters.find(f => f.alive && f.c === c && f.r === r);
+    // Un combattant ennemi invisible ne peut pas etre pris pour cible.
+    if (targetFighter && targetFighter.invisible && targetFighter.team !== caster.team) {
+      return 'Cible invisible';
+    }
     if (spell.target === 'self' && targetFighter !== caster) return 'Cible : soi-meme';
     if (spell.target === 'any' && !targetFighter) return 'Cible : un combattant ou une bombe';
     if (spell.target === 'enemy' && (!targetFighter || targetFighter.team === caster.team)) return 'Pas d ennemi';
@@ -716,10 +723,12 @@ export class Game {
             bonusPm: effect.bonusPm,
             shield: effect.shield,
             reflect: effect.reflect,
+            invisible: effect.invisible,
           });
           if (effect.bonusPa) tf.pa += effect.bonusPa;
           if (effect.bonusPm) tf.pm += effect.bonusPm;
           tf.character.flashGlow(buffColorHex, 900);
+          if (effect.invisible && tf.character.setGhost) tf.character.setGhost(true);
         }
         this.hud.flash(`${spell.name}`, 1200);
         const names = buffTargets.map(t => t.name).join(', ');
@@ -1291,7 +1300,7 @@ export class Game {
   // Hero (vrai personnage) ennemi le plus proche, ou null.
   pickClosestHero(ai) {
     const heroes = this.fighters
-      .filter(f => f.alive && f.team !== ai.team && !f.isBomb && !f.isSummon)
+      .filter(f => f.alive && f.team !== ai.team && !f.isBomb && !f.isSummon && !f.invisible)
       .map(f => ({ f, d: this._dist(ai, f) }))
       .sort((a, b) => a.d - b.d);
     return heroes.length ? heroes[0].f : null;
@@ -1299,40 +1308,68 @@ export class Game {
 
   // ===== IA dediees aux monstres =====
 
-  // CHAFER : fantassin squelette. Discipline et bourrin : fonce en
-  // ligne droite sur la cible la plus faible et frappe au corps a corps.
+  // CHAFER : fantassin squelette. Combat acharne au corps a corps :
+  // frappe tout ce qui est a portee (invocation / bombe si le hero ne
+  // l est pas) puis poursuit sa route, jusqu a epuisement des PA / PM.
   async runChafer(ai) {
-    const target = this.pickWeakestTarget(ai);
-    if (!target) return;
-    const spells = this.aiAttackSpells(ai);
-    if (spells.length === 0) return;
-    if (ai.pm > 0 && this._dist(ai, target) > 1) {
-      await this.aiApproach(ai, target, 1);
-      await this.aiPause(450);
-    }
-    if (this.ended) return;
-    await this.aiAttackLoop(ai, target, spells);
-    if (this.ended) return;
-    await this.aiRepositionTowardHero(ai, spells);
+    await this.runRelentlessMelee(ai, 1);
   }
 
-  // CHAFER ROYAL : officier. Identique au fantassin mais dispose de la
-  // Charge Osseuse (portee 2) : il s approche jusqu a la portee la plus
-  // courte de ses sorts.
+  // CHAFER ROYAL : officier squelette. Lance d abord Invisibilite si
+  // elle est disponible, puis combat de maniere acharnee comme le
+  // fantassin (il continue d avancer vers ses ennemis pendant qu il
+  // est invisible).
   async runChaferRoyal(ai) {
-    const target = this.pickWeakestTarget(ai);
-    if (!target) return;
-    const spells = this.aiAttackSpells(ai);
-    if (spells.length === 0) return;
-    const reach = spells.reduce((m, s) => Math.min(m, s.range.max), Infinity);
-    if (ai.pm > 0 && this._dist(ai, target) > reach) {
-      await this.aiApproach(ai, target, reach);
-      await this.aiPause(450);
+    await this.aiTryInvisibility(ai);
+    if (this.ended) return;
+    await this.runRelentlessMelee(ai, 1);
+  }
+
+  // Combat de melee acharne : a chaque passe, frappe ce qui est a
+  // portee (le hero en priorite, sinon une invocation / bombe via
+  // aiAttackLoop) puis avance vers le hero. Boucle tant qu il reste des
+  // PA ou des PM et qu un progres est realise.
+  async runRelentlessMelee(ai, reach) {
+    let guard = 0;
+    while (ai.alive && (ai.pa > 0 || ai.pm > 0) && guard++ < 30) {
+      if (this.ended) return;
+      const spells = this.aiAttackSpells(ai);
+      const hero = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
+      if (!hero || spells.length === 0) return;
+      const before = { pa: ai.pa, c: ai.c, r: ai.r };
+      // 1. Frappe tout ce qui est deja a portee.
+      await this.aiAttackLoop(ai, hero, spells);
+      if (this.ended) return;
+      // 2. Poursuit sa route vers le hero avec les PM restants.
+      if (ai.pm > 0 && this._dist(ai, hero) > reach) {
+        await this.aiApproach(ai, hero, reach);
+        if (this.ended) return;
+      }
+      const progressed = ai.pa < before.pa || ai.c !== before.c || ai.r !== before.r;
+      if (!progressed) break;
+      await this.aiPause(280);
     }
-    if (this.ended) return;
-    await this.aiAttackLoop(ai, target, spells);
-    if (this.ended) return;
-    await this.aiRepositionTowardHero(ai, spells);
+  }
+
+  // Lance le sort d invisibilite sur soi-meme si disponible (Chafer Royal).
+  async aiTryInvisibility(ai) {
+    if (ai.invisible) return false;
+    const spell = ai.spells.find(s =>
+      !ai.isOnCooldown(s.id) && ai.pa >= s.apCost && s.target === 'self' &&
+      s.effects.some(e => e.type === 'buff' && e.invisible)
+    );
+    if (!spell) return false;
+    ai.pa -= spell.apCost;
+    if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
+    ai.character.popCost(spell.apCost, 'pa');
+    if (this.vfx) {
+      const color = parseInt(spell.color.slice(1), 16);
+      this.vfx.buffAura({ c: ai.c, r: ai.r }, { color });
+    }
+    this.hud.update(ai, this.mode, this.selectedSpellId);
+    await this.applySpellEffects(ai, spell, { c: ai.c, r: ai.r });
+    await this.aiPause(350);
+    return true;
   }
 
   // TOFU : oiseau impulsif et rapide. Charge le hero LE PLUS PROCHE
@@ -1451,29 +1488,49 @@ export class Game {
 
   // DRAGOUNET ROUGE (invocation Osamodas) : craintif. Soigne d abord un
   // allie blesse (Dragosoin), puis se place a ~5 cases d un ennemi,
-  // ALIGNE pour pouvoir cracher sa Dragoflamme en ligne droite.
+  // ALIGNE pour cracher sa Dragoflamme. Tant qu il lui reste des PA / PM,
+  // il continue de se repositionner et d attaquer, en changeant de cible
+  // au besoin.
   async runDragounet(ai) {
     const spells = this.aiAttackSpells(ai);
-    const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
     const maxRange = spells.reduce((m, s) => Math.max(m, s.range.max), 0) || 8;
-    // 1. Positionnement : zone de confort a 5 cases, aligne (Dragoflamme).
-    if (target && ai.pm > 0 && spells.length > 0) {
-      const moved = await this.aiPositionAtRange(ai, target, 5, maxRange, true);
+    const target0 = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
+    // 1. Positionnement initial : zone de confort a 5 cases, aligne.
+    if (target0 && ai.pm > 0 && spells.length > 0) {
+      const moved = await this.aiPositionAtRange(ai, target0, 5, maxRange, true);
       if (this.ended) return;
       if (moved) await this.aiPause(450);
     }
-    // Le Dragounet PREFERE soigner, mais frappe toujours 1 fois un
-    // ennemi avant de soigner si un ennemi est a portee. Si aucun soin
-    // n est possible, il frappe autant de fois que possible.
+    // 2. Le Dragounet PREFERE soigner : il frappe 1 fois avant de
+    //    soigner si un allie blesse est a portee.
     const wantsHeal = this.hasHealableAlly(ai);
-    if (target && spells.length > 0
-        && this.usableSpellsOn(ai, target, spells).length > 0) {
-      await this.aiAttackLoop(ai, target, spells, wantsHeal ? 1 : Infinity);
+    if (wantsHeal && target0 && spells.length > 0
+        && this.usableSpellsOn(ai, target0, spells).length > 0) {
+      await this.aiAttackLoop(ai, target0, spells, 1);
       if (this.ended) return;
-      if (wantsHeal) await this.aiPause(350);
+      await this.aiPause(350);
     }
-    // 2. Soin d un allie blesse a portee (Dragosoin), s il reste des PA.
     await this.aiTryHeal(ai);
+    if (this.ended) return;
+    // 3. Tant qu il reste des PA / PM : se repositionner et attaquer,
+    //    quitte a changer de cible.
+    let guard = 0;
+    while (ai.alive && (ai.pa > 0 || ai.pm > 0) && guard++ < 20) {
+      if (this.ended) return;
+      const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
+      if (!target || spells.length === 0) break;
+      const before = { pa: ai.pa, c: ai.c, r: ai.r };
+      if (ai.pm > 0) {
+        await this.aiPositionAtRange(ai, target, 5, maxRange, true);
+        if (this.ended) return;
+      }
+      if (this.usableSpellsOn(ai, target, spells).length > 0) {
+        await this.aiAttackLoop(ai, target, spells);
+        if (this.ended) return;
+      }
+      if (ai.pa >= before.pa && ai.c === before.c && ai.r === before.r) break;
+      await this.aiPause(300);
+    }
   }
 
   // CHATON BLANC (invocation Ecaflip) : felin joueur. Fonce sur le hero
@@ -1775,7 +1832,7 @@ export class Game {
       const db = Math.abs(ai.c - b.c) + Math.abs(ai.r - b.r);
       return da - db;
     });
-    const all = this.fighters.filter(f => f.alive && f.team !== ai.team);
+    const all = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.invisible);
     let pool = all.filter(f => !f.isBomb && !f.isSummon);  // vrais heros
     if (pool.length === 0) pool = all.filter(f => f.isSummon); // invocations
     if (pool.length === 0) pool = all;                          // bombes
