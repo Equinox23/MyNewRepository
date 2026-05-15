@@ -411,40 +411,41 @@ export const SPELLS = {
   },
 
   // ---------- XELOR ----------
-  aiguilleGlacee: {
-    id: 'aiguilleGlacee', name: 'Aiguille Glacee', short: 'AG', icon: ICON_LINE,
+  horloge: {
+    id: 'horloge', name: 'Horloge', short: 'HO', icon: ICON_HOURGLASS,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
-    target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 13, max: 18 }],
-    desc: 'Plante une aiguille du cadran a distance.',
-  },
-  volTemporel: {
-    id: 'volTemporel', name: 'Vol Temporel', short: 'VT', icon: ICON_HOURGLASS,
-    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 4, range: { min: 1, max: 5 }, needsLOS: true,
+    apCost: 4, range: { min: 1, max: 3 }, needsLOS: true, lineOnly: true,
     target: 'enemy', area: { type: 'single' },
     effects: [
-      { type: 'damage', min: 12, max: 16 },
-      { type: 'debuff_pa', value: 2 },
+      { type: 'damage', min: 20, max: 30 },
+      { type: 'debuff_pa', min: 1, max: 2 },
     ],
-    desc: 'Vole le temps de la cible : degats + elle perd 2 PA.',
+    desc: 'Lancee en ligne (portee 3) : 20-30 degats et vole 1 a 2 PA.',
   },
-  engrenage: {
-    id: 'engrenage', name: 'Engrenage', short: 'EN', icon: ICON_GEAR,
+  ralentissement: {
+    id: 'ralentissement', name: 'Ralentissement', short: 'RA', icon: ICON_GEAR,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
+    apCost: 1, range: { min: 1, max: 8 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'debuff_pa', value: 3 }],
-    desc: 'Bloque les rouages de la cible : elle perd 3 PA.',
+    effects: [{ type: 'debuff_pa', value: 2 }],
+    desc: 'Retire 2 PA a un adversaire. Portee 8.',
   },
-  bondTemporel: {
-    id: 'bondTemporel', name: 'Bond Temporel', short: 'BT', icon: ICON_JUMP,
-    category: 'move', color: SPELL_CATEGORY_COLOR.move,
-    apCost: 2, range: { min: 1, max: 6 }, needsLOS: false,
-    target: 'tile', area: { type: 'single' },
-    effects: [{ type: 'teleport' }],
-    desc: 'Se teleporte a travers le temps sur une case libre.',
+  devouement: {
+    id: 'devouement', name: 'Devouement', short: 'DV', icon: ICON_BOOST,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
+    target: 'self', area: { type: 'circle', radius: 2 },
+    cooldown: 3,
+    effects: [{ type: 'buff', bonusPa: 2, duration: 3 }],
+    desc: '+2 PA au lanceur et aux allies dans un rayon de 2 cases, pendant 3 tours.',
+  },
+  aiguille: {
+    id: 'aiguille', name: 'Aiguille', short: 'AI', icon: ICON_LINE,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 7 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 20, max: 35 }],
+    desc: 'Plante une aiguille du cadran : 20-35 degats. Portee 7.',
   },
 
   // ---------- ECAFLIP ----------
@@ -581,12 +582,16 @@ export function spellEffectLines(spell) {
       case 'summon':
         lines.push(`Invoque : ${eff.creatureId}`);
         break;
-      case 'debuff_pm':
-        lines.push(`Cible perd ${eff.value} PM`);
+      case 'debuff_pm': {
+        const amt = eff.value !== undefined ? `${eff.value}` : `${eff.min}-${eff.max}`;
+        lines.push(`Cible perd ${amt} PM (au prochain tour)`);
         break;
-      case 'debuff_pa':
-        lines.push(`Cible perd ${eff.value} PA`);
+      }
+      case 'debuff_pa': {
+        const amt = eff.value !== undefined ? `${eff.value}` : `${eff.min}-${eff.max}`;
+        lines.push(`Cible perd ${amt} PA (au prochain tour)`);
         break;
+      }
       case 'dot':
         lines.push(`Poison : ${eff.min}-${eff.max} degats pendant ${eff.duration} tours`);
         break;

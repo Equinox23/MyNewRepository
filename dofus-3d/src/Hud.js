@@ -1172,8 +1172,8 @@ export class Hud {
       for (const b of otherBuffs) {
         const parts = [];
         if (b.damageMult) parts.push(`+${Math.round(b.damageMult * 100)}% degats`);
-        if (b.bonusPa) parts.push(`+${b.bonusPa} PA`);
-        if (b.bonusPm) parts.push(`+${b.bonusPm} PM`);
+        if (b.bonusPa) parts.push(`${b.bonusPa > 0 ? '+' : ''}${b.bonusPa} PA`);
+        if (b.bonusPm) parts.push(`${b.bonusPm > 0 ? '+' : ''}${b.bonusPm} PM`);
         if (b.shield) parts.push(`-${Math.round(b.shield * 100)}% degats reçus`);
         if (b.dot) parts.push(`Poison ${b.dot.min}-${b.dot.max}/tour`);
         if (parts.length === 0) continue;
@@ -1377,8 +1377,8 @@ export class Hud {
       for (const b of otherBuffs) {
         const bits = [];
         if (b.damageMult) bits.push(`+${Math.round(b.damageMult * 100)}% dgt`);
-        if (b.bonusPa) bits.push(`+${b.bonusPa} PA`);
-        if (b.bonusPm) bits.push(`+${b.bonusPm} PM`);
+        if (b.bonusPa) bits.push(`${b.bonusPa > 0 ? '+' : ''}${b.bonusPa} PA`);
+        if (b.bonusPm) bits.push(`${b.bonusPm > 0 ? '+' : ''}${b.bonusPm} PM`);
         if (b.shield) bits.push(`-${Math.round(b.shield * 100)}% reçus`);
         if (b.dot) bits.push(`Poison ${b.dot.min}-${b.dot.max}`);
         if (!bits.length) continue;

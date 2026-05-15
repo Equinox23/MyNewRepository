@@ -79,7 +79,7 @@ export const DEFS = {
     name: 'Xelor',
     role: 'Maitre du temps',
     hp: 100, pa: 8, pm: 4, initiative: 10,
-    spellIds: ['aiguilleGlacee', 'volTemporel', 'engrenage', 'bondTemporel'],
+    spellIds: ['horloge', 'ralentissement', 'devouement', 'aiguille'],
   },
   ecaflip: {
     name: 'Ecaflip',
@@ -173,17 +173,17 @@ export class Fighter {
     return this.def.spellIds.map(id => SPELLS[id]).filter(Boolean);
   }
 
-  // Max effectif PA / PM = base + buffs additifs. Sert a l affichage
-  // "6/9" plutot que "9/6" quand on a recu un bonus.
+  // Max effectif PA / PM = base + buffs additifs (bonus ou malus).
+  // Borne a 0 : un combattant totalement draine affiche "0/0".
   get effectiveMaxPa() {
     let max = this.maxPa;
     for (const b of this.buffs) if (b.bonusPa) max += b.bonusPa;
-    return max;
+    return Math.max(0, max);
   }
   get effectiveMaxPm() {
     let max = this.maxPm;
     for (const b of this.buffs) if (b.bonusPm) max += b.bonusPm;
-    return max;
+    return Math.max(0, max);
   }
 
   startTurn() {
@@ -193,11 +193,16 @@ export class Fighter {
     this.buffs = this.buffs
       .map(b => b.permanent ? b : { ...b, duration: b.duration - 1 })
       .filter(b => b.permanent || b.duration > 0);
-    // Applique les bonus PA / PM des buffs actifs (au-dessus du max).
+    // Applique les bonus / malus PA / PM des buffs actifs. Un malus
+    // (bonusPa/Pm negatif, ex : vol de PA d un Xelor) persiste donc
+    // jusqu au debut du tour de la cible : si on lui retire 5 PA et
+    // qu elle en a 5, elle commence son tour a 0.
     for (const b of this.buffs) {
       if (b.bonusPa) this.pa += b.bonusPa;
       if (b.bonusPm) this.pm += b.bonusPm;
     }
+    this.pa = Math.max(0, this.pa);
+    this.pm = Math.max(0, this.pm);
     // Decremente les cooldowns.
     for (const id in this.spellCooldowns) {
       this.spellCooldowns[id] = Math.max(0, this.spellCooldowns[id] - 1);

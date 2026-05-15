@@ -346,7 +346,7 @@ export class Game {
     if (this.map3d.isWall(c, r)) return 'Mur';
     const blockers = this.bombBlockers();
     if (spell.needsLOS && !hasLOS(this.map3d.getData(), caster.c, caster.r, c, r, blockers)) return 'Pas de vue';
-    if (spell.area && spell.area.type === 'line') {
+    if ((spell.area && spell.area.type === 'line') || spell.lineOnly) {
       const dc = c - caster.c, dr = r - caster.r;
       if (dc !== 0 && dr !== 0) return 'Doit etre en ligne droite';
     }
@@ -571,94 +571,117 @@ export class Game {
         return;
       }
       case 'buff': {
-        const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
-        if (!tf) return;
         const buffColorHex = parseInt(spell.color.slice(1), 16);
-        // Si la cible est a distance et n est pas le caster, on lance un
-        // projectile (un crachat-bouclier pour Peau Dure, une etincelle
-        // doree pour les autres boosts).
-        if (caster !== tf && this.vfx) {
-          const d = Math.abs(caster.c - tf.c) + Math.abs(caster.r - tf.r);
-          if (d >= 1) {
-            caster.character.faceToward(tf.c, tf.r);
-            const isShield = !!effect.shield;
-            const projColor = isShield
-              ? (spell.id === 'peauDure' ? 0x88dd55 : 0xf1c40f)
-              : buffColorHex;
-            await this.vfx.projectile(
-              { c: caster.c, r: caster.r },
-              { c: tf.c, r: tf.r },
-              { color: projColor, glow: 0.8, radius: 0.16, arcHeight: 1.3 },
-            );
+        // Cible(s) : zone circulaire d allies, ou cible unique.
+        let buffTargets;
+        if (spell.area && spell.area.type === 'circle') {
+          const cells = this.circleCells(target.c, target.r, spell.area.radius);
+          const keys = new Set(cells.map(cl => cl.c + ',' + cl.r));
+          buffTargets = this.fighters.filter(f =>
+            f.alive && !f.isBomb && f.team === caster.team && keys.has(f.c + ',' + f.r)
+          );
+        } else {
+          const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
+          buffTargets = tf ? [tf] : [];
+        }
+        if (buffTargets.length === 0) return;
+        // Projectile uniquement pour un buff a distance sur cible unique.
+        if (!spell.area || spell.area.type !== 'circle') {
+          const tf = buffTargets[0];
+          if (caster !== tf && this.vfx) {
+            const d = Math.abs(caster.c - tf.c) + Math.abs(caster.r - tf.r);
+            if (d >= 1) {
+              caster.character.faceToward(tf.c, tf.r);
+              const isShield = !!effect.shield;
+              const projColor = isShield
+                ? (spell.id === 'peauDure' ? 0x88dd55 : 0xf1c40f)
+                : buffColorHex;
+              await this.vfx.projectile(
+                { c: caster.c, r: caster.r },
+                { c: tf.c, r: tf.r },
+                { color: projColor, glow: 0.8, radius: 0.16, arcHeight: 1.3 },
+              );
+            }
           }
         }
-        // VFX d application sur la cible.
-        if (this.vfx) {
-          if (effect.shield) this.vfx.shieldDome({ c: tf.c, r: tf.r }, { color: buffColorHex });
-          else this.vfx.buffAura({ c: tf.c, r: tf.r }, { color: buffColorHex });
+        for (const tf of buffTargets) {
+          if (this.vfx) {
+            if (effect.shield) this.vfx.shieldDome({ c: tf.c, r: tf.r }, { color: buffColorHex });
+            else this.vfx.buffAura({ c: tf.c, r: tf.r }, { color: buffColorHex });
+          }
+          tf.buffs.push({
+            duration: (effect.duration || 1) + 1,
+            damageMult: effect.damageMult,
+            bonusPa: effect.bonusPa,
+            bonusPm: effect.bonusPm,
+            shield: effect.shield,
+          });
+          if (effect.bonusPa) tf.pa += effect.bonusPa;
+          if (effect.bonusPm) tf.pm += effect.bonusPm;
+          tf.character.flashGlow(buffColorHex, 900);
         }
-        const buff = {
-          duration: (effect.duration || 1) + 1,
-          damageMult: effect.damageMult,
-          bonusPa: effect.bonusPa,
-          bonusPm: effect.bonusPm,
-          shield: effect.shield,
-        };
-        tf.buffs.push(buff);
-        if (effect.bonusPa) tf.pa += effect.bonusPa;
-        if (effect.bonusPm) tf.pm += effect.bonusPm;
-        tf.character.flashGlow(buffColorHex, 900);
-        this.hud.flash(`${spell.name} appliquee a ${tf.name}`, 1200);
-        this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} sur ${tf.name}`, 'buff');
-        if (this.turn.current() === tf) this.hud.update(tf, this.mode, this.selectedSpellId);
+        this.hud.flash(`${spell.name}`, 1200);
+        const names = buffTargets.map(t => t.name).join(', ');
+        this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} (${names})`, 'buff');
+        this.hud.update(this.turn.current(), this.mode, this.selectedSpellId);
         await new Promise(r => setTimeout(r, 400));
         return;
       }
       case 'debuff_pm': {
         const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
         if (!tf) return;
-        // VFX : rocher qui vole jusqu a la cible puis nuage de poussiere.
-        if (this.vfx && caster !== tf) {
+        const amount = effect.value !== undefined ? effect.value
+          : (effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1)));
+        // Projectile uniquement si le sort n a pas d effet de degats
+        // (sinon le projectile a deja ete tire par l effet 'damage').
+        const hasDamage = spell.effects.some(e => e.type === 'damage');
+        if (this.vfx && caster !== tf && !hasDamage) {
           caster.character.faceToward(tf.c, tf.r);
           await this.vfx.projectile(
             { c: caster.c, r: caster.r },
             { c: tf.c, r: tf.r },
             { color: 0x7c6655, glow: 0.4, radius: 0.20, arcHeight: 1.8 },
           );
-          this.vfx.debuffCloud({ c: tf.c, r: tf.r }, { color: 0x9a8a78 });
         }
-        const before = tf.pm;
-        tf.pm = Math.max(0, tf.pm - (effect.value || 0));
-        const lost = before - tf.pm;
-        if (lost > 0) {
-          tf.character.popText('-' + lost + ' PM', '#74e69b', {
-            fontSize: 22, dx: -0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42,
-          });
-          tf.character.flashGlow(0x7a6b5a, 500);
-          this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} perd ${lost} PM`, 'buff');
-        }
-        if (this.turn.current() === tf) this.hud.update(tf, this.mode, this.selectedSpellId);
+        if (this.vfx) this.vfx.debuffCloud({ c: tf.c, r: tf.r }, { color: 0x9a8a78 });
+        // Reduction immediate (feedback) + malus persistant : le manque
+        // de PM s appliquera au DEBUT du prochain tour de la cible.
+        tf.pm = Math.max(0, tf.pm - amount);
+        tf.buffs.push({ bonusPm: -amount, duration: 2 });
+        tf.character.popText('-' + amount + ' PM', '#74e69b', {
+          fontSize: 22, dx: -0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42,
+        });
+        tf.character.flashGlow(0x7a6b5a, 500);
+        this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} perd ${amount} PM`, 'buff');
+        this.hud.update(this.turn.current(), this.mode, this.selectedSpellId);
         await new Promise(r => setTimeout(r, 400));
         return;
       }
       case 'debuff_pa': {
         const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
         if (!tf) return;
-        if (this.vfx && caster !== tf) {
-          // Le projectile du debuff_pa du crachat n est pas envoye ici
-          // car il a deja ete envoye par l effet 'damage' du meme sort.
+        const amount = effect.value !== undefined ? effect.value
+          : (effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1)));
+        const hasDamage = spell.effects.some(e => e.type === 'damage');
+        if (this.vfx && caster !== tf && !hasDamage) {
+          caster.character.faceToward(tf.c, tf.r);
+          await this.vfx.projectile(
+            { c: caster.c, r: caster.r },
+            { c: tf.c, r: tf.r },
+            { color: 0x6fa8d6, glow: 0.9, radius: 0.16, arcHeight: 1.5 },
+          );
         }
-        const before = tf.pa;
-        tf.pa = Math.max(0, tf.pa - (effect.value || 0));
-        const lost = before - tf.pa;
-        if (lost > 0) {
-          tf.character.popText('-' + lost + ' PA', '#7ec6ff', {
-            fontSize: 22, dx: 0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42,
-          });
-          tf.character.flashGlow(0x2980b9, 500);
-          this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} perd ${lost} PA`, 'buff');
-        }
-        if (this.turn.current() === tf) this.hud.update(tf, this.mode, this.selectedSpellId);
+        if (this.vfx) this.vfx.debuffCloud({ c: tf.c, r: tf.r }, { color: 0x4a6f9a });
+        // Reduction immediate + malus persistant (vol de temps du Xelor) :
+        // la cible commencera son prochain tour amputee de ces PA.
+        tf.pa = Math.max(0, tf.pa - amount);
+        tf.buffs.push({ bonusPa: -amount, duration: 2 });
+        tf.character.popText('-' + amount + ' PA', '#7ec6ff', {
+          fontSize: 22, dx: 0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42,
+        });
+        tf.character.flashGlow(0x2980b9, 500);
+        this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} perd ${amount} PA`, 'buff');
+        this.hud.update(this.turn.current(), this.mode, this.selectedSpellId);
         await new Promise(r => setTimeout(r, 300));
         return;
       }
@@ -951,7 +974,7 @@ export class Game {
       const spell = SPELLS[this.selectedSpellId];
       if (!spell) return;
       const tiles = [];
-      if (spell.area && spell.area.type === 'line') {
+      if ((spell.area && spell.area.type === 'line') || spell.lineOnly) {
         for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
           for (let i = 1; i <= spell.range.max; i++) {
             const c = cur.c + dc * i;
