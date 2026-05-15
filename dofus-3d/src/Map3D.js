@@ -601,7 +601,6 @@ export class Map3D {
         break;
       case 'cliff':
         this._scatterRing(buildPeak, 28, { seedBase: 8080, minD: 11, maxD: 27, scale: [2.4, 5.2] });
-        this._buildClouds(16);
         break;
       case 'swamp':
         this._scatterRing(buildDeadTree, 54, { seedBase: 33221, scale: [0.9, 1.6] });
