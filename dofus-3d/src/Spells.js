@@ -13,6 +13,7 @@
 //  - 'debuff_pa'      { value | min,max, chance?, turns?, steal? }
 //  - 'knockback'      { distance }  -> repousse la cible en ligne droite
 //  - 'chanceStrike'   { dmgMin,dmgMax, healMin,healMax }  -> 50% degats / 50% soin
+//  - 'gainPa'         { amount, nextTurnPenalty? }  -> +PA ce tour, -PA au suivant
 //
 // Aire : { type: 'single' } | { type: 'line', length } | { type: 'cross', size }.
 // Cooldown : nombre de tours entre deux casts (decremente au debut du
@@ -224,6 +225,12 @@ const ICON_PULSAR = `
     <polyline points="8 24, 4 28, 8 28"/>
   </svg>`;
 
+const ICON_HASTE = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="4 7, 4 25, 15 16" fill="currentColor"/>
+    <polygon points="16 7, 16 25, 27 16" fill="currentColor"/>
+  </svg>`;
+
 const ICON_KITTEN = `
   <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <polygon points="7 4, 12 12, 4 12" fill="currentColor"/>
@@ -241,6 +248,7 @@ export const SPELL_CATEGORY_COLOR = {
   heal:   '#e91e63',
   boost:  '#f1c40f',
   move:   '#27ae60',
+  summon: '#8a5a2b',
 };
 
 export const SPELLS = {
@@ -250,7 +258,7 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 2 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 12, max: 18 }],
+    effects: [{ type: 'damage', min: 30, max: 50 }],
     desc: 'Coup rapide a 1 a 2 cases.',
   },
   bond: {
@@ -267,7 +275,7 @@ export const SPELLS = {
     apCost: 5, range: { min: 1, max: 1 }, needsLOS: false,
     // length: -1 = jusqu au bord de la carte. piercing = traverse murs et combattants.
     target: 'tile', area: { type: 'line', length: -1, piercing: true },
-    effects: [{ type: 'damage', min: 18, max: 24 }],
+    effects: [{ type: 'damage', min: 40, max: 70 }],
     desc: 'Lance sur la case devant soi : la lame divine fonce ensuite tout droit jusqu au bord de la carte et traverse murs et ennemis.',
   },
   concentration: {
@@ -277,6 +285,15 @@ export const SPELLS = {
     target: 'self', area: { type: 'single' },
     effects: [{ type: 'buff', damageMult: 0.3, duration: 2 }],
     desc: '+30% degats pendant 2 tours. Cumulable.',
+  },
+  precipitation: {
+    id: 'precipitation', name: 'Precipitation', short: 'PE', icon: ICON_HASTE,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 1, range: { min: 0, max: 0 }, needsLOS: false,
+    target: 'self', area: { type: 'single' },
+    cooldown: 4,
+    effects: [{ type: 'gainPa', amount: 6, nextTurnPenalty: 3 }],
+    desc: 'Gagne 6 PA pour ce tour puis perd 3 PA au tour suivant. A lancer sur soi-meme.',
   },
 
   // ---------- ROUBLARD ----------
@@ -331,7 +348,7 @@ export const SPELLS = {
   // ---------- OSAMODAS ----------
   invocationCraqueleur: {
     id: 'invocationCraqueleur', name: 'Invocation du Craqueleur', short: 'IC', icon: ICON_SUMMON,
-    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    category: 'summon', color: SPELL_CATEGORY_COLOR.summon,
     apCost: 6, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'tile', area: { type: 'single' },
     cooldown: 4,
@@ -369,7 +386,7 @@ export const SPELLS = {
   },
   invocationDragounet: {
     id: 'invocationDragounet', name: 'Invocation du Dragounet Rouge', short: 'ID', icon: ICON_SUMMON,
-    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    category: 'summon', color: SPELL_CATEGORY_COLOR.summon,
     apCost: 8, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'tile', area: { type: 'single' },
     cooldown: 5,
@@ -560,7 +577,7 @@ export const SPELLS = {
   },
   invocationChaton: {
     id: 'invocationChaton', name: 'Invocation du Chaton', short: 'IK', icon: ICON_SUMMON,
-    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    category: 'summon', color: SPELL_CATEGORY_COLOR.summon,
     apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'tile', area: { type: 'single' },
     cooldown: 7,
@@ -693,6 +710,10 @@ export function spellEffectLines(spell) {
       }
       case 'knockback':
         lines.push(`Repousse la cible de ${eff.distance || 1} cases`);
+        break;
+      case 'gainPa':
+        lines.push(`+${eff.amount} PA ce tour`);
+        if (eff.nextTurnPenalty) lines.push(`-${eff.nextTurnPenalty} PA au tour suivant`);
         break;
       case 'chanceStrike':
         lines.push(`50% : degats ${eff.dmgMin}-${eff.dmgMax}`);

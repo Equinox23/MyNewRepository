@@ -8,7 +8,7 @@ export const DEFS = {
     name: 'Iop',
     role: 'Guerrier',
     hp: 100, pa: 8, pm: 4, initiative: 12,
-    spellIds: ['pression', 'bond', 'epeeDivine', 'concentration'],
+    spellIds: ['pression', 'bond', 'epeeDivine', 'concentration', 'precipitation'],
   },
   osamodas: {
     name: 'Osamodas',

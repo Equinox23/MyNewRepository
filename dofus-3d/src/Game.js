@@ -136,11 +136,21 @@ export class Game {
       }
     }
     this.fighters = [];
-    this.turn = null;
     this.busy = false;
-    this.ended = false;
+    // On NE remet PAS `ended` a false ni `turn` a null ici : si un combat
+    // est abandonne pendant le tour de l IA, ses promesses en cours
+    // doivent voir `ended === true` (pour s arreter) et un `turn` non nul
+    // (pour ne pas crasher). setup() reinitialise ces deux champs.
     this.rangeOverlay && this.rangeOverlay.clear();
     this.picker && this.picker.setHover(null);
+  }
+
+  // Abandonne le combat en cours et nettoie la scene. Declenche par le
+  // bouton "retour au menu" du HUD (avec confirmation).
+  abandon() {
+    this.ended = true;
+    this.busy = true;
+    this.cleanup();
   }
 
   // ---------- TOUR ----------
@@ -994,6 +1004,22 @@ export class Game {
         }
         tf.c = destC; tf.r = destR;
         this.hud.log && this.hud.log(`${caster.name} repousse ${tf.name}`, 'cast');
+        return;
+      }
+      case 'gainPa': {
+        // Precipitation : gain de PA immediat, contrecoup le tour suivant.
+        caster.pa += effect.amount;
+        caster.character.popText('+' + effect.amount + ' PA', '#7ec6ff', {
+          fontSize: 22, dx: 0.45, yStart: 1.5, scaleX: 1.1, scaleY: 0.42,
+        });
+        caster.character.flashGlow(0x7ec6ff, 600);
+        // Malus de PA applique au DEBUT du prochain tour du lanceur.
+        if (effect.nextTurnPenalty) {
+          caster.buffs.push({ bonusPa: -effect.nextTurnPenalty, duration: 2 });
+        }
+        this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : +${effect.amount} PA`, 'buff');
+        this.hud.update(this.turn.current(), this.mode, this.selectedSpellId);
+        await new Promise(r => setTimeout(r, 350));
         return;
       }
       case 'chanceStrike': {

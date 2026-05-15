@@ -156,6 +156,12 @@ export class Hud {
         filter: drop-shadow(1px 1px 1px rgba(0,0,0,0.6));
       }
       .spell .icon svg { width: 100%; height: 100%; }
+      .spell .icon img.summon-icon {
+        width: 128%; height: 128%;
+        margin: -14%;
+        object-fit: contain;
+        image-rendering: auto;
+      }
       .spell .cost {
         position: absolute; bottom: 2px; right: 5px;
         font-size: 12px; font-weight: bold; color: #fff;
@@ -531,9 +537,63 @@ export class Hud {
       #fighter-info.pinned .fi-pin { display: flex; }
       #fighter-info.pinned { border-color: #f1c40f; box-shadow: 0 6px 18px rgba(0,0,0,0.6), 0 0 0 2px #f1c40f; }
 
+      /* ----- Bouton menu / abandon ----- */
+      #menu-btn {
+        position: fixed; top: 16px; right: 208px;
+        width: 52px; height: 52px;
+        border-radius: 50%;
+        background: rgba(12, 12, 20, 0.78);
+        border: 3px solid #e74c3c;
+        color: #e74c3c;
+        cursor: pointer; pointer-events: auto;
+        user-select: none; -webkit-tap-highlight-color: transparent;
+        touch-action: manipulation;
+        z-index: 5;
+        display: flex; align-items: center; justify-content: center;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.6);
+        transition: background 0.15s, transform 0.1s;
+      }
+      #menu-btn svg { width: 28px; height: 28px; display: block; }
+      #menu-btn:hover { background: rgba(231, 76, 60, 0.18); }
+      #menu-btn:active { background: #e74c3c; color: #14182a; transform: scale(0.92); }
+
+      #confirm-overlay {
+        position: fixed; inset: 0;
+        display: flex; align-items: center; justify-content: center;
+        background: rgba(0, 0, 0, 0.72);
+        z-index: 30;
+        font-family: "Trebuchet MS", sans-serif;
+      }
+      #confirm-overlay .confirm-box {
+        background: rgba(16, 16, 26, 0.98);
+        border: 2px solid #e74c3c;
+        border-radius: 12px;
+        padding: 24px 28px;
+        max-width: 360px; text-align: center;
+        box-shadow: 0 16px 40px rgba(0,0,0,0.85);
+      }
+      #confirm-overlay .confirm-msg {
+        color: #fff; font-size: 17px; line-height: 1.45; margin-bottom: 20px;
+      }
+      #confirm-overlay .confirm-actions {
+        display: flex; gap: 12px; justify-content: center;
+      }
+      #confirm-overlay button {
+        padding: 10px 22px; font-size: 16px; border-radius: 8px;
+        font-family: inherit; font-weight: bold; cursor: pointer;
+      }
+      #confirm-overlay #confirm-no {
+        background: #2c3e50; border: 2px solid #6a7090; color: #fff;
+      }
+      #confirm-overlay #confirm-yes {
+        background: #e74c3c; border: 2px solid #922b21; color: #fff;
+      }
+
       /* ----- ADAPTATIONS MOBILE ----- */
       @media (pointer: coarse), (max-width: 768px) {
         #btn-end-mobile { display: block; }
+        #menu-btn { width: 40px; height: 40px; border-width: 2px; right: 156px; top: 12px; }
+        #menu-btn svg { width: 22px; height: 22px; }
         .rot-btn { width: 44px; height: 44px; border-width: 2px; }
         .rot-btn svg { width: 24px; height: 24px; }
         #rot-recenter { width: 40px; height: 40px; border-width: 2px; top: 12px; right: 12px; }
@@ -627,6 +687,7 @@ export class Hud {
     this.buildRotationButtons();
     this.buildHelpPanel();
     this.buildSettingsPanel();
+    this.buildMenuButton();
     this.makeDraggable(this.statsEl, 'dofus3d.statsPos');
     this.makeDraggable(this.spellsEl, 'dofus3d.spellsPos');
     this.makeDraggable(this.turnOrderEl, 'dofus3d.turnPos');
@@ -684,6 +745,52 @@ export class Hud {
       e.stopPropagation();
       this.toggleHelp();
     });
+  }
+
+  // Bouton "retour au menu" : abandonne le combat apres confirmation.
+  buildMenuButton() {
+    const btn = document.createElement('button');
+    btn.id = 'menu-btn';
+    btn.title = 'Abandonner le combat et revenir au menu';
+    btn.innerHTML = `
+      <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M4 15 L16 4 L28 15"/>
+        <path d="M7 13 V27 H25 V13"/>
+        <rect x="13" y="18" width="6" height="9"/>
+      </svg>`;
+    document.body.appendChild(btn);
+    this.menuBtnEl = btn;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.showConfirm(
+        'Abandonner le combat et revenir au menu principal ?',
+        () => this.callbacks.onAbandon && this.callbacks.onAbandon(),
+      );
+    });
+  }
+
+  // Petite fenetre de confirmation oui / non.
+  showConfirm(message, onYes) {
+    const old = document.getElementById('confirm-overlay');
+    if (old) old.remove();
+    const overlay = document.createElement('div');
+    overlay.id = 'confirm-overlay';
+    overlay.innerHTML = `
+      <div class="confirm-box">
+        <div class="confirm-msg">${message}</div>
+        <div class="confirm-actions">
+          <button id="confirm-no" type="button">Annuler</button>
+          <button id="confirm-yes" type="button">Abandonner</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+    const close = () => overlay.remove();
+    overlay.querySelector('#confirm-no').addEventListener('click', close);
+    overlay.querySelector('#confirm-yes').addEventListener('click', () => {
+      close();
+      if (onYes) onYes();
+    });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) close(); });
   }
 
   toggleHelp(force) {
@@ -1042,10 +1149,19 @@ export class Hud {
       btn.dataset.slot = String(idx);
       // Numero de touche : 1..9 puis 0, sinon ^N pour les futurs Ctrl+N.
       const keyLabel = idx < 9 ? String(idx + 1) : (idx === 9 ? '0' : `^${idx - 9}`);
+      // Sort d invocation : l icone represente la creature a invoquer
+      // (snapshot 3D du modele) plutot qu un pictogramme generique.
+      let iconHtml = spell.icon || '';
+      const summonEff = spell.effects && spell.effects.find(e => e.type === 'summon');
+      if (summonEff) {
+        let avatar = null;
+        try { avatar = getAvatar(summonEff.creatureId, 96); } catch (_) { avatar = null; }
+        if (avatar) iconHtml = `<img class="summon-icon" src="${avatar}" alt="">`;
+      }
       btn.innerHTML = `
         <div class="accent" style="background: ${spell.color};"></div>
         <div class="key">${keyLabel}</div>
-        <div class="icon">${spell.icon || ''}</div>
+        <div class="icon">${iconHtml}</div>
         <div class="cost">${spell.apCost} PA</div>
         <div class="cd-overlay"></div>
       `;

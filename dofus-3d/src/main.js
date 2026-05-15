@@ -60,6 +60,11 @@ game.onEnd = () => {
   game.cleanup();
   menu.show();
 };
+// Bouton "retour au menu" du HUD : abandonne le combat en cours.
+hud.on('onAbandon', () => {
+  game.abandon();
+  menu.show();
+});
 menu.show();
 
 // --- INPUTS souris / tactile ---
