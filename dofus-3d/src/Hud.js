@@ -1480,11 +1480,9 @@ export class Hud {
 
   pinFighterInfo(fighter) {
     if (!this.fighterInfoEl || !fighter) return;
-    // Toggle : un second clic sur la meme cible la desepingle.
-    if (this._pinnedFighter === fighter) {
-      this.unpinFighterInfo();
-      return;
-    }
+    // Le pin reste colle : un second clic sur la meme cible ne la
+    // depingle plus (seul le bouton X de l infobulle le fait). Cela
+    // evite de perdre la cible quand on cast un sort dessus.
     this._pinnedFighter = fighter;
     this._infoFighter = fighter;
     this.renderFighterInfo();
