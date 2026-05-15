@@ -508,6 +508,10 @@ export class Hud {
       #settings-panel input[type="checkbox"] {
         width: 16px; height: 16px; accent-color: #95a5a6; cursor: pointer;
       }
+      #settings-panel .sp-vol { gap: 10px; }
+      #settings-panel .sp-vol input[type="range"] {
+        flex: 1; accent-color: #95a5a6; cursor: pointer;
+      }
       #settings-panel .sp-hint { font-size: 11px; color: #888; font-style: italic; margin-top: 8px; }
       #settings-panel .sp-btn {
         display: block; width: 100%;
@@ -701,6 +705,14 @@ export class Hud {
     });
     // Restaure les visibilites memorisees.
     this.applyVisibility();
+
+    // Son de clic sur les boutons du HUD. La barre de sorts est exclue
+    // (son gere par Game.selectSpellSlot) ainsi que le menu (gere par Menu).
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest && e.target.closest('button');
+      if (!btn || btn.closest('#spell-bar') || btn.closest('#menu-root')) return;
+      if (this.audio) this.audio.sfx('uiClick');
+    });
   }
 
   buildHelpPanel() {
@@ -824,12 +836,23 @@ export class Hud {
       <label><input type="checkbox" data-target="turn" checked> Ordre du tour</label>
       <label><input type="checkbox" data-target="log" checked> Journal de combat</label>
       <label><input type="checkbox" data-target="info" checked> Infobulle combattant</label>
+      <div class="sp-section">SON</div>
+      <label><input type="checkbox" id="sp-audio-on"> Activer le son</label>
+      <label class="sp-vol">Volume <input type="range" id="sp-audio-vol" min="0" max="100" value="70"></label>
       <div class="sp-section">DISPOSITION</div>
       <button id="sp-reset-pos" type="button" class="sp-btn">Reinitialiser les positions</button>
       <div class="sp-hint">Astuce : pince a 2 doigts un panneau pour le redimensionner.</div>
     `;
     document.body.appendChild(panel);
     this.settingsPanelEl = panel;
+    this.audioOnEl = panel.querySelector('#sp-audio-on');
+    this.audioVolEl = panel.querySelector('#sp-audio-vol');
+    this.audioOnEl.addEventListener('change', () => {
+      if (this.audio) this.audio.setMuted(!this.audioOnEl.checked);
+    });
+    this.audioVolEl.addEventListener('input', () => {
+      if (this.audio) this.audio.setVolume(this.audioVolEl.value / 100);
+    });
 
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -883,6 +906,14 @@ export class Hud {
     const show = force === undefined ? !this.settingsPanelEl.classList.contains('show') : force;
     this.settingsPanelEl.classList.toggle('show', show);
     this.settingsBtnEl.classList.toggle('active', show);
+    if (show) this.refreshAudioControls();
+  }
+
+  // Synchronise les controles audio du panneau avec l etat du moteur.
+  refreshAudioControls() {
+    if (!this.audio || !this.audioOnEl) return;
+    this.audioOnEl.checked = !this.audio.isMuted();
+    this.audioVolEl.value = Math.round(this.audio.getVolume() * 100);
   }
 
   // Hash cle (target) -> element du panneau correspondant.

@@ -40,13 +40,14 @@ const PLAYER_SPAWNS = [{ c: 3, r: 7 }, { c: 2, r: 5 }, { c: 2, r: 9 }];
 const ENEMY_SPAWNS  = [{ c: 11, r: 7 }, { c: 12, r: 5 }, { c: 12, r: 9 }, { c: 13, r: 7 }];
 
 export class Game {
-  constructor({ scene3d, map3d, picker, hud, rangeOverlay, vfx }) {
+  constructor({ scene3d, map3d, picker, hud, rangeOverlay, vfx, audio }) {
     this.scene3d = scene3d;
     this.map3d = map3d;
     this.picker = picker;
     this.hud = hud;
     this.rangeOverlay = rangeOverlay;
     this.vfx = vfx;
+    this.audio = audio || null;
     this.fighters = [];
     this.turn = null;
     this.mode = 'move';
@@ -201,6 +202,7 @@ export class Game {
     this._pendingCast = null;     // confirmation de sort en 2 clics
     this.hud.update(cur, this.mode, null);
     this.hud.flash(`Tour ${this.turn.round}  -  ${cur.name}`, 1200);
+    this.audio && this.audio.sfx(cur.team === 'player' ? 'turnPlayer' : 'turnEnemy');
     this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, cur);
     this.hud.log && this.hud.log(`Tour de ${cur.name}`, 'info');
 
@@ -262,21 +264,26 @@ export class Game {
     if (!spell) return;
     if (cur.isOnCooldown(spell.id)) {
       this.hud.flash(`${spell.name} en recharge (${cur.spellCooldowns[spell.id]} tours)`, 900);
+      this.audio && this.audio.sfx('uiError');
       return;
     }
     if (spell.apCost > cur.pa) {
       this.hud.flash('Pas assez de PA pour ' + spell.name, 900);
+      this.audio && this.audio.sfx('uiError');
       return;
     }
     if (this.isSummonBlocked(cur, spell)) {
       this.hud.flash('Cette creature est deja invoquee', 900);
+      this.audio && this.audio.sfx('uiError');
       return;
     }
     if (spell.maxCastsPerTurn
         && (cur._castCounts && cur._castCounts[spell.id] || 0) >= spell.maxCastsPerTurn) {
       this.hud.flash(`${spell.name} : deja lance ${spell.maxCastsPerTurn} fois ce tour`, 900);
+      this.audio && this.audio.sfx('uiError');
       return;
     }
+    this.audio && this.audio.sfx('uiSelect');
     this._pendingCast = null;
     if (spell.target === 'self') {
       this.busy = true;
@@ -341,6 +348,7 @@ export class Game {
     cur.character.popCost(cost, 'pm');
     for (const step of path.slice(1)) {
       cur.pm--;
+      this.audio && this.audio.sfx('step');
       this.hud.update(cur, this.mode, this.selectedSpellId);
       this.refreshRangeOverlay();
       await cur.character.moveTo(step.c, step.r, 170);
@@ -360,6 +368,7 @@ export class Game {
     const reason = this.validateSpellTarget(cur, spell, c, r);
     if (reason) {
       this.hud.flash(reason, 900);
+      this.audio && this.audio.sfx('uiError');
       this._pendingCast = null;
       // Sur mobile, taper une case non ciblable equivaut au clic droit
       // PC : on revient en mode deplacement (etat de base).
@@ -487,6 +496,7 @@ export class Game {
   }
 
   async applySpellEffects(caster, spell, target) {
+    this.audio && this.audio.cast(spell.category);
     for (const effect of spell.effects) {
       await this.applyEffect(effect, caster, spell, target);
       if (this.ended) return;
@@ -632,10 +642,13 @@ export class Game {
         }
         if (touched === 0) {
           this.hud.log && this.hud.log(`${caster.name} lance ${spell.name} (sans cible)`, 'cast');
+        } else {
+          this.audio && this.audio.sfx('hit');
         }
         if (lunge) await lunge;
         for (const d of dying) {
           this.hud.log && this.hud.log(`${d.name} est vaincu !`, 'death');
+          this.audio && this.audio.sfx('death');
           await d.character.die();
         }
         if (dying.length) this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
@@ -658,6 +671,7 @@ export class Game {
           }
         }
         if (this.vfx) this.vfx.healSparkles({ c: tf.c, r: tf.r });
+        this.audio && this.audio.sfx('heal');
         const amt = effect.type === 'heal'
           ? effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1))
           : Math.round(tf.maxHp * (effect.percent || 0));
@@ -855,6 +869,7 @@ export class Game {
         if (this.map3d.isWall(target.c, target.r)) return;
         // VFX : portail magique a l emplacement d apparition.
         if (this.vfx) this.vfx.portal(target.c, target.r, { color: 0xf1c40f, duration: 0.9 });
+        this.audio && this.audio.sfx('summon');
         await new Promise(r => setTimeout(r, 200));
         const summon = new Fighter(effect.creatureId, caster.team, target.c, target.r);
         summon.character = new Character3D(this.scene3d.scene, effect.creatureId, caster.team, target.c, target.r);
@@ -997,6 +1012,7 @@ export class Game {
           return;
         }
         if (this.vfx) this.vfx.flash(tf.c, tf.r, { color: 0xffd166, duration: 0.25 });
+        this.audio && this.audio.sfx('knockback');
         let cc = tf.c, cr = tf.r;
         while (cc !== destC || cr !== destR) {
           cc += sc; cr += sr;
@@ -1044,6 +1060,7 @@ export class Game {
   async explodeBomb(bomb) {
     if (!bomb || !bomb.alive || bomb._exploding) return;
     bomb._exploding = true;
+    this.audio && this.audio.sfx('explosion');
     // Aire : on supporte 'circle' (par defaut) ou ancien 'cross'.
     const area = bomb.def.bombArea || { type: 'circle', radius: 2 };
     let cells;
@@ -1090,6 +1107,7 @@ export class Game {
     }
     for (const d of dying) {
       this.hud.log && this.hud.log(`${d.name} est vaincu !`, 'death');
+      this.audio && this.audio.sfx('death');
       await d.character.die();
     }
     if (dying.length) this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
@@ -1981,6 +1999,10 @@ export class Game {
     if (winner && !this.ended) {
       this.ended = true;
       this.busy = true;
+      if (this.audio) {
+        this.audio.music(null);
+        this.audio.sfx(winner === 'player' ? 'victory' : 'defeat');
+      }
       const combat = this.config && COMBATS[this.config.combatId];
       const enemyLabel = combat ? combat.name : 'tes adversaires';
       // Victoire : on enregistre l etoile (or si vaincu sur la carte

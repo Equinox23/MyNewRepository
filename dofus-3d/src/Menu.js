@@ -470,8 +470,9 @@ const MAP_OPTIONS = [
 ];
 
 export class Menu {
-  constructor(onStart) {
+  constructor(onStart, audio) {
     this.onStart = onStart;
+    this.audio = audio || null;
     this.selection = {
       classId: 'iop',
       combatId: 'bouftou',
@@ -719,8 +720,14 @@ export class Menu {
     document.body.appendChild(tip);
     this.tooltipEl = tip;
 
-    this.backBtn.addEventListener('click', () => this.goBack());
-    this.nextBtn.addEventListener('click', () => this.goNext());
+    this.backBtn.addEventListener('click', () => {
+      this.audio && this.audio.sfx('uiClick');
+      this.goBack();
+    });
+    this.nextBtn.addEventListener('click', () => {
+      this.audio && this.audio.sfx('uiClick');
+      this.goNext();
+    });
 
     this.renderStage();
   }
@@ -826,6 +833,7 @@ export class Menu {
       btn.addEventListener('click', (e) => {
         if (lpFired) { lpFired = false; e.preventDefault(); return; }
         if (btn.disabled) return;
+        this.audio && this.audio.sfx('uiSelect');
         const key = btn.dataset.key;
         this.selection[key] = btn.dataset.value;
         this.stageEl.querySelectorAll('.menu-option').forEach(b => {

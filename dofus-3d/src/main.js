@@ -6,6 +6,7 @@ import { Game, COMBATS } from './Game.js';
 import { RangeOverlay } from './RangeOverlay.js';
 import { Menu } from './Menu.js';
 import { VFX } from './VFX.js';
+import { AudioEngine } from './Audio.js';
 
 // --- CURSEURS PERSONNALISES ---
 // Curseur de base : fleche doree style RPG (hotspot a la pointe = 3,2).
@@ -33,7 +34,20 @@ const picker = new Picker(scene3d, map3d);
 const rangeOverlay = new RangeOverlay(scene3d.scene, MAP_SIZE);
 const hud = new Hud();
 const vfx = new VFX(scene3d.scene);
-const game = new Game({ scene3d, map3d, picker, hud, rangeOverlay, vfx });
+const audio = new AudioEngine();
+hud.audio = audio;
+hud.refreshAudioControls();
+const game = new Game({ scene3d, map3d, picker, hud, rangeOverlay, vfx, audio });
+
+// Le contexte audio demarre suspendu (politique navigateur) : on le
+// reveille au tout premier geste de l utilisateur.
+function wakeAudio() {
+  audio.resume();
+  window.removeEventListener('pointerdown', wakeAudio);
+  window.removeEventListener('keydown', wakeAudio);
+}
+window.addEventListener('pointerdown', wakeAudio);
+window.addEventListener('keydown', wakeAudio);
 
 const loader = document.getElementById('loader');
 if (loader) loader.remove();
@@ -53,19 +67,23 @@ const menu = new Menu(selection => {
     combatId: selection.combatId,
     mapId: selection.mapId,
   });
-});
+  audio.music('combat');
+}, audio);
 // Quand la partie se termine et que le joueur clique "Rejouer",
 // on revient sur le menu.
 game.onEnd = () => {
   game.cleanup();
   menu.show();
+  audio.music('menu');
 };
 // Bouton "retour au menu" du HUD : abandonne le combat en cours.
 hud.on('onAbandon', () => {
   game.abandon();
   menu.show();
+  audio.music('menu');
 });
 menu.show();
+audio.music('menu');
 
 // --- INPUTS souris / tactile ---
 const canvas = scene3d.renderer.domElement;
