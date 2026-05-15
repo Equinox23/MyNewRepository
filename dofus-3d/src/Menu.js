@@ -1,6 +1,15 @@
-// Menu de pre-combat : choix classe / combat / carte.
-// V1 ne propose que Iop / Bouftou / Foret mais la structure est prete
-// pour ajouter d autres options.
+// Menu de pre-combat : selection guidee, etape par etape
+// (classe -> combat -> carte), avec etoiles de progression.
+import { getStar } from './Progress.js';
+
+// Etoile SVG : 'gold' | 'silver' | 'empty'.
+function starSvg(type, size = 26) {
+  const fill = type === 'gold' ? '#f6c83e' : type === 'silver' ? '#d3dade' : 'none';
+  const stroke = type === 'gold' ? '#a87c12' : type === 'silver' ? '#8a949c' : '#5b6072';
+  return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+    <polygon points="32 5,40 24,61 26,45 40,50 60,32 49,14 60,19 40,3 26,24 24"
+      fill="${fill}" stroke="${stroke}" stroke-width="4" stroke-linejoin="round"/></svg>`;
+}
 
 const CLASS_OPTIONS = [
   {
@@ -186,85 +195,98 @@ const COMBAT_OPTIONS = [
   {
     id: 'bouftou',
     name: 'Meute de Bouftous',
-    desc: '3 Bouftous + 1 Bouftou Royal',
+    desc: '3 Bouftous + 1 Bouftou Royal. Foncent au corps a corps.',
     available: true,
+    homeMap: 'foret',
     icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
-      <path d="M20 22 Q10 14 14 6 Q16 14 24 18 Z" fill="#fdfefe" stroke="#1a0d05" stroke-width="1.5"/>
-      <path d="M44 22 Q54 14 50 6 Q48 14 40 18 Z" fill="#fdfefe" stroke="#1a0d05" stroke-width="1.5"/>
-      <circle cx="32" cy="38" r="22" fill="#f1c40f" stroke="#5a3a07" stroke-width="2"/>
-      <circle cx="14" cy="32" r="6" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
-      <circle cx="22" cy="22" r="5" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
-      <circle cx="42" cy="22" r="5" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
-      <circle cx="50" cy="32" r="6" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
-      <circle cx="14" cy="48" r="5" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
-      <circle cx="50" cy="48" r="5" fill="#fff3a0" stroke="#5a3a07" stroke-width="1.5"/>
-      <ellipse cx="32" cy="38" rx="14" ry="10" fill="#1a0d05"/>
-      <circle cx="26" cy="36" r="2.8" fill="#e74c3c"/>
-      <circle cx="38" cy="36" r="2.8" fill="#e74c3c"/>
-      <circle cx="26" cy="36" r="4" fill="#e74c3c" opacity="0.35"/>
-      <circle cx="38" cy="36" r="4" fill="#e74c3c" opacity="0.35"/>
-      <path d="M26 44 L28 48 L30 44 L32 48 L34 44 L36 48 L38 44" stroke="#fff" stroke-width="1.5" fill="none"/>
-      <path d="M22 6 L26 -2 L32 4 L38 -2 L42 6 Z" fill="#f1c40f" stroke="#7a5d0a" stroke-width="1.5" opacity="0.9"/>
+      <defs>
+        <radialGradient id="bouW" cx="42%" cy="34%" r="72%">
+          <stop offset="0" stop-color="#fff7c2"/><stop offset="1" stop-color="#e6b41f"/>
+        </radialGradient>
+      </defs>
+      <ellipse cx="32" cy="60" rx="23" ry="3.5" fill="#000" opacity="0.35"/>
+      <!-- cornes -->
+      <path d="M16 24 Q6 18 9 7 Q14 15 22 19 Z" fill="#efe6cf" stroke="#1a0d05" stroke-width="1.6"/>
+      <path d="M48 24 Q58 18 55 7 Q50 15 42 19 Z" fill="#efe6cf" stroke="#1a0d05" stroke-width="1.6"/>
+      <!-- toison : amas de boules -->
+      <circle cx="32" cy="38" r="22" fill="url(#bouW)" stroke="#5a3a07" stroke-width="2"/>
+      <circle cx="13" cy="30" r="7" fill="url(#bouW)" stroke="#5a3a07" stroke-width="1.4"/>
+      <circle cx="20" cy="20" r="6" fill="url(#bouW)" stroke="#5a3a07" stroke-width="1.4"/>
+      <circle cx="44" cy="20" r="6" fill="url(#bouW)" stroke="#5a3a07" stroke-width="1.4"/>
+      <circle cx="51" cy="30" r="7" fill="url(#bouW)" stroke="#5a3a07" stroke-width="1.4"/>
+      <circle cx="14" cy="47" r="6.5" fill="url(#bouW)" stroke="#5a3a07" stroke-width="1.4"/>
+      <circle cx="50" cy="47" r="6.5" fill="url(#bouW)" stroke="#5a3a07" stroke-width="1.4"/>
+      <circle cx="32" cy="53" r="6.5" fill="url(#bouW)" stroke="#5a3a07" stroke-width="1.4"/>
+      <!-- museau sombre + yeux rouges -->
+      <ellipse cx="32" cy="40" rx="13" ry="9.5" fill="#1c0f06"/>
+      <circle cx="26" cy="37" r="3" fill="#ff5b4d"/>
+      <circle cx="38" cy="37" r="3" fill="#ff5b4d"/>
+      <circle cx="26" cy="37" r="5" fill="#ff5b4d" opacity="0.3"/>
+      <circle cx="38" cy="37" r="5" fill="#ff5b4d" opacity="0.3"/>
+      <path d="M25 45 L28 48 L31 45 L34 48 L37 45 L39 47" stroke="#fff" stroke-width="1.6" fill="none" stroke-linejoin="round"/>
     </svg>`,
   },
   {
     id: 'crapaud',
     name: 'Crapauds de la mare',
-    desc: '3 Crapauds + 1 Chef (haut-de-forme). Aquatiques.',
+    desc: '3 Crapauds + 1 Chef coiffe. Aquatiques, crachent a distance.',
     available: true,
+    homeMap: 'cascade',
     icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="crapBody" cx="50%" cy="40%" r="60%">
-          <stop offset="0" stop-color="#73b550"/>
-          <stop offset="1" stop-color="#2f5a24"/>
+        <radialGradient id="craB" cx="48%" cy="34%" r="70%">
+          <stop offset="0" stop-color="#86c95e"/><stop offset="1" stop-color="#2c5421"/>
         </radialGradient>
       </defs>
-      <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
-      <!-- body -->
-      <ellipse cx="32" cy="42" rx="22" ry="14" fill="url(#crapBody)" stroke="#1a3010" stroke-width="2"/>
-      <!-- legs -->
-      <ellipse cx="10" cy="50" rx="6" ry="3" fill="#2f5a24"/>
-      <ellipse cx="54" cy="50" rx="6" ry="3" fill="#2f5a24"/>
-      <!-- belly -->
-      <ellipse cx="32" cy="50" rx="14" ry="5" fill="#ccd66a"/>
-      <!-- eyes -->
-      <circle cx="22" cy="22" r="9" fill="#fff" stroke="#1a3010" stroke-width="2"/>
-      <circle cx="42" cy="22" r="9" fill="#fff" stroke="#1a3010" stroke-width="2"/>
-      <circle cx="22" cy="24" r="4" fill="#1a1a1a"/>
-      <circle cx="42" cy="24" r="4" fill="#1a1a1a"/>
-      <circle cx="20" cy="22" r="1.5" fill="#fff"/>
-      <circle cx="40" cy="22" r="1.5" fill="#fff"/>
-      <!-- mouth -->
-      <path d="M14 42 Q32 50 50 42" stroke="#3a2010" stroke-width="3" fill="none" stroke-linecap="round"/>
-      <!-- top hat hint -->
-      <ellipse cx="32" cy="14" rx="10" ry="2" fill="#141416"/>
-      <rect x="26" y="2" width="12" height="12" fill="#141416"/>
-      <rect x="26" y="11" width="12" height="3" fill="#c0392b"/>
+      <ellipse cx="32" cy="60" rx="23" ry="3.5" fill="#000" opacity="0.35"/>
+      <!-- pattes -->
+      <ellipse cx="11" cy="50" rx="7" ry="3.4" fill="#33602a"/>
+      <ellipse cx="53" cy="50" rx="7" ry="3.4" fill="#33602a"/>
+      <!-- corps -->
+      <ellipse cx="32" cy="42" rx="23" ry="15" fill="url(#craB)" stroke="#16300d" stroke-width="2"/>
+      <ellipse cx="32" cy="51" rx="15" ry="5.5" fill="#cfdc73"/>
+      <!-- gros yeux globuleux -->
+      <circle cx="21" cy="22" r="10" fill="#f4f7ea" stroke="#16300d" stroke-width="2"/>
+      <circle cx="43" cy="22" r="10" fill="#f4f7ea" stroke="#16300d" stroke-width="2"/>
+      <circle cx="22" cy="24" r="4.4" fill="#16140f"/>
+      <circle cx="42" cy="24" r="4.4" fill="#16140f"/>
+      <circle cx="20" cy="21" r="1.8" fill="#fff"/>
+      <circle cx="40" cy="21" r="1.8" fill="#fff"/>
+      <!-- bouche large -->
+      <path d="M14 41 Q32 53 50 41" stroke="#22130a" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+      <!-- haut-de-forme du chef -->
+      <ellipse cx="32" cy="13" rx="11" ry="2.4" fill="#141416"/>
+      <rect x="25.5" y="1" width="13" height="12" rx="1" fill="#1c1c1f"/>
+      <rect x="25.5" y="9.5" width="13" height="3.2" fill="#c0392b"/>
     </svg>`,
   },
   {
     id: 'chafer',
     name: 'Patrouille de Chafers',
-    desc: '3 Chafers + 1 Chafer Royal. Fantassins squelettes au corps a corps.',
+    desc: '3 Chafers + 1 Chafer Royal. Fantassins squelettes disciplines.',
     available: true,
+    homeMap: 'cimetiere',
     icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="32" cy="60" rx="22" ry="3" fill="#000" opacity="0.4"/>
-      <!-- cage thoracique -->
-      <rect x="26" y="30" width="12" height="20" rx="2" fill="#e9e3cf" stroke="#8a8268" stroke-width="1.5"/>
-      <line x1="26" y1="36" x2="38" y2="36" stroke="#8a8268" stroke-width="1.5"/>
-      <line x1="26" y1="42" x2="38" y2="42" stroke="#8a8268" stroke-width="1.5"/>
-      <!-- crane -->
-      <circle cx="32" cy="20" r="11" fill="#e9e3cf" stroke="#8a8268" stroke-width="1.5"/>
-      <ellipse cx="27" cy="20" rx="3" ry="4" fill="#6fe6ff"/>
-      <ellipse cx="37" cy="20" rx="3" ry="4" fill="#6fe6ff"/>
-      <rect x="27" y="27" width="10" height="4" fill="#b8ad8e"/>
-      <!-- casque a pointe -->
-      <path d="M21 16 Q21 6 32 5 Q43 6 43 16 Z" fill="#3a4046" stroke="#23272c" stroke-width="1.5"/>
-      <polygon points="30 5, 34 5, 32 -3" fill="#23272c"/>
+      <ellipse cx="32" cy="60" rx="20" ry="3.5" fill="#000" opacity="0.35"/>
       <!-- lance -->
-      <line x1="48" y1="54" x2="44" y2="8" stroke="#b8ad8e" stroke-width="2.5"/>
-      <polygon points="44 8, 41 14, 47 14" fill="#e9e3cf"/>
+      <line x1="50" y1="58" x2="45" y2="6" stroke="#9c8f6e" stroke-width="3" stroke-linecap="round"/>
+      <polygon points="45 6, 41 15, 49 15" fill="#eee6cf" stroke="#8a8268" stroke-width="1.2"/>
+      <!-- cage thoracique -->
+      <path d="M24 28 Q24 50 32 52 Q40 50 40 28 Z" fill="#ece5cf" stroke="#8a8268" stroke-width="1.6"/>
+      <path d="M25 33 H39 M25 39 H39 M26 45 H38" stroke="#8a8268" stroke-width="1.6"/>
+      <!-- epaulieres -->
+      <circle cx="22" cy="29" r="5" fill="#3a4046" stroke="#23272c" stroke-width="1.4"/>
+      <circle cx="42" cy="29" r="5" fill="#3a4046" stroke="#23272c" stroke-width="1.4"/>
+      <!-- crane -->
+      <circle cx="32" cy="19" r="12" fill="#ece5cf" stroke="#8a8268" stroke-width="1.6"/>
+      <ellipse cx="27" cy="20" rx="3.4" ry="4.4" fill="#6fe6ff"/>
+      <ellipse cx="37" cy="20" rx="3.4" ry="4.4" fill="#6fe6ff"/>
+      <ellipse cx="27" cy="20" rx="5.5" ry="6.5" fill="#6fe6ff" opacity="0.25"/>
+      <ellipse cx="37" cy="20" rx="5.5" ry="6.5" fill="#6fe6ff" opacity="0.25"/>
+      <path d="M27 27 H37 M29 27 V31 M32 27 V31 M35 27 V31" stroke="#b8ad8e" stroke-width="1.5"/>
+      <!-- casque a pointe -->
+      <path d="M20 15 Q20 3 32 3 Q44 3 44 15 Q38 9 32 9 Q26 9 20 15 Z" fill="#3a4046" stroke="#23272c" stroke-width="1.6"/>
+      <polygon points="30 3, 34 3, 32 -5" fill="#23272c"/>
     </svg>`,
   },
   {
@@ -272,25 +294,34 @@ const COMBAT_OPTIONS = [
     name: 'Volee de Tofus',
     desc: '3 Tofus + 1 Tofu Royal. Oiseaux rapides et impulsifs.',
     available: true,
+    homeMap: 'falaise',
     icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="32" cy="60" rx="20" ry="3" fill="#000" opacity="0.4"/>
-      <ellipse cx="22" cy="52" rx="4" ry="2" fill="#d9762a"/>
-      <ellipse cx="42" cy="52" rx="4" ry="2" fill="#d9762a"/>
-      <!-- corps rond -->
-      <circle cx="32" cy="34" r="20" fill="#f2c93a" stroke="#b8841a" stroke-width="2"/>
-      <ellipse cx="32" cy="40" rx="11" ry="9" fill="#fde89a"/>
+      <defs>
+        <radialGradient id="tofB" cx="42%" cy="32%" r="72%">
+          <stop offset="0" stop-color="#fce886"/><stop offset="1" stop-color="#e0ad21"/>
+        </radialGradient>
+      </defs>
+      <ellipse cx="32" cy="60" rx="20" ry="3.5" fill="#000" opacity="0.35"/>
+      <!-- pattes -->
+      <path d="M24 52 v6 M21 58 h6 M40 52 v6 M37 58 h6" stroke="#d9762a" stroke-width="2.4" stroke-linecap="round"/>
       <!-- ailes -->
-      <ellipse cx="12" cy="36" rx="6" ry="11" fill="#d9a324"/>
-      <ellipse cx="52" cy="36" rx="6" ry="11" fill="#d9a324"/>
+      <ellipse cx="11" cy="36" rx="7" ry="13" fill="#d29a22"/>
+      <ellipse cx="53" cy="36" rx="7" ry="13" fill="#d29a22"/>
+      <!-- corps rond -->
+      <circle cx="32" cy="34" r="21" fill="url(#tofB)" stroke="#a8781a" stroke-width="2"/>
+      <ellipse cx="32" cy="41" rx="12" ry="10" fill="#fdeea6"/>
       <!-- touffe -->
-      <polygon points="26 15, 32 2, 38 15" fill="#d9a324"/>
+      <path d="M25 14 Q28 1 31 13 M31 13 Q33 -1 36 13 M36 13 Q39 3 40 16" fill="none" stroke="#d29a22" stroke-width="3.2" stroke-linecap="round"/>
       <!-- yeux geants -->
-      <circle cx="24" cy="30" r="8" fill="#fff" stroke="#b8841a" stroke-width="1.5"/>
-      <circle cx="40" cy="30" r="8" fill="#fff" stroke="#b8841a" stroke-width="1.5"/>
-      <circle cx="25" cy="32" r="4" fill="#1a1a22"/>
-      <circle cx="39" cy="32" r="4" fill="#1a1a22"/>
+      <circle cx="24" cy="31" r="8.5" fill="#fff" stroke="#a8781a" stroke-width="1.5"/>
+      <circle cx="40" cy="31" r="8.5" fill="#fff" stroke="#a8781a" stroke-width="1.5"/>
+      <circle cx="25" cy="33" r="4.4" fill="#1a1a22"/>
+      <circle cx="39" cy="33" r="4.4" fill="#1a1a22"/>
+      <circle cx="27" cy="31" r="1.6" fill="#fff"/>
+      <circle cx="41" cy="31" r="1.6" fill="#fff"/>
       <!-- bec -->
-      <polygon points="32 38, 26 44, 38 44" fill="#e8762a" stroke="#a8551a" stroke-width="1"/>
+      <polygon points="32 37, 25 44, 39 44" fill="#ec7d2a" stroke="#a8551a" stroke-width="1.2"/>
+      <line x1="25" y1="44" x2="39" y2="44" stroke="#a8551a" stroke-width="1.2"/>
     </svg>`,
   },
   {
@@ -298,22 +329,29 @@ const COMBAT_OPTIONS = [
     name: 'Colonie de Champignons',
     desc: '3 Champignons + 1 Champignon Royal. Empoisonnent a distance.',
     available: true,
+    homeMap: 'marais',
     icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <ellipse cx="32" cy="60" rx="20" ry="3" fill="#000" opacity="0.4"/>
+      <defs>
+        <radialGradient id="chaC" cx="44%" cy="26%" r="78%">
+          <stop offset="0" stop-color="#b04f44"/><stop offset="1" stop-color="#5f241f"/>
+        </radialGradient>
+      </defs>
+      <ellipse cx="32" cy="60" rx="20" ry="3.5" fill="#000" opacity="0.35"/>
+      <!-- spores qui flottent -->
+      <circle cx="11" cy="15" r="3" fill="#9be86a" opacity="0.9"/>
+      <circle cx="53" cy="12" r="2.4" fill="#9be86a" opacity="0.9"/>
+      <circle cx="49" cy="5" r="1.6" fill="#9be86a" opacity="0.85"/>
       <!-- pied -->
-      <path d="M22 56 L24 32 L40 32 L42 56 Z" fill="#e6dcc0" stroke="#b0a684" stroke-width="2"/>
-      <ellipse cx="32" cy="40" rx="9" ry="3" fill="#c9a98c"/>
-      <circle cx="28" cy="46" r="2" fill="#1a1a22"/>
-      <circle cx="36" cy="46" r="2" fill="#1a1a22"/>
-      <!-- chapeau -->
-      <path d="M8 34 Q32 2 56 34 Z" fill="#8e3b34" stroke="#5a221e" stroke-width="2"/>
-      <ellipse cx="20" cy="26" rx="4" ry="2.5" fill="#f3ead2"/>
-      <ellipse cx="34" cy="18" rx="4.5" ry="3" fill="#f3ead2"/>
-      <ellipse cx="44" cy="27" rx="3.5" ry="2.5" fill="#f3ead2"/>
-      <!-- spores -->
-      <circle cx="12" cy="14" r="2.5" fill="#9be86a"/>
-      <circle cx="52" cy="12" r="2" fill="#9be86a"/>
-      <circle cx="48" cy="6" r="1.5" fill="#9be86a"/>
+      <path d="M23 56 Q24 34 32 33 Q40 34 41 56 Z" fill="#ece1c4" stroke="#aa9f7c" stroke-width="2"/>
+      <ellipse cx="32" cy="38" rx="9.5" ry="3.4" fill="#c8a98a"/>
+      <circle cx="28" cy="45" r="2.3" fill="#16140f"/>
+      <circle cx="36" cy="45" r="2.3" fill="#16140f"/>
+      <path d="M29 50 Q32 53 35 50" stroke="#16140f" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+      <!-- chapeau bombe -->
+      <path d="M6 35 Q32 0 58 35 Q32 41 6 35 Z" fill="url(#chaC)" stroke="#4a1c18" stroke-width="2"/>
+      <ellipse cx="19" cy="27" rx="4.6" ry="3" fill="#f3ead2"/>
+      <ellipse cx="34" cy="17" rx="5.4" ry="3.4" fill="#f3ead2"/>
+      <ellipse cx="45" cy="28" rx="4" ry="2.6" fill="#f3ead2"/>
     </svg>`,
   },
 ];
@@ -439,6 +477,12 @@ export class Menu {
       combatId: 'bouftou',
       mapId: 'foret',
     };
+    this.step = 0; // 0 = classe, 1 = combat, 2 = carte
+    this.steps = [
+      { key: 'classId', title: 'Choisis ton heros', options: CLASS_OPTIONS },
+      { key: 'combatId', title: 'Choisis ton combat', options: COMBAT_OPTIONS },
+      { key: 'mapId', title: 'Choisis ton terrain', options: MAP_OPTIONS },
+    ];
     this.build();
   }
 
@@ -449,9 +493,9 @@ export class Menu {
         position: fixed; inset: 0;
         z-index: 60;
         display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        padding: 24px;
-        background: linear-gradient(180deg, #1a1f10 0%, #0a1006 100%);
+        align-items: center; justify-content: flex-start;
+        padding: 20px 16px;
+        background: radial-gradient(circle at 50% 18%, #2a3320 0%, #11160a 60%, #060903 100%);
         color: #fff;
         font-family: "Trebuchet MS", "Helvetica Neue", sans-serif;
         overflow: auto;
@@ -459,90 +503,142 @@ export class Menu {
       #menu-root .menu-title {
         font-size: 44px; font-weight: bold;
         color: #f1c40f;
-        text-shadow: 0 2px 10px rgba(0,0,0,0.6);
-        letter-spacing: 4px;
-        margin-bottom: 6px;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.7);
+        letter-spacing: 5px;
+        margin: 8px 0 4px;
       }
       #menu-root .menu-subtitle {
-        font-size: 14px; color: #cccccc;
-        font-style: italic; margin-bottom: 22px;
+        font-size: 14px; color: #d6d6c4;
+        margin-bottom: 14px; text-align: center;
       }
-      #menu-root .menu-step {
-        background: rgba(255,255,255,0.04);
+      #menu-root .menu-prog {
+        display: inline-flex; align-items: center; gap: 4px;
+        background: rgba(0,0,0,0.4); border: 1px solid #444a66;
+        border-radius: 20px; padding: 2px 12px; margin-left: 8px;
+        font-weight: bold; color: #fff;
+      }
+      #menu-root .menu-prog svg { vertical-align: middle; }
+
+      /* Indicateur d etapes */
+      #menu-root .menu-steps {
+        display: flex; gap: 14px; align-items: center;
+        margin-bottom: 16px;
+      }
+      #menu-root .menu-stepitem {
+        display: flex; align-items: center; gap: 7px;
+        font-size: 12px; letter-spacing: 1px; color: #7a8092;
+        text-transform: uppercase;
+      }
+      #menu-root .menu-stepitem.active { color: #f1c40f; font-weight: bold; }
+      #menu-root .menu-stepitem.done { color: #2ecc71; }
+      #menu-root .menu-dot {
+        width: 22px; height: 22px; border-radius: 50%;
+        background: #2a2f42; border: 2px solid #444a66;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 12px; font-weight: bold; color: #7a8092;
+      }
+      #menu-root .menu-stepitem.active .menu-dot {
+        background: #f1c40f; border-color: #f1c40f; color: #14182a;
+        box-shadow: 0 0 10px rgba(241,196,15,0.6);
+      }
+      #menu-root .menu-stepitem.done .menu-dot {
+        background: #2ecc71; border-color: #2ecc71; color: #0c2a16;
+      }
+
+      /* Scene de selection */
+      #menu-root .menu-stage {
+        width: min(880px, 96vw);
+        background: rgba(255,255,255,0.035);
         border: 2px solid #444a66;
-        border-radius: 14px;
-        padding: 12px 16px;
+        border-radius: 16px;
+        padding: 16px;
         margin-bottom: 14px;
-        width: min(820px, 92vw);
       }
-      #menu-root .menu-step h2 {
-        margin: 0 0 10px 0;
-        font-size: 16px; color: #f1c40f;
+      #menu-root .menu-stage-title {
+        font-size: 17px; color: #f1c40f; font-weight: bold;
         text-transform: uppercase; letter-spacing: 2px;
+        margin-bottom: 12px; text-align: center;
       }
       #menu-root .menu-options {
-        display: flex; flex-wrap: wrap; gap: 10px;
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+        gap: 10px;
       }
       #menu-root .menu-option {
         position: relative;
-        background: #1a1f2c;
+        background: linear-gradient(180deg, #1f2536 0%, #161a28 100%);
         border: 2px solid #444a66;
-        border-radius: 10px;
-        padding: 10px;
-        min-width: 180px;
+        border-radius: 12px;
+        padding: 12px;
         cursor: pointer;
         color: #fff;
         font-family: inherit;
         text-align: left;
         transition: transform 0.1s, border-color 0.15s, box-shadow 0.15s;
+        overflow: hidden;
       }
       #menu-root .menu-option:hover:not(:disabled) {
         border-color: #f1c40f;
-        transform: translateY(-2px);
+        transform: translateY(-3px);
       }
       #menu-root .menu-option.selected {
         border-color: #f1c40f;
-        box-shadow: 0 0 14px rgba(241, 196, 15, 0.45);
+        box-shadow: 0 0 16px rgba(241, 196, 15, 0.5);
+        background: linear-gradient(180deg, #2c3043 0%, #1d2233 100%);
       }
-      #menu-root .menu-option:disabled {
-        opacity: 0.4; cursor: not-allowed;
-      }
+      #menu-root .menu-option:disabled { opacity: 0.4; cursor: not-allowed; }
       #menu-root .menu-option .icon {
-        width: 64px; height: 64px;
+        width: 66px; height: 66px;
         margin-right: 12px;
         float: left;
       }
       #menu-root .menu-option .icon svg { width: 100%; height: 100%; }
       #menu-root .menu-option .opt-name {
-        font-size: 16px; font-weight: bold;
-        color: #f1c40f;
+        font-size: 16px; font-weight: bold; color: #f1c40f;
+        padding-right: 30px;
       }
       #menu-root .menu-option .opt-desc {
-        font-size: 12px; color: #cccccc; margin-top: 2px;
+        font-size: 12px; color: #c7c7bd; margin-top: 3px;
       }
       #menu-root .menu-option .opt-soon {
-        position: absolute; top: 4px; right: 6px;
-        font-size: 9px; color: #888;
-        text-transform: uppercase;
+        position: absolute; bottom: 4px; right: 8px;
+        font-size: 9px; color: #888; text-transform: uppercase;
       }
-      #menu-root #btn-start {
-        margin-top: 16px;
-        padding: 14px 56px;
-        font-size: 22px; font-weight: bold;
-        font-family: inherit;
-        background: linear-gradient(180deg, #2ecc71 0%, #145a32 100%);
-        color: #fff;
-        border: 3px solid #145a32;
-        border-radius: 14px;
-        cursor: pointer;
-        letter-spacing: 4px;
-        box-shadow: 0 6px 24px rgba(0,0,0,0.5);
-        transition: transform 0.1s;
+      #menu-root .menu-option .opt-star {
+        position: absolute; top: 6px; right: 6px;
+        width: 30px; height: 30px;
+        filter: drop-shadow(0 1px 3px rgba(0,0,0,0.7));
       }
-      #menu-root #btn-start:hover { transform: scale(1.04); }
+      #menu-root .menu-option .opt-star.gold { animation: starGlow 1.6s ease-in-out infinite; }
+      @keyframes starGlow {
+        0%,100% { filter: drop-shadow(0 0 1px rgba(246,200,62,0.4)); }
+        50% { filter: drop-shadow(0 0 7px rgba(246,200,62,0.9)); }
+      }
+      #menu-root .menu-option .opt-startag {
+        position: absolute; bottom: 6px; right: 8px;
+        font-size: 9px; font-weight: bold; letter-spacing: 0.5px;
+      }
 
-      /* Infobulle des options : description complete au survol souris
-         ou au long-press tactile. */
+      /* Barre de navigation */
+      #menu-root .menu-nav {
+        display: flex; gap: 16px; align-items: center;
+      }
+      #menu-root .menu-navbtn {
+        padding: 13px 34px; font-size: 16px; font-weight: bold;
+        font-family: inherit; letter-spacing: 1px;
+        background: #2c3548; border: 2px solid #6a7090; color: #fff;
+        border-radius: 12px; cursor: pointer;
+        transition: transform 0.1s, background 0.15s;
+      }
+      #menu-root .menu-navbtn:hover { transform: scale(1.04); }
+      #menu-root .menu-navbtn.primary { background: #3a4a8a; border-color: #6678c4; }
+      #menu-root .menu-navbtn.fight {
+        background: linear-gradient(180deg, #2ecc71 0%, #145a32 100%);
+        border-color: #145a32; letter-spacing: 3px; font-size: 18px;
+        padding: 13px 46px;
+      }
+
+      /* Infobulle des options */
       .menu-tooltip {
         position: fixed;
         background: rgba(8, 10, 18, 0.96);
@@ -552,7 +648,7 @@ export class Menu {
         padding: 8px 12px;
         font-family: "Trebuchet MS", sans-serif;
         font-size: 13px;
-        max-width: 240px;
+        max-width: 250px;
         pointer-events: none;
         z-index: 70;
         box-shadow: 0 8px 24px rgba(0,0,0,0.6);
@@ -566,42 +662,34 @@ export class Menu {
       /* ---- ADAPTATIONS MOBILE / TACTILE ---- */
       @media (pointer: coarse), (max-width: 768px) {
         #menu-root { padding: 12px 6px; overflow-x: hidden; }
-        #menu-root .menu-title { font-size: 28px; letter-spacing: 2px; margin-bottom: 2px; }
-        #menu-root .menu-subtitle { font-size: 12px; margin-bottom: 12px; }
-        #menu-root .menu-step {
-          width: 100%; box-sizing: border-box;
-          padding: 8px 10px; margin-bottom: 8px;
+        #menu-root .menu-title { font-size: 28px; letter-spacing: 3px; margin: 2px 0; }
+        #menu-root .menu-subtitle { font-size: 11px; margin-bottom: 10px; }
+        #menu-root .menu-steps { gap: 8px; margin-bottom: 10px; }
+        #menu-root .menu-stepitem { font-size: 0; gap: 0; }
+        #menu-root .menu-dot { width: 26px; height: 26px; font-size: 13px; }
+        #menu-root .menu-stage {
+          width: 100%; box-sizing: border-box; padding: 10px;
         }
-        #menu-root .menu-step h2 {
-          font-size: 13px; margin-bottom: 6px; letter-spacing: 1px;
-        }
+        #menu-root .menu-stage-title { font-size: 14px; margin-bottom: 8px; }
         #menu-root .menu-options {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(88px, 1fr));
-          gap: 6px;
+          grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+          gap: 7px;
         }
         #menu-root .menu-option {
-          min-width: 0; aspect-ratio: 1 / 1;
-          padding: 6px 4px;
+          aspect-ratio: 1 / 1; padding: 6px 4px;
           text-align: center;
           display: flex; flex-direction: column;
           align-items: center; justify-content: center;
         }
         #menu-root .menu-option .icon {
-          width: 56px; height: 56px;
-          margin: 0 0 4px 0; float: none;
+          width: 54px; height: 54px; margin: 0 0 3px 0; float: none;
         }
-        #menu-root .menu-option .opt-name {
-          font-size: 12px; line-height: 1.15;
-        }
+        #menu-root .menu-option .opt-name { font-size: 11px; line-height: 1.1; padding: 0; }
         #menu-root .menu-option .opt-desc { display: none; }
-        #menu-root .menu-option .opt-soon {
-          font-size: 8px; top: 2px; right: 4px;
-        }
-        #menu-root #btn-start {
-          margin-top: 8px; padding: 12px 40px;
-          font-size: 18px; letter-spacing: 2px; border-width: 2px;
-        }
+        #menu-root .menu-option .opt-star { width: 22px; height: 22px; top: 2px; right: 2px; }
+        #menu-root .menu-option .opt-startag { display: none; }
+        #menu-root .menu-navbtn { padding: 11px 22px; font-size: 14px; }
+        #menu-root .menu-navbtn.fight { padding: 11px 30px; font-size: 16px; }
       }
     `;
     document.head.appendChild(css);
@@ -610,45 +698,140 @@ export class Menu {
     root.id = 'menu-root';
     root.innerHTML = `
       <div class="menu-title">DOFUS 3D</div>
-      <div class="menu-subtitle">Choisis ta classe, ton combat et ta carte</div>
-      ${this.renderStep('Classe', 'classId', CLASS_OPTIONS)}
-      ${this.renderStep('Combat', 'combatId', COMBAT_OPTIONS)}
-      ${this.renderStep('Carte', 'mapId', MAP_OPTIONS)}
-      <button id="btn-start">COMBATTRE</button>
+      <div class="menu-subtitle" id="menu-sub"></div>
+      <div class="menu-steps" id="menu-steps"></div>
+      <div class="menu-stage" id="menu-stage"></div>
+      <div class="menu-nav">
+        <button class="menu-navbtn" id="menu-back">Retour</button>
+        <button class="menu-navbtn primary" id="menu-next">Suivant</button>
+      </div>
     `;
     document.body.appendChild(root);
     this.root = root;
+    this.subEl = root.querySelector('#menu-sub');
+    this.stepsEl = root.querySelector('#menu-steps');
+    this.stageEl = root.querySelector('#menu-stage');
+    this.backBtn = root.querySelector('#menu-back');
+    this.nextBtn = root.querySelector('#menu-next');
 
-    // Tooltip : un seul element reutilise pour toutes les options.
     const tip = document.createElement('div');
     tip.className = 'menu-tooltip';
     document.body.appendChild(tip);
     this.tooltipEl = tip;
 
-    // Click + hover (souris) + long-press (tactile).
-    root.querySelectorAll('.menu-option').forEach(btn => {
+    this.backBtn.addEventListener('click', () => this.goBack());
+    this.nextBtn.addEventListener('click', () => this.goNext());
+
+    this.renderStage();
+  }
+
+  // Bilan global des etoiles (toutes classes x tous combats).
+  globalProgress() {
+    let gold = 0, silver = 0;
+    for (const cls of CLASS_OPTIONS) {
+      for (const cmb of COMBAT_OPTIONS) {
+        const s = getStar(cls.id, cmb.id);
+        if (s === 'gold') gold++;
+        else if (s === 'silver') silver++;
+      }
+    }
+    return { gold, silver, total: CLASS_OPTIONS.length * COMBAT_OPTIONS.length };
+  }
+
+  goNext() {
+    if (this.step < 2) {
+      // En passant a l etape "terrain", on propose par defaut la carte
+      // maison du monstre choisi (bonus etoile d or).
+      if (this.step === 1) {
+        const combat = COMBAT_OPTIONS.find(c => c.id === this.selection.combatId);
+        if (combat && combat.homeMap) this.selection.mapId = combat.homeMap;
+      }
+      this.step++;
+      this.renderStage();
+    } else {
+      this.hideOptionTooltip();
+      this.onStart && this.onStart({ ...this.selection });
+    }
+  }
+
+  goBack() {
+    if (this.step > 0) {
+      this.step--;
+      this.renderStage();
+    }
+  }
+
+  // (Re)dessine l etape courante.
+  renderStage() {
+    const step = this.steps[this.step];
+    const prog = this.globalProgress();
+
+    this.subEl.innerHTML = `Selection guidee &mdash; etape ${this.step + 1} sur 3
+      <span class="menu-prog">${starSvg('gold', 16)}${prog.gold}
+        &nbsp;${starSvg('silver', 16)}${prog.silver}
+        &nbsp;<span style="color:#9aa">/ ${prog.total}</span></span>`;
+
+    this.stepsEl.innerHTML = this.steps.map((s, i) => {
+      const cls = i === this.step ? 'active' : (i < this.step ? 'done' : '');
+      const labels = ['Heros', 'Combat', 'Terrain'];
+      return `<div class="menu-stepitem ${cls}">
+        <div class="menu-dot">${i < this.step ? '&#10003;' : (i + 1)}</div>${labels[i]}</div>`;
+    }).join('');
+
+    this.stageEl.innerHTML = `
+      <div class="menu-stage-title">${step.title}</div>
+      <div class="menu-options">
+        ${step.options.map(o => this.renderOption(step.key, o)).join('')}
+      </div>
+    `;
+    this.wireOptions();
+
+    this.backBtn.style.visibility = this.step === 0 ? 'hidden' : 'visible';
+    this.nextBtn.textContent = this.step === 2 ? 'COMBATTRE' : 'Suivant';
+    this.nextBtn.classList.toggle('fight', this.step === 2);
+    this.nextBtn.classList.toggle('primary', this.step !== 2);
+  }
+
+  renderOption(key, o) {
+    const selected = o.id === this.selection[key] ? 'selected' : '';
+    let badge = '';
+    if (key === 'combatId') {
+      // Etoile de progression : meilleure obtenue avec le heros choisi.
+      const star = getStar(this.selection.classId, o.id);
+      badge = `<div class="opt-star ${star || ''}">${starSvg(star || 'empty', 30)}</div>`;
+    } else if (key === 'mapId') {
+      // Etoile indicative : or sur la carte maison du monstre choisi.
+      const combat = COMBAT_OPTIONS.find(c => c.id === this.selection.combatId);
+      const home = !!(combat && combat.homeMap === o.id);
+      badge = `<div class="opt-star ${home ? 'gold' : ''}">${starSvg(home ? 'gold' : 'silver', 30)}</div>
+        <div class="opt-startag" style="color:${home ? '#f6c83e' : '#cfd8dd'}">${home ? 'BONUS OR' : 'bonus argent'}</div>`;
+    }
+    return `
+      <button class="menu-option ${selected}" data-key="${key}" data-value="${o.id}"
+              ${o.available ? '' : 'disabled'}>
+        ${badge}
+        <div class="icon">${o.icon}</div>
+        <div class="opt-name">${o.name}</div>
+        <div class="opt-desc">${o.desc}</div>
+        ${o.available ? '' : '<div class="opt-soon">bientot</div>'}
+      </button>
+    `;
+  }
+
+  wireOptions() {
+    this.stageEl.querySelectorAll('.menu-option').forEach(btn => {
       let lpTimer = null;
       let lpFired = false;
 
       btn.addEventListener('click', (e) => {
-        if (lpFired) {
-          // Le long-press a ete utilise pour afficher l infobulle :
-          // on ne selectionne PAS l option dans ce cas (l utilisateur
-          // demandait juste l info).
-          lpFired = false;
-          e.preventDefault();
-          return;
-        }
+        if (lpFired) { lpFired = false; e.preventDefault(); return; }
         if (btn.disabled) return;
         const key = btn.dataset.key;
-        const value = btn.dataset.value;
-        this.selection[key] = value;
-        root.querySelectorAll(`.menu-option[data-key="${key}"]`).forEach(b => {
-          b.classList.toggle('selected', b.dataset.value === value);
+        this.selection[key] = btn.dataset.value;
+        this.stageEl.querySelectorAll('.menu-option').forEach(b => {
+          b.classList.toggle('selected', b.dataset.value === btn.dataset.value);
         });
       });
-
-      // Souris : hover -> infobulle immediate.
       btn.addEventListener('pointerenter', (e) => {
         if (e.pointerType !== 'mouse') return;
         this.showOptionTooltip(btn);
@@ -657,38 +840,22 @@ export class Menu {
         if (e.pointerType !== 'mouse') return;
         this.hideOptionTooltip();
       });
-
-      // Tactile : long-press 450ms.
       btn.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'mouse') return;
         lpFired = false;
         clearTimeout(lpTimer);
-        lpTimer = setTimeout(() => {
-          lpFired = true;
-          this.showOptionTooltip(btn);
-        }, 450);
+        lpTimer = setTimeout(() => { lpFired = true; this.showOptionTooltip(btn); }, 450);
       });
-      const cancelLongPress = () => { clearTimeout(lpTimer); lpTimer = null; };
+      const cancelLp = () => { clearTimeout(lpTimer); lpTimer = null; };
       btn.addEventListener('pointermove', (e) => {
-        if (e.pointerType === 'mouse') return;
-        cancelLongPress();
+        if (e.pointerType !== 'mouse') cancelLp();
       });
-      btn.addEventListener('pointercancel', () => {
-        cancelLongPress();
-        if (lpFired) this.hideOptionTooltip();
-      });
+      btn.addEventListener('pointercancel', () => { cancelLp(); if (lpFired) this.hideOptionTooltip(); });
       btn.addEventListener('pointerup', (e) => {
         if (e.pointerType === 'mouse') return;
-        cancelLongPress();
-        if (lpFired) {
-          // Laisse le tooltip un peu visible avant de le masquer.
-          setTimeout(() => this.hideOptionTooltip(), 1500);
-        }
+        cancelLp();
+        if (lpFired) setTimeout(() => this.hideOptionTooltip(), 1500);
       });
-    });
-
-    root.querySelector('#btn-start').addEventListener('click', () => {
-      this.onStart && this.onStart({ ...this.selection });
     });
   }
 
@@ -721,33 +888,18 @@ export class Menu {
     if (this.tooltipEl) this.tooltipEl.classList.remove('show');
   }
 
-  renderStep(title, key, options) {
-    return `
-      <div class="menu-step">
-        <h2>${title}</h2>
-        <div class="menu-options">
-          ${options.map(o => `
-            <button class="menu-option ${o.id === this.selection[key] ? 'selected' : ''}"
-                    data-key="${key}" data-value="${o.id}"
-                    ${o.available ? '' : 'disabled'}>
-              <div class="icon">${o.icon}</div>
-              <div class="opt-name">${o.name}</div>
-              <div class="opt-desc">${o.desc}</div>
-              ${o.available ? '' : '<div class="opt-soon">bientot</div>'}
-            </button>
-          `).join('')}
-        </div>
-      </div>
-    `;
-  }
-
   show() {
     if (!this.root) return;
+    // On revient toujours a la 1re etape et on rafraichit les etoiles
+    // (la progression a pu changer apres un combat).
+    this.step = 0;
+    this.renderStage();
     this.root.style.display = 'flex';
   }
 
   hide() {
     if (!this.root) return;
+    this.hideOptionTooltip();
     this.root.style.display = 'none';
   }
 }
