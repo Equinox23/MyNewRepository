@@ -8,6 +8,7 @@ import { buildCrapaud } from './models/crapaud.js';
 import { buildCrapaudChef } from './models/crapaudChef.js';
 import { buildRoublard } from './models/roublard.js';
 import { buildBombeRoublard } from './models/bombeRoublard.js';
+import { buildDragounetRouge } from './models/dragounetRouge.js';
 import { buildXelor } from './models/xelor.js';
 import { buildEcaflip } from './models/ecaflip.js';
 import { buildChafer } from './models/chafer.js';
@@ -30,6 +31,7 @@ const BUILDERS = {
   crapaud: buildCrapaud,
   crapaudChef: buildCrapaudChef,
   bombeRoublard: buildBombeRoublard,
+  dragounetRouge: buildDragounetRouge,
   chafer: buildChafer,
   chaferRoyal: buildChaferRoyal,
   tofu: buildTofu,
@@ -50,6 +52,7 @@ const HP_BAR_Y = {
   crapaud: 1.10,
   crapaudChef: 1.80,
   bombeRoublard: 1.20,
+  dragounetRouge: 1.40,
   chafer: 1.60,
   chaferRoyal: 2.30,
   tofu: 1.05,

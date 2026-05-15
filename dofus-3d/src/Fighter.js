@@ -14,7 +14,7 @@ export const DEFS = {
     name: 'Osamodas',
     role: 'Invocateur',
     hp: 100, pa: 8, pm: 4, initiative: 11,
-    spellIds: ['invocationCraqueleur', 'piqureMotivante', 'protectionCraqueleur', 'soinInvocation'],
+    spellIds: ['invocationCraqueleur', 'invocationDragounet', 'piqureMotivante', 'protectionCraqueleur', 'soinInvocation'],
   },
   roublard: {
     name: 'Roublard',
@@ -55,7 +55,14 @@ export const DEFS = {
     role: 'Invocation',
     hp: 80, pa: 6, pm: 3, initiative: 8,
     spellIds: ['frappeCraqueleur', 'lancerRocher'],
-    ai: 'aggressive',
+    ai: 'craqueleur',
+  },
+  dragounetRouge: {
+    name: 'Dragounet Rouge',
+    role: 'Invocation',
+    hp: 70, pa: 8, pm: 4, initiative: 8,
+    spellIds: ['dragoflamme', 'dragosoin'],
+    ai: 'dragounet',
   },
   crapaud: {
     name: 'Crapaud',

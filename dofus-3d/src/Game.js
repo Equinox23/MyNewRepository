@@ -1071,6 +1071,8 @@ export class Game {
       tofuRoyal: () => this.runTofuRoyal(ai),
       champignon: () => this.runChampignon(ai),
       champignonRoyal: () => this.runChampignonRoyal(ai),
+      craqueleur: () => this.runCraqueleur(ai),
+      dragounet: () => this.runDragounet(ai),
     };
     const fn = dispatch[profile] || dispatch.aggressive;
     await fn();
@@ -1209,6 +1211,75 @@ export class Game {
     await this.aiAttackLoop(ai, target, spells);
     if (this.ended) return;
     await this.aiRepositionTowardHero(ai, spells);
+  }
+
+  // CRAQUELEUR (invocation Osamodas) : implacable. Il se rapproche au
+  // maximum, frappe la cible la plus proche (Frappe si possible, sinon
+  // Lancer de Rocher), depense tous ses PA, et s il tue une cible il
+  // fonce vers la suivante. Il bouge tant qu il a des PM, sauf au contact.
+  async runCraqueleur(ai) {
+    const spells = this.aiAttackSpells(ai);
+    if (spells.length === 0) return;
+    let guard = 0;
+    while (ai.alive && guard++ < 40) {
+      if (this.ended) return;
+      const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
+      if (!target) return;
+      let d = this._dist(ai, target);
+      // Se rapprocher au maximum si pas deja au contact.
+      let moved = false;
+      if (d > 1 && ai.pm > 0) {
+        const from = { c: ai.c, r: ai.r };
+        await this.aiApproach(ai, target, 1);
+        if (this.ended) return;
+        moved = (ai.c !== from.c || ai.r !== from.r);
+        d = this._dist(ai, target);
+        if (moved) await this.aiPause(280);
+      }
+      // Attaquer : Frappe en priorite (portee courte), Rocher sinon.
+      const usable = this.usableSpellsOn(ai, target, spells);
+      if (usable.length === 0) {
+        // Ni attaque possible ni rapprochement utile -> on s arrete.
+        if (!moved) break;
+        if (ai.pm <= 0) break;
+        break;
+      }
+      usable.sort((a, b) => (a.range.max - b.range.max) || (spellScore(b) - spellScore(a)));
+      const spell = usable[0];
+      ai.pa -= spell.apCost;
+      if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
+      ai.character.popCost(spell.apCost, 'pa');
+      this.hud.update(ai, this.mode, this.selectedSpellId);
+      await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
+      if (this.checkEnd()) return;
+      await this.aiPause(280);
+    }
+  }
+
+  // DRAGOUNET ROUGE (invocation Osamodas) : craintif. Soigne d abord un
+  // allie blesse (Dragosoin), puis se place a ~5 cases d un ennemi,
+  // ALIGNE pour pouvoir cracher sa Dragoflamme en ligne droite.
+  async runDragounet(ai) {
+    // 1. Soutien : soigne un allie blesse si possible.
+    if (ai.spells.some(s => s.effects.some(e => e.type === 'heal' || e.type === 'heal_percent'))) {
+      const healed = await this.aiTryHeal(ai);
+      if (this.ended) return;
+      if (healed) await this.aiPause(420);
+    }
+    const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
+    if (!target) return;
+    const spells = this.aiAttackSpells(ai);
+    if (spells.length === 0) return;
+    const maxRange = spells.reduce((m, s) => Math.max(m, s.range.max), 0);
+    // 2. Positionnement : zone de confort a 5 cases, aligne (Dragoflamme).
+    if (ai.pm > 0) {
+      const moved = await this.aiPositionAtRange(ai, target, 5, maxRange, true);
+      if (this.ended) return;
+      if (moved) await this.aiPause(450);
+    }
+    if (this.ended) return;
+    // 3. Crache la Dragoflamme tant que c est possible.
+    await this.aiAttackLoop(ai, target, spells);
   }
 
   async runAggressive(ai) {
@@ -1473,9 +1544,12 @@ export class Game {
   usableSpellsOn(ai, tgt, attackSpells) {
     return attackSpells.filter(s => {
       if (s.apCost > ai.pa) return false;
-      const d = Math.abs(ai.c - tgt.c) + Math.abs(ai.r - tgt.r);
+      const dc = tgt.c - ai.c, dr = tgt.r - ai.r;
+      const d = Math.abs(dc) + Math.abs(dr);
       if (d < s.range.min || d > s.range.max) return false;
       if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, tgt.c, tgt.r, this.bombBlockers())) return false;
+      // Sort en ligne : la cible doit etre alignee orthogonalement.
+      if ((s.lineOnly || (s.area && s.area.type === 'line')) && dc !== 0 && dr !== 0) return false;
       return true;
     });
   }
@@ -1558,9 +1632,10 @@ export class Game {
     return true;
   }
 
-  // Positionne le combattant a la distance ideale de la cible (1 case
-  // de moins que max range, plancher 3), avec ligne de vue obligatoire.
-  async aiPositionAtRange(ai, target, idealDist, maxDist) {
+  // Positionne le combattant a la distance ideale de la cible.
+  // `requireLine` : la case de tir doit etre alignee orthogonalement
+  // avec la cible (pour les sorts en ligne, ex : Dragoflamme).
+  async aiPositionAtRange(ai, target, idealDist, maxDist, requireLine = false) {
     const occ = this.computeOccupied(ai);
     const blocked = (c, r) => this.map3d.isBlockedFor(c, r, ai);
     const result = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, ai.pm, blocked);
@@ -1574,6 +1649,8 @@ export class Game {
     //    et la ligne de vue est obligatoire.
     const scoreCell = (c, r, d) => {
       if (d < 1) return 1e6;
+      // Sort en ligne : une case non alignee ne sert qu a s approcher.
+      if (requireLine && c !== target.c && r !== target.r) return 5e4 + d;
       if (d > maxDist) return 1e4 + d;          // approche : minimise d
       if (!hasLOS(mapData, c, r, target.c, target.r, blockers)) return 9e5;
       return Math.abs(d - idealDist);            // tir : vise idealDist

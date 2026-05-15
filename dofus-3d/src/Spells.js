@@ -310,8 +310,11 @@ export const SPELLS = {
     apCost: 3, range: { min: 1, max: 5 }, needsLOS: true,
     target: 'ally', area: { type: 'single' },
     cooldown: 3,
-    effects: [{ type: 'buff', bonusPa: 3, bonusPm: 4, duration: 5 }],
-    desc: 'Donne +3 PA et +4 PM a une invocation alliee pendant 5 tours.',
+    effects: [
+      { type: 'buff', bonusPa: 3, bonusPm: 4, duration: 5 },
+      { type: 'buff', damageMult: 0.3, duration: 10 },
+    ],
+    desc: 'Donne +3 PA et +4 PM (5 tours) et +30% degats (10 tours) a une invocation alliee.',
   },
   protectionCraqueleur: {
     id: 'protectionCraqueleur', name: 'Protection du Craqueleur', short: 'PC', icon: ICON_SHIELD,
@@ -329,6 +332,33 @@ export const SPELLS = {
     target: 'ally', area: { type: 'single' },
     effects: [{ type: 'heal_percent', percent: 0.30 }],
     desc: 'Soigne 30% des PV max de l invocation alliee.',
+  },
+  invocationDragounet: {
+    id: 'invocationDragounet', name: 'Invocation du Dragounet Rouge', short: 'ID', icon: ICON_SUMMON,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 8, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'tile', area: { type: 'single' },
+    cooldown: 5,
+    effects: [{ type: 'summon', creatureId: 'dragounetRouge' }],
+    desc: 'Invoque un Dragounet Rouge sur une case adjacente libre.',
+  },
+
+  // ---------- DRAGOUNET ROUGE (invocation Osamodas) ----------
+  dragoflamme: {
+    id: 'dragoflamme', name: 'Dragoflamme', short: 'DF', icon: ICON_LINE,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 8 }, needsLOS: true, lineOnly: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 50, max: 60 }],
+    desc: 'Souffle enflamme en ligne droite (portee 8) : 50-60 degats.',
+  },
+  dragosoin: {
+    id: 'dragosoin', name: 'Dragosoin', short: 'DS', icon: ICON_HEAL_CROSS,
+    category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
+    apCost: 4, range: { min: 1, max: 4 }, needsLOS: true,
+    target: 'ally', area: { type: 'single' },
+    effects: [{ type: 'heal_percent', percent: 0.20 }],
+    desc: 'Soigne un allie de 20% de ses PV max. Portee 4.',
   },
 
   // ---------- BOUFTOU ----------
