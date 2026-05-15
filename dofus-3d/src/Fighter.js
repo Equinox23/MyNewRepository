@@ -20,7 +20,7 @@ export const DEFS = {
     name: 'Roublard',
     role: 'Artificier',
     hp: 100, pa: 8, pm: 4, initiative: 13,
-    spellIds: ['poserBombe', 'aimantation', 'detonationManuelle', 'bouclierBombe', 'pulsar'],
+    spellIds: ['poserBombe', 'entourloupe', 'detonationManuelle', 'bouclierBombe', 'pulsar'],
   },
   bombeRoublard: {
     name: 'Bombe',

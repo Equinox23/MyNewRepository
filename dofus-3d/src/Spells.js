@@ -160,6 +160,19 @@ const ICON_BOMB_MOVE = `
     <line x1="14" y1="14" x2="26" y2="6" stroke-dasharray="2 2"/>
   </svg>`;
 
+const ICON_BOMB_SWAP = `
+  <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="9" cy="9" r="4" fill="currentColor"/>
+    <line x1="9" y1="5" x2="11" y2="3"/>
+    <circle cx="23" cy="23" r="5" fill="currentColor"/>
+    <rect x="22" y="16" width="2" height="2" fill="currentColor"/>
+    <line x1="23" y1="16" x2="26" y2="12"/>
+    <path d="M14 9 Q22 9 22 17" stroke-dasharray="2 2"/>
+    <polygon points="20 17, 22 21, 24 17" fill="currentColor"/>
+    <path d="M18 23 Q10 23 10 15" stroke-dasharray="2 2"/>
+    <polygon points="12 15, 10 11, 8 15" fill="currentColor"/>
+  </svg>`;
+
 const ICON_DETONATE = `
   <svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
     <polygon points="16 2, 19 13, 30 16, 19 19, 16 30, 13 19, 2 16, 13 13" fill="currentColor"/>
@@ -289,13 +302,15 @@ export const SPELLS = {
     effects: [{ type: 'placeBomb' }],
     desc: 'Pose une bombe sur une case libre (50 PV, bloque la vue). Explose dans 3 tours en zone rayon 2 pour 50 degats, +75% par tour ecoule. Max 3 bombes sur le terrain, 2 posees par tour.',
   },
-  aimantation: {
-    id: 'aimantation', name: 'Aimantation', short: 'AI', icon: ICON_BOMB_MOVE,
+  entourloupe: {
+    id: 'entourloupe', name: 'Entourloupe', short: 'ET', icon: ICON_BOMB_SWAP,
     category: 'move', color: SPELL_CATEGORY_COLOR.move,
-    apCost: 3, range: { min: 0, max: 6 }, needsLOS: false,
-    target: 'any', area: { type: 'single' }, confirmCast: true,
-    effects: [{ type: 'magnetBombs', pullRange: 5 }],
-    desc: 'Attire vos bombes alignees en croix avec la case visee (a 5 cases max) jusqu a 1 case de celle-ci. Peut etre lancee sur soi-meme. Le 1er clic affiche la croix d attraction, le 2eme sur la meme case lance le sort.',
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: false,
+    target: 'ally', area: { type: 'single' },
+    targetFilter: 'bomb',
+    cooldown: 5,
+    effects: [{ type: 'swapWithBomb' }],
+    desc: 'Echange la position du lanceur avec celle d une de ses bombes (portee 6).',
   },
   detonationManuelle: {
     id: 'detonationManuelle', name: 'Detonation', short: 'DT', icon: ICON_DETONATE,
@@ -319,7 +334,7 @@ export const SPELLS = {
   pulsar: {
     id: 'pulsar', name: 'Pulsar', short: 'PU', icon: ICON_PULSAR,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 5, range: { min: 1, max: 6 }, needsLOS: true,
+    apCost: 4, range: { min: 1, max: 6 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
     effects: [
       { type: 'damage', min: 40, max: 60 },
@@ -709,9 +724,8 @@ export function spellEffectLines(spell) {
       case 'moveBomb':
         lines.push('Deplace la bombe la plus proche');
         break;
-      case 'magnetBombs':
-        lines.push('Attire vos bombes alignees vers la cible');
-        lines.push(`Portee d attraction : ${eff.pullRange || 5} cases`);
+      case 'swapWithBomb':
+        lines.push('Echange la position du lanceur avec la bombe ciblee');
         break;
       case 'detonateBomb':
         lines.push('Detonation de la bombe ciblee');
