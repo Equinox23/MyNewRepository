@@ -39,15 +39,22 @@ hud.audio = audio;
 hud.refreshAudioControls();
 const game = new Game({ scene3d, map3d, picker, hud, rangeOverlay, vfx, audio });
 
-// Le contexte audio demarre suspendu (politique navigateur) : on le
-// reveille au tout premier geste de l utilisateur.
+// Le contexte audio demarre suspendu (politique navigateur, stricte sur
+// mobile) : on le reveille au premier geste. On reessaie tant qu il n est
+// pas reellement actif (resume() est asynchrone).
 function wakeAudio() {
   audio.resume();
-  window.removeEventListener('pointerdown', wakeAudio);
-  window.removeEventListener('keydown', wakeAudio);
+  if (audio.ctx && audio.ctx.state === 'running') {
+    ['pointerdown', 'touchstart', 'touchend', 'keydown'].forEach(ev =>
+      window.removeEventListener(ev, wakeAudio));
+  }
 }
-window.addEventListener('pointerdown', wakeAudio);
-window.addEventListener('keydown', wakeAudio);
+['pointerdown', 'touchstart', 'touchend', 'keydown'].forEach(ev =>
+  window.addEventListener(ev, wakeAudio));
+// iOS suspend le contexte quand la page passe en arriere-plan.
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) audio.resume();
+});
 
 const loader = document.getElementById('loader');
 if (loader) loader.remove();

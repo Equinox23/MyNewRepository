@@ -14,7 +14,6 @@ const STORE_KEY = 'dofus3d.audio';
 
 export class AudioEngine {
   constructor() {
-    this.ok = false;
     this.muted = false;
     this.volume = 0.7;
     // Restaure les preferences memorisees.
@@ -28,15 +27,27 @@ export class AudioEngine {
     this._step = 0;
     this._nextStepTime = 0;
     this._musicTimer = null;
+    // Le contexte audio est cree paresseusement, au 1er geste utilisateur
+    // (obligatoire sur mobile : iOS / Android bloquent l audio sinon).
+    this.ctx = null;
+    this._unlocked = false;
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    this.ok = typeof Ctx === 'function';
+  }
 
+  // Cree le contexte audio + le graphe a la demande (1er geste).
+  _ensureContext() {
+    if (this.ctx) return true;
+    if (!this.ok) return false;
     try {
       const Ctx = window.AudioContext || window.webkitAudioContext;
-      if (!Ctx) return;
       this.ctx = new Ctx();
       this._buildGraph();
-      this.ok = true;
+      return true;
     } catch (_) {
       this.ok = false;
+      this.ctx = null;
+      return false;
     }
   }
 
@@ -93,15 +104,28 @@ export class AudioEngine {
   }
 
   // ---- Reglages ----
+  // A appeler depuis un geste utilisateur (pointerdown / touchend...).
   resume() {
-    if (!this.ok) return;
-    if (this.ctx.state !== 'running') this.ctx.resume();
+    if (!this._ensureContext()) return;
+    const ctx = this.ctx;
+    if (ctx.state !== 'running') ctx.resume();
+    // Deverrouillage mobile : jouer un buffer muet DANS le geste pour
+    // que iOS / Android autorisent l audio ensuite.
+    if (!this._unlocked) {
+      this._unlocked = true;
+      try {
+        const src = ctx.createBufferSource();
+        src.buffer = ctx.createBuffer(1, 1, 22050);
+        src.connect(ctx.destination);
+        src.start(0);
+      } catch (_) { /* ignore */ }
+    }
     // (Re)lance la musique demandee une fois le contexte actif.
     if (this._musicTrack && !this._musicTimer) this._startScheduler();
   }
 
   _applyGain(instant) {
-    if (!this.ok) return;
+    if (!this.ctx) return;
     const target = this.muted ? 0.0001 : Math.max(0.0001, this.volume);
     const t = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(t);
@@ -129,7 +153,7 @@ export class AudioEngine {
   // Oscillateur enveloppe (sinus / triangle), filtre passe-bas optionnel,
   // glissando de hauteur optionnel, envoi reverb optionnel.
   _tone(o) {
-    if (!this.ok) return;
+    if (!this.ctx) return;
     const ctx = this.ctx;
     const t = o.t != null ? o.t : ctx.currentTime;
     const dur = o.dur || 0.2;
@@ -168,7 +192,7 @@ export class AudioEngine {
 
   // Salve de bruit filtre (impacts, souffles).
   _noise(o) {
-    if (!this.ok) return;
+    if (!this.ctx) return;
     const ctx = this.ctx;
     const t = o.t != null ? o.t : ctx.currentTime;
     const dur = o.dur || 0.2;
@@ -203,7 +227,7 @@ export class AudioEngine {
   }
 
   sfx(name) {
-    if (!this.ok || this.ctx.state !== 'running') return;
+    if (!this.ctx || this.ctx.state !== 'running') return;
     const t = this.ctx.currentTime;
     switch (name) {
       case 'cast_attack':
@@ -301,7 +325,7 @@ export class AudioEngine {
       this._stopScheduler();
       return;
     }
-    if (this.ctx.state === 'running') this._startScheduler();
+    if (this.ctx && this.ctx.state === 'running') this._startScheduler();
   }
 
   _startScheduler() {
@@ -315,7 +339,7 @@ export class AudioEngine {
   }
 
   _scheduleMusic() {
-    if (!this.ok || !this._musicTrack) return;
+    if (!this.ctx || !this._musicTrack) return;
     const ctx = this.ctx;
     if (ctx.state !== 'running') { this._nextStepTime = ctx.currentTime + 0.12; return; }
     const tr = this._musicTrack === 'combat' ? this._combat : this._menu;
