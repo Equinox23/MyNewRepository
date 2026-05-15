@@ -776,14 +776,15 @@ export class Game {
           return;
         }
         if (this.vfx) this.vfx.debuffCloud({ c: tf.c, r: tf.r }, { color: 0x4a6f9a });
-        // currentTurnOnly (sorts du Xelor) : retrait differé applique
-        // au prochain tour de la cible uniquement, sans toucher a son
-        // affichage actuel. Sinon : reduction immediate + malus
-        // persistant via le systeme de buffs.
+        // Reduction immediate des PA stockes pour le feedback visuel
+        // (le preview montre tout de suite la baisse).
+        tf.pa = Math.max(0, tf.pa - amount);
+        // currentTurnOnly (sorts du Xelor) : retrait reapplique au
+        // prochain tour de la cible, puis disparait. Sinon : malus
+        // persistant via le systeme de buffs (Crachat, Griffe de Ceangal).
         if (effect.currentTurnOnly) {
           tf.pendingPaDebuff = (tf.pendingPaDebuff || 0) + amount;
         } else {
-          tf.pa = Math.max(0, tf.pa - amount);
           tf.buffs.push({ bonusPa: -amount, duration: effect.turns ? effect.turns + 1 : 2 });
         }
         tf.character.popText('-' + amount + ' PA', '#7ec6ff', {
