@@ -514,7 +514,7 @@ export const SPELLS = {
     target: 'enemy', area: { type: 'single' },
     effects: [
       { type: 'damage', min: 30, max: 40 },
-      { type: 'debuff_pa', min: 1, max: 2, steal: true },
+      { type: 'debuff_pa', min: 1, max: 2, steal: true, currentTurnOnly: true },
     ],
     desc: 'Lancee en ligne (portee 3) : 30-40 degats et vole 1 a 2 PA (rendus au Xelor pour le tour).',
   },
@@ -523,8 +523,8 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 1, range: { min: 1, max: 8 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'debuff_pa', value: 2 }],
-    desc: 'Retire 2 PA a un adversaire. Portee 8.',
+    effects: [{ type: 'debuff_pa', value: 2, currentTurnOnly: true }],
+    desc: 'Retire 2 PA a un adversaire pour le tour en cours. Portee 8.',
   },
   devouement: {
     id: 'devouement', name: 'Devouement', short: 'DV', icon: ICON_BOOST,
@@ -715,11 +715,13 @@ export function spellEffectLines(spell) {
       }
       case 'debuff_pa': {
         const amt = eff.value !== undefined ? `${eff.value}` : `${eff.min}-${eff.max}`;
+        const turnTxt = eff.currentTurnOnly
+          ? 'ce tour-ci'
+          : (eff.turns ? `${eff.turns} tours` : 'au prochain tour');
         if (eff.chance !== undefined) {
-          const turnTxt = eff.turns ? `${eff.turns} tours` : 'au prochain tour';
           lines.push(`${Math.round(eff.chance * 100)}% : cible perd ${amt} PA (${turnTxt})`);
         } else {
-          lines.push(`Cible perd ${amt} PA (au prochain tour)`);
+          lines.push(`Cible perd ${amt} PA (${turnTxt})`);
         }
         break;
       }
