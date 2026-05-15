@@ -392,7 +392,7 @@ export const SPELLS = {
   protectionCraqueleur: {
     id: 'protectionCraqueleur', name: 'Protection du Craqueleur', short: 'PC', icon: ICON_SHIELD,
     category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
-    apCost: 3, range: { min: 1, max: 4 }, needsLOS: true,
+    apCost: 2, range: { min: 1, max: 4 }, needsLOS: true,
     target: 'ally', area: { type: 'single' },
     cooldown: 3,
     effects: [{ type: 'buff', shield: 0.5, duration: 2 }],
