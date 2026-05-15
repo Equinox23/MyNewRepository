@@ -776,10 +776,12 @@ export class Game {
           return;
         }
         if (this.vfx) this.vfx.debuffCloud({ c: tf.c, r: tf.r }, { color: 0x4a6f9a });
-        // Reduction immediate + malus persistant (vol de temps du Xelor) :
-        // la cible commencera son prochain tour amputee de ces PA.
+        // Reduction immediate ; le malus persistant n est applique que si
+        // l effet n est pas marque comme limite au tour en cours.
         tf.pa = Math.max(0, tf.pa - amount);
-        tf.buffs.push({ bonusPa: -amount, duration: effect.turns ? effect.turns + 1 : 2 });
+        if (!effect.currentTurnOnly) {
+          tf.buffs.push({ bonusPa: -amount, duration: effect.turns ? effect.turns + 1 : 2 });
+        }
         tf.character.popText('-' + amount + ' PA', '#7ec6ff', {
           fontSize: 22, dx: 0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42,
         });
