@@ -992,17 +992,17 @@ export class Game {
     };
 
     // Si le hero choisi est hors d atteinte ce tour mais qu une bombe
-    // ennemie est, elle, atteignable (typiquement une bombe qui bloque
-    // le passage), on bascule la cible sur la bombe pour la detruire.
+    // ou invocation ennemie est, elle, atteignable (typiquement une
+    // bombe qui bloque le passage), on bascule la cible dessus.
     if (!isReachableForAttack(target)) {
-      const bombs = this.fighters
-        .filter(f => f.alive && f.isBomb && f.team !== ai.team)
+      const secondaries = this.fighters
+        .filter(f => f.alive && f.team !== ai.team && (f.isBomb || f.isSummon))
         .map(f => ({ f, d: Math.abs(ai.c - f.c) + Math.abs(ai.r - f.r) }))
         .sort((a, b) => a.d - b.d);
-      for (const { f: bomb } of bombs) {
-        if (isReachableForAttack(bomb)) {
-          target = bomb;
-          this.hud.log && this.hud.log(`${ai.name} cible la bombe (route bloquee)`, 'info');
+      for (const { f } of secondaries) {
+        if (isReachableForAttack(f)) {
+          target = f;
+          this.hud.log && this.hud.log(`${ai.name} cible ${f.name} (route bloquee)`, 'info');
           break;
         }
       }
@@ -1020,18 +1020,33 @@ export class Game {
     await this.aiAttackLoop(ai, target, attackSpells);
     if (this.ended) return;
 
-    // Apres avoir attaque : si aucun ennemi adjacent et qu il reste des
-    // PM, on se rapproche du prochain ennemi LE PLUS PROCHE pour
-    // preparer le tour suivant.
-    if (ai.pm > 0) {
-      const enemies = this.fighters
-        .filter(f => f.alive && !f.isBomb && f.team !== ai.team)
-        .map(f => ({ f, d: Math.abs(ai.c - f.c) + Math.abs(ai.r - f.r) }))
-        .sort((a, b) => a.d - b.d);
-      if (enemies.length > 0 && enemies[0].d > 1) {
-        await this.aiPause(400);
-        await this.aiApproach(ai, enemies[0].f, 1);
-      }
+    // Apres avoir attaque : on cherche toujours a se rapprocher d un
+    // VRAI personnage (ni bombe ni invocation) pour pouvoir le frapper
+    // au prochain tour, plutot que de passer son tour sur place.
+    await this.aiRepositionTowardHero(ai, attackSpells);
+  }
+
+  // Repositionnement post-attaque : approche le hero le plus proche
+  // pour etre a portee au tour suivant. Pour une IA a distance, on
+  // garde un ecart ideal ; pour une IA de melee on colle la cible.
+  async aiRepositionTowardHero(ai, attackSpells) {
+    if (ai.pm <= 0) return;
+    const heroes = this.fighters
+      .filter(f => f.alive && !f.isBomb && !f.isSummon && f.team !== ai.team)
+      .map(f => ({ f, d: Math.abs(ai.c - f.c) + Math.abs(ai.r - f.r) }))
+      .sort((a, b) => a.d - b.d);
+    if (heroes.length === 0) return;
+    const hero = heroes[0].f;
+    const maxRange = attackSpells.reduce((m, s) => Math.max(m, s.range.max), 0);
+    // Deja a portee de tir d un hero : inutile de bouger.
+    if (this.usableSpellsOn(ai, hero, attackSpells.map(s => ({ ...s, apCost: 0 }))).length > 0) {
+      return;
+    }
+    await this.aiPause(400);
+    if (maxRange > 1) {
+      await this.aiPositionAtRange(ai, hero, Math.max(maxRange - 1, 3), maxRange);
+    } else {
+      await this.aiApproach(ai, hero, 1);
     }
   }
 
@@ -1065,58 +1080,40 @@ export class Game {
     }
 
     await this.aiAttackLoop(ai, target, attackSpells);
+    if (this.ended) return;
+
+    // Post-attaque : se rapprocher d un vrai personnage pour etre a
+    // portee de tir au prochain tour (au lieu de passer son tour).
+    await this.aiRepositionTowardHero(ai, attackSpells);
   }
 
   aiPause(ms) {
     return new Promise(r => setTimeout(r, ms));
   }
 
-  // Cherche une bombe ennemie attaquable depuis la position courante
-  // de l ai (sort utilisable, dans la portee, ligne de vue si requise).
-  // Retourne la bombe la plus proche en distance Manhattan, ou null.
-  findBombInRange(ai, attackSpells) {
-    const bombs = this.fighters
-      .filter(f => f.alive && f.isBomb && f.team !== ai.team)
-      .map(b => ({ b, d: Math.abs(ai.c - b.c) + Math.abs(ai.r - b.r) }))
-      .sort((a, b) => a.d - b.d);
-    for (const { b: bomb } of bombs) {
-      for (const s of attackSpells) {
-        if (s.apCost > ai.pa) continue;
-        const d = Math.abs(ai.c - bomb.c) + Math.abs(ai.r - bomb.r);
-        if (d < s.range.min || d > s.range.max) continue;
-        if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, bomb.c, bomb.r, this.bombBlockers())) continue;
-        return bomb;
-      }
-    }
-    return null;
-  }
-
-  async aiAttackLoop(ai, target, attackSpells) {
+  async aiAttackLoop(ai, mainTarget, attackSpells) {
     let first = true;
-    while (ai.alive && target && target.alive) {
-      const usable = attackSpells.filter(s => s.apCost <= ai.pa).filter(s => {
-        const d = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
-        if (d < s.range.min || d > s.range.max) return false;
-        if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r, this.bombBlockers())) return false;
-        return true;
-      });
-      if (usable.length === 0) {
-        // Aucun sort utilisable sur la cible principale. Si la cible
-        // n est pas deja une bombe, on cherche une bombe ennemie en
-        // portee a frapper a la place.
-        if (!target.isBomb) {
-          const bomb = this.findBombInRange(ai, attackSpells);
-          if (bomb) {
-            target = bomb;
-            continue;
-          }
+    while (ai.alive) {
+      // Choix de la cible de cette passe :
+      //  1. Une bombe / invocation en portee qu on peut ACHEVER ce tour
+      //     (nettoyage : exception a la priorite "frapper un hero").
+      //  2. Sinon la cible principale (un hero en priorite) si attaquable.
+      //  3. Sinon, en dernier recours, une bombe / invocation en portee.
+      let pick = this.findSecondaryInRange(ai, attackSpells, true);
+      if (!pick) {
+        if (mainTarget && mainTarget.alive &&
+            this.usableSpellsOn(ai, mainTarget, attackSpells).length > 0) {
+          pick = mainTarget;
+        } else {
+          pick = this.findSecondaryInRange(ai, attackSpells, false);
         }
-        break;
       }
+      if (!pick) break;
+      const usable = this.usableSpellsOn(ai, pick, attackSpells);
+      if (usable.length === 0) break;
       // Preference stricte : portee la plus COURTE d abord (le Craqueleur
       // choisit Frappe range 1 plutot que Lancer Rocher range 6 si les
-      // deux sont utilisables). En cas d egalite, on prend le sort qui
-      // marque le meilleur score (degats/debuffs).
+      // deux sont utilisables). En cas d egalite, meilleur score.
       usable.sort((a, b) => {
         if (a.range.max !== b.range.max) return a.range.max - b.range.max;
         return spellScore(b) - spellScore(a);
@@ -1128,7 +1125,7 @@ export class Game {
       if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
       ai.character.popCost(spell.apCost, 'pa');
       this.hud.update(ai, this.mode, this.selectedSpellId);
-      await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
+      await this.applySpellEffects(ai, spell, { c: pick.c, r: pick.r });
       if (this.checkEnd()) return;
     }
   }
@@ -1199,21 +1196,54 @@ export class Game {
   }
 
   pickWeakestTarget(ai) {
-    // On ignore les bombes : elles ne combattent pas et risquent de
-    // monopoliser l attention de l IA (50 PV = toujours plus faible).
-    // Si seules des bombes restent, on tombe en fallback dessus.
-    let enemies = this.fighters.filter(f => f.alive && !f.isBomb && f.team !== ai.team);
-    if (enemies.length === 0) {
-      enemies = this.fighters.filter(f => f.alive && f.team !== ai.team);
-    }
-    if (enemies.length === 0) return null;
-    enemies.sort((a, b) => {
+    // Priorite stricte : les VRAIS personnages d abord (ni bombe ni
+    // invocation). Les monstres ne s acharnent sur les invocations /
+    // bombes que s il ne reste plus aucun hero a frapper.
+    const sortWeak = (list) => list.sort((a, b) => {
       if (a.hp !== b.hp) return a.hp - b.hp;
       const da = Math.abs(ai.c - a.c) + Math.abs(ai.r - a.r);
       const db = Math.abs(ai.c - b.c) + Math.abs(ai.r - b.r);
       return da - db;
     });
-    return enemies[0];
+    const all = this.fighters.filter(f => f.alive && f.team !== ai.team);
+    let pool = all.filter(f => !f.isBomb && !f.isSummon);  // vrais heros
+    if (pool.length === 0) pool = all.filter(f => f.isSummon); // invocations
+    if (pool.length === 0) pool = all;                          // bombes
+    if (pool.length === 0) return null;
+    sortWeak(pool);
+    return pool[0];
+  }
+
+  // Sorts d attaque utilisables sur une cible depuis la position de l ai
+  // (PA suffisants, dans la portee, ligne de vue si requise).
+  usableSpellsOn(ai, tgt, attackSpells) {
+    return attackSpells.filter(s => {
+      if (s.apCost > ai.pa) return false;
+      const d = Math.abs(ai.c - tgt.c) + Math.abs(ai.r - tgt.r);
+      if (d < s.range.min || d > s.range.max) return false;
+      if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, tgt.c, tgt.r, this.bombBlockers())) return false;
+      return true;
+    });
+  }
+
+  // Cible secondaire (bombe ou invocation ennemie) attaquable depuis la
+  // position courante. Si `mustKill` est vrai, ne retient que celles
+  // qu un sort utilisable peut achever ce tour. Renvoie la plus proche.
+  findSecondaryInRange(ai, attackSpells, mustKill = false) {
+    const secondaries = this.fighters
+      .filter(f => f.alive && f.team !== ai.team && (f.isBomb || f.isSummon))
+      .map(f => ({ f, d: Math.abs(ai.c - f.c) + Math.abs(ai.r - f.r) }))
+      .sort((a, b) => a.d - b.d);
+    for (const { f } of secondaries) {
+      const usable = this.usableSpellsOn(ai, f, attackSpells);
+      if (usable.length === 0) continue;
+      if (mustKill) {
+        const maxDmg = Math.max(...usable.map(maxDamageOf));
+        if (f.hp > maxDmg) continue;
+      }
+      return f;
+    }
+    return null;
   }
 
   async aiApproach(ai, target, range) {
@@ -1333,9 +1363,11 @@ export class Game {
     if (winner && !this.ended) {
       this.ended = true;
       this.busy = true;
+      const combat = this.config && COMBATS[this.config.combatId];
+      const enemyLabel = combat ? combat.name : 'tes adversaires';
       setTimeout(() => this.hud.showEnd(winner, () => {
         if (this.onEnd) this.onEnd();
-      }), 600);
+      }, enemyLabel), 600);
       return true;
     }
     return false;
@@ -1351,4 +1383,15 @@ function spellScore(spell) {
     if (e.type === 'dot') score += ((e.min + e.max) / 2) * (e.duration || 1);
   }
   return score;
+}
+
+// Degats max qu un sort peut infliger d un coup (sert a estimer si une
+// bombe / invocation peut etre achevee ce tour).
+function maxDamageOf(spell) {
+  let dmg = 0;
+  for (const e of spell.effects) {
+    if (e.type === 'damage') dmg += e.max;
+    if (e.type === 'dot') dmg += e.max * (e.duration || 1);
+  }
+  return dmg;
 }

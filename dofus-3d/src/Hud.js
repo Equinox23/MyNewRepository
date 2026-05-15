@@ -1213,14 +1213,17 @@ export class Hud {
     if (this._infoFighter) this.renderFighterInfo();
   }
 
-  showEnd(winner, onReplay) {
+  showEnd(winner, onReplay, enemyLabel) {
+    const label = enemyLabel || 'tes adversaires';
     const overlay = document.createElement('div');
     overlay.id = 'end-overlay';
     overlay.innerHTML = `
       <div class="title" style="color: ${winner === 'player' ? '#2ecc71' : '#e74c3c'}">
         ${winner === 'player' ? 'VICTOIRE' : 'DEFAITE'}
       </div>
-      <div class="sub">${winner === 'player' ? 'Tu as terrasse le Bouftou !' : 'Le Bouftou t a vaincu...'}</div>
+      <div class="sub">${winner === 'player'
+        ? `Tu as triomphe de ${label} !`
+        : `${label} t ont vaincu...`}</div>
       <button id="btn-replay">REJOUER</button>
     `;
     document.body.appendChild(overlay);
