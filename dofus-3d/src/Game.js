@@ -359,7 +359,7 @@ export class Game {
       if (isTouch) this.setMode('move');
       return;
     }
-    // Sorts en 2 clics (ex : Aimantation) : le 1er clic affiche l apercu
+    // Sorts en 2 clics (confirmCast) : le 1er clic affiche l apercu
     // de la zone d effet, le 2eme sur la MEME case lance reellement.
     if (spell.confirmCast) {
       if (!this._pendingCast || this._pendingCast.spellId !== spell.id
@@ -917,48 +917,30 @@ export class Game {
         this.hud.log && this.hud.log(`${caster.name} alimente sa bombe -> (${target.c},${target.r})`, 'cast');
         return;
       }
-      case 'magnetBombs': {
-        // Attire les bombes du caster alignees en croix avec la case
-        // visee (a `pullRange` cases max) jusqu a 1 case de la cible.
-        const myBombs = this.fighters.filter(f =>
-          f.alive && f.isBomb && f.bombOwner === caster
+      case 'swapWithBomb': {
+        // Echange la position du caster avec celle de la bombe ciblee.
+        const bomb = this.fighters.find(f =>
+          f.alive && f.isBomb && f.c === target.c && f.r === target.r &&
+          f.bombOwner === caster
         );
-        const pullRange = effect.pullRange || 5;
-        let pulled = 0;
-        for (const bomb of myBombs) {
-          const dc = bomb.c - target.c;
-          const dr = bomb.r - target.r;
-          // Doit etre aligne en croix (meme ligne ou meme colonne).
-          if (dc !== 0 && dr !== 0) continue;
-          const dist = Math.abs(dc) + Math.abs(dr);
-          if (dist === 0 || dist > pullRange) continue;
-          const sc = Math.sign(dc), sr = Math.sign(dr);
-          // On rapproche la bombe case par case sans traverser
-          // d obstacle (mur / eau / combattant), au plus pres de la cible.
-          let destC = bomb.c, destR = bomb.r;
-          for (let step = dist - 1; step >= 1; step--) {
-            const cc = target.c + sc * step;
-            const cr = target.r + sr * step;
-            if (this.map3d.isWall(cc, cr) || this.map3d.isWater(cc, cr)) break;
-            if (this.fighters.some(f => f.alive && f !== bomb && f.c === cc && f.r === cr)) break;
-            destC = cc; destR = cr;
-          }
-          if (destC === bomb.c && destR === bomb.r) continue;
-          if (this.vfx) {
-            this.vfx.portal(bomb.c, bomb.r, { color: 0xc0392b, duration: 0.4 });
-            this.vfx.portal(destC, destR, { color: 0xc0392b, duration: 0.4 });
-          }
-          await bomb.character.teleportTo(destC, destR);
-          bomb.c = destC;
-          bomb.r = destR;
-          pulled++;
+        if (!bomb) {
+          this.hud.log && this.hud.log(`${caster.name} : pas de bombe ici`, 'cast');
+          return;
         }
+        const fromC = caster.c, fromR = caster.r;
+        const toC = bomb.c, toR = bomb.r;
+        if (this.vfx) {
+          this.vfx.portal(fromC, fromR, { color: 0xc0392b, duration: 0.5 });
+          this.vfx.portal(toC, toR, { color: 0xc0392b, duration: 0.5 });
+        }
+        await Promise.all([
+          caster.character.teleportTo(toC, toR),
+          bomb.character.teleportTo(fromC, fromR),
+        ]);
+        caster.c = toC; caster.r = toR;
+        bomb.c = fromC; bomb.r = fromR;
         caster.character.flashGlow(0xc0392b, 500);
-        this.hud.log && this.hud.log(
-          pulled > 0
-            ? `${caster.name} aimante ${pulled} bombe(s)`
-            : `${caster.name} : aucune bombe alignee a aimanter`,
-          'cast');
+        this.hud.log && this.hud.log(`${caster.name} echange sa place avec sa bombe`, 'cast');
         return;
       }
       case 'detonateBomb': {
@@ -1228,24 +1210,7 @@ export class Game {
     }
   }
 
-  // Apercu de la zone d effet d un sort a confirmer (Aimantation) :
-  // affiche la croix d attraction des bombes autour de la case visee.
-  showCastPreview(caster, spell, c, r) {
-    const magnet = spell.effects.find(e => e.type === 'magnetBombs');
-    if (!magnet) return;
-    const pull = magnet.pullRange || 5;
-    const tiles = [{ c, r }];
-    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      for (let i = 1; i <= pull; i++) {
-        const cc = c + dc * i, cr = r + dr * i;
-        if (!this.map3d.inBounds(cc, cr)) break;
-        if (this.map3d.isWall(cc, cr)) break;
-        tiles.push({ c: cc, r: cr });
-      }
-    }
-    this.rangeOverlay.clear();
-    this.rangeOverlay.paint(tiles, 0xc0392b, 0.40);
-  }
+  showCastPreview(_caster, _spell, _c, _r) {}
 
   // ---------- IA ----------
   async runAI() {
