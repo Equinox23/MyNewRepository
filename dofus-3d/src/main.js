@@ -173,8 +173,12 @@ function handleHover(x, y) {
   const fighterHere = game.fighters.find(f =>
     f.alive && f.c === hit.c && f.r === hit.r
   );
-  hud.showFighterInfo(fighterHere || null);
-  const enemyHere = !!(fighterHere && fighterHere.team !== 'player');
+  // Un ennemi invisible n est pas revele au survol (ni info, ni curseur).
+  const visibleFighter = fighterHere
+    && !(fighterHere.invisible && fighterHere.team !== 'player')
+    ? fighterHere : null;
+  hud.showFighterInfo(visibleFighter);
+  const enemyHere = !!(visibleFighter && visibleFighter.team !== 'player');
   canvas.style.cursor = enemyHere ? SWORD_CURSOR : POINTER_CURSOR;
 }
 
@@ -190,7 +194,12 @@ function handleTap(x, y, pointerType = 'mouse') {
     return;
   }
   const fighter = game.fighters.find(f => f.alive && f.c === hit.c && f.r === hit.r);
-  if (fighter) hud.pinFighterInfo(fighter);
+  // Un ennemi invisible ne revele pas ses infos, meme si on tape sa case
+  // (le sort, lui, l atteint quand meme via game.onTileTap).
+  const visibleFighter = fighter
+    && !(fighter.invisible && fighter.team !== 'player')
+    ? fighter : null;
+  if (visibleFighter) hud.pinFighterInfo(visibleFighter);
   else hud.unpinFighterInfo();
   game.onTileTap(hit.c, hit.r, pointerType);
 }

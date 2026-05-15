@@ -411,10 +411,8 @@ export class Game {
       if (dc !== 0 && dr !== 0) return 'Doit etre en ligne droite';
     }
     const targetFighter = this.fighters.find(f => f.alive && f.c === c && f.r === r);
-    // Un combattant ennemi invisible ne peut pas etre pris pour cible.
-    if (targetFighter && targetFighter.invisible && targetFighter.team !== caster.team) {
-      return 'Cible invisible';
-    }
+    // Un combattant invisible reste touchable : on ne bloque pas le
+    // ciblage de sa case (le joueur ne le voit simplement plus).
     if (spell.target === 'self' && targetFighter !== caster) return 'Cible : soi-meme';
     if (spell.target === 'any' && !targetFighter) return 'Cible : un combattant ou une bombe';
     if (spell.target === 'enemy' && (!targetFighter || targetFighter.team === caster.team)) return 'Pas d ennemi';

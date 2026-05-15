@@ -390,31 +390,13 @@ export class Character3D {
     requestAnimationFrame(tick);
   }
 
-  // Rend le modele fantomatique (invisibilite) ou le restaure. On
-  // memorise l opacite d origine de chaque materiau pour pouvoir la
-  // remettre sans casser les materiaux deja translucides.
+  // Invisibilite : masque completement le modele (et sa barre de vie).
+  // Le combattant reste present sur sa case et peut donc etre touche si
+  // l on vise celle-ci.
   setGhost(on) {
     if (this._ghost === on) return;
     this._ghost = on;
-    this.group.traverse((obj) => {
-      if (!obj.isMesh || !obj.material) return;
-      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-      for (const m of mats) {
-        if (on) {
-          if (m._origOpacity === undefined) {
-            m._origOpacity = m.opacity;
-            m._origTransparent = m.transparent;
-          }
-          m.transparent = true;
-          m.opacity = m._origOpacity * 0.26;
-        } else if (m._origOpacity !== undefined) {
-          m.opacity = m._origOpacity;
-          m.transparent = m._origTransparent;
-          delete m._origOpacity;
-          delete m._origTransparent;
-        }
-      }
-    });
+    this.group.visible = !on;
   }
 
   // Animation de mort : le perso s effondre (scale.y -> 0) + alpha.

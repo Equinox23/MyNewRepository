@@ -623,8 +623,8 @@ export const SPELLS = {
     apCost: 4, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
     cooldown: 5,
-    effects: [{ type: 'buff', invisible: true, duration: 3 }],
-    desc: 'Le lanceur devient invisible pendant 3 tours : il ne peut plus etre pris pour cible.',
+    effects: [{ type: 'buff', invisible: true, bonusPm: 1, duration: 3 }],
+    desc: 'Le lanceur disparait completement pendant 3 tours et gagne +1 PM. Il reste touchable si on vise sa case.',
   },
 
   // ---------- TOFU (oiseau) ----------
