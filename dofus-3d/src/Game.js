@@ -4,27 +4,35 @@ import { TurnManager } from './TurnManager.js';
 import { bfs, pathTo, hasLOS } from './Path.js';
 import { SPELLS } from './Spells.js';
 import { MAP_BOOSTS } from './Map3D.js';
+import { recordWin } from './Progress.js';
 
+// `homeMap` : la carte "maison" du monstre. Le vaincre dessus rapporte
+// une etoile d or, ailleurs une etoile d argent.
 export const COMBATS = {
   bouftou: {
     name: 'Meute de Bouftous',
     enemyComposition: ['bouftou', 'bouftou', 'bouftou', 'bouftouRoyal'],
+    homeMap: 'foret',
   },
   crapaud: {
     name: 'Crapauds de la mare',
     enemyComposition: ['crapaud', 'crapaud', 'crapaud', 'crapaudChef'],
+    homeMap: 'cascade',
   },
   chafer: {
     name: 'Patrouille de Chafers',
     enemyComposition: ['chafer', 'chafer', 'chafer', 'chaferRoyal'],
+    homeMap: 'cimetiere',
   },
   tofu: {
     name: 'Volee de Tofus',
     enemyComposition: ['tofu', 'tofu', 'tofu', 'tofuRoyal'],
+    homeMap: 'falaise',
   },
   champignon: {
     name: 'Colonie de Champignons',
     enemyComposition: ['champignon', 'champignon', 'champignon', 'champignonRoyal'],
+    homeMap: 'marais',
   },
 };
 
@@ -352,6 +360,7 @@ export class Game {
     }
     const targetFighter = this.fighters.find(f => f.alive && f.c === c && f.r === r);
     if (spell.target === 'self' && targetFighter !== caster) return 'Cible : soi-meme';
+    if (spell.target === 'any' && !targetFighter) return 'Cible : un combattant ou une bombe';
     if (spell.target === 'enemy' && (!targetFighter || targetFighter.team === caster.team)) return 'Pas d ennemi';
     if (spell.target === 'ally') {
       if (!targetFighter || targetFighter.team !== caster.team) return 'Pas d allie';
@@ -793,6 +802,50 @@ export class Game {
         bomb.c = target.c;
         bomb.r = target.r;
         this.hud.log && this.hud.log(`${caster.name} alimente sa bombe -> (${target.c},${target.r})`, 'cast');
+        return;
+      }
+      case 'magnetBombs': {
+        // Attire les bombes du caster alignees en croix avec la case
+        // visee (a `pullRange` cases max) jusqu a 1 case de la cible.
+        const myBombs = this.fighters.filter(f =>
+          f.alive && f.isBomb && f.bombOwner === caster
+        );
+        const pullRange = effect.pullRange || 5;
+        let pulled = 0;
+        for (const bomb of myBombs) {
+          const dc = bomb.c - target.c;
+          const dr = bomb.r - target.r;
+          // Doit etre aligne en croix (meme ligne ou meme colonne).
+          if (dc !== 0 && dr !== 0) continue;
+          const dist = Math.abs(dc) + Math.abs(dr);
+          if (dist === 0 || dist > pullRange) continue;
+          const sc = Math.sign(dc), sr = Math.sign(dr);
+          // On rapproche la bombe case par case sans traverser
+          // d obstacle (mur / eau / combattant), au plus pres de la cible.
+          let destC = bomb.c, destR = bomb.r;
+          for (let step = dist - 1; step >= 1; step--) {
+            const cc = target.c + sc * step;
+            const cr = target.r + sr * step;
+            if (this.map3d.isWall(cc, cr) || this.map3d.isWater(cc, cr)) break;
+            if (this.fighters.some(f => f.alive && f !== bomb && f.c === cc && f.r === cr)) break;
+            destC = cc; destR = cr;
+          }
+          if (destC === bomb.c && destR === bomb.r) continue;
+          if (this.vfx) {
+            this.vfx.portal(bomb.c, bomb.r, { color: 0xc0392b, duration: 0.4 });
+            this.vfx.portal(destC, destR, { color: 0xc0392b, duration: 0.4 });
+          }
+          await bomb.character.teleportTo(destC, destR);
+          bomb.c = destC;
+          bomb.r = destR;
+          pulled++;
+        }
+        caster.character.flashGlow(0xc0392b, 500);
+        this.hud.log && this.hud.log(
+          pulled > 0
+            ? `${caster.name} aimante ${pulled} bombe(s)`
+            : `${caster.name} : aucune bombe alignee a aimanter`,
+          'cast');
         return;
       }
       case 'detonateBomb': {
@@ -1572,9 +1625,20 @@ export class Game {
       this.busy = true;
       const combat = this.config && COMBATS[this.config.combatId];
       const enemyLabel = combat ? combat.name : 'tes adversaires';
+      // Victoire : on enregistre l etoile (or si vaincu sur la carte
+      // maison du monstre, argent sinon).
+      let starResult = null;
+      if (winner === 'player' && combat && this.config) {
+        const classId = (this.config.playerClasses && this.config.playerClasses[0])
+          || this.config.classId;
+        if (classId) {
+          starResult = (this.config.mapId === combat.homeMap) ? 'gold' : 'silver';
+          recordWin(classId, this.config.combatId, starResult);
+        }
+      }
       setTimeout(() => this.hud.showEnd(winner, () => {
         if (this.onEnd) this.onEnd();
-      }, enemyLabel), 600);
+      }, enemyLabel, starResult), 600);
       return true;
     }
     return false;

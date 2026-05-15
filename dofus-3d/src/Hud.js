@@ -195,7 +195,21 @@ export class Hud {
         font-family: "Trebuchet MS", sans-serif;
       }
       #end-overlay .title { font-size: 64px; font-weight: bold; margin-bottom: 16px; }
-      #end-overlay .sub { font-size: 18px; color: #ccc; margin-bottom: 24px; }
+      #end-overlay .sub { font-size: 18px; color: #ccc; margin-bottom: 16px; }
+      #end-overlay .end-star {
+        margin-bottom: 6px;
+        filter: drop-shadow(0 4px 14px rgba(0,0,0,0.7));
+        animation: end-star-pop 0.5s ease-out;
+      }
+      @keyframes end-star-pop {
+        0% { transform: scale(0) rotate(-90deg); }
+        70% { transform: scale(1.2) rotate(8deg); }
+        100% { transform: scale(1) rotate(0deg); }
+      }
+      #end-overlay .end-star-label {
+        font-size: 16px; font-weight: bold; letter-spacing: 1px;
+        margin-bottom: 22px;
+      }
       #end-overlay button {
         background: #27ae60; border: 2px solid #145a32; color: #fff;
         padding: 12px 28px; font-size: 20px; border-radius: 8px;
@@ -1213,10 +1227,32 @@ export class Hud {
     if (this._infoFighter) this.renderFighterInfo();
   }
 
-  showEnd(winner, onReplay, enemyLabel) {
+  // Etoile SVG : 'gold', 'silver' ou 'empty'.
+  starSvg(type, size = 90) {
+    const fill = type === 'gold' ? '#f6c83e' : type === 'silver' ? '#cfd8dd' : '#3a3f4d';
+    const stroke = type === 'gold' ? '#a87c12' : type === 'silver' ? '#8a949c' : '#5a6070';
+    const shine = type === 'gold' ? '#fff0b8' : type === 'silver' ? '#ffffff' : '#4a505e';
+    return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <polygon points="32 4, 40 24, 61 25, 44 39, 50 60, 32 48, 14 60, 20 39, 3 25, 24 24"
+               fill="${fill}" stroke="${stroke}" stroke-width="3" stroke-linejoin="round"/>
+      <polygon points="32 12, 36 25, 28 25" fill="${shine}" opacity="0.85"/>
+    </svg>`;
+  }
+
+  showEnd(winner, onReplay, enemyLabel, starResult) {
     const label = enemyLabel || 'tes adversaires';
     const overlay = document.createElement('div');
     overlay.id = 'end-overlay';
+    let starBlock = '';
+    if (winner === 'player' && starResult) {
+      const txt = starResult === 'gold'
+        ? 'ETOILE D OR ! (carte maison du monstre)'
+        : 'Etoile d argent';
+      starBlock = `
+        <div class="end-star">${this.starSvg(starResult, 110)}</div>
+        <div class="end-star-label" style="color: ${starResult === 'gold' ? '#f6c83e' : '#cfd8dd'}">${txt}</div>
+      `;
+    }
     overlay.innerHTML = `
       <div class="title" style="color: ${winner === 'player' ? '#2ecc71' : '#e74c3c'}">
         ${winner === 'player' ? 'VICTOIRE' : 'DEFAITE'}
@@ -1224,6 +1260,7 @@ export class Hud {
       <div class="sub">${winner === 'player'
         ? `Tu as triomphe de ${label} !`
         : `${label} t ont vaincu...`}</div>
+      ${starBlock}
       <button id="btn-replay">REJOUER</button>
     `;
     document.body.appendChild(overlay);

@@ -266,13 +266,13 @@ export const SPELLS = {
     effects: [{ type: 'placeBomb' }],
     desc: 'Pose une bombe sur une case libre (50 PV, bloque la vue). Explose dans 3 tours en zone rayon 2 pour 50 degats, +75% par tour ecoule. Max 2 bombes sur le terrain, 1 pose par tour.',
   },
-  alimentationBombe: {
-    id: 'alimentationBombe', name: 'Alimentation', short: 'AL', icon: ICON_BOMB_MOVE,
+  aimantation: {
+    id: 'aimantation', name: 'Aimantation', short: 'AI', icon: ICON_BOMB_MOVE,
     category: 'move', color: SPELL_CATEGORY_COLOR.move,
-    apCost: 3, range: { min: 1, max: 5 }, needsLOS: false,
-    target: 'tile', area: { type: 'single' },
-    effects: [{ type: 'moveBomb' }],
-    desc: 'Deplace votre bombe la plus proche vers la case visee (case libre).',
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: false,
+    target: 'any', area: { type: 'single' },
+    effects: [{ type: 'magnetBombs', pullRange: 5 }],
+    desc: 'Attire vos bombes alignees en croix avec la case visee (a 5 cases max) jusqu a 1 case de celle-ci. A lancer sur un combattant ou une bombe, jamais dans le vide.',
   },
   detonationManuelle: {
     id: 'detonationManuelle', name: 'Detonation', short: 'DT', icon: ICON_DETONATE,
@@ -602,6 +602,10 @@ export function spellEffectLines(spell) {
         break;
       case 'moveBomb':
         lines.push('Deplace la bombe la plus proche');
+        break;
+      case 'magnetBombs':
+        lines.push('Attire vos bombes alignees vers la cible');
+        lines.push(`Portee d attraction : ${eff.pullRange || 5} cases`);
         break;
       case 'detonateBomb':
         lines.push('Detonation de la bombe ciblee');
