@@ -367,7 +367,7 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 6, max: 9 }],
+    effects: [{ type: 'damage', min: 20, max: 30 }],
     desc: 'Morsure brutale au corps a corps.',
   },
   morsureRoyale: {
@@ -375,8 +375,8 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 12, max: 18 }],
-    desc: 'Morsure royale puissante.',
+    effects: [{ type: 'damage', min: 40, max: 60 }],
+    desc: 'Morsure royale devastatrice.',
   },
   soinAnimal: {
     id: 'soinAnimal', name: 'Soin Animal', short: 'SA', icon: ICON_HEAL_CROSS,
@@ -447,10 +447,10 @@ export const SPELLS = {
     apCost: 4, range: { min: 1, max: 3 }, needsLOS: true, lineOnly: true,
     target: 'enemy', area: { type: 'single' },
     effects: [
-      { type: 'damage', min: 20, max: 30 },
-      { type: 'debuff_pa', min: 1, max: 2 },
+      { type: 'damage', min: 30, max: 40 },
+      { type: 'debuff_pa', min: 1, max: 2, steal: true },
     ],
-    desc: 'Lancee en ligne (portee 3) : 20-30 degats et vole 1 a 2 PA.',
+    desc: 'Lancee en ligne (portee 3) : 30-40 degats et vole 1 a 2 PA (rendus au Xelor pour le tour).',
   },
   ralentissement: {
     id: 'ralentissement', name: 'Ralentissement', short: 'RA', icon: ICON_GEAR,
@@ -476,6 +476,15 @@ export const SPELLS = {
     target: 'enemy', area: { type: 'single' },
     effects: [{ type: 'damage', min: 20, max: 35 }],
     desc: 'Plante une aiguille du cadran : 20-35 degats. Portee 7.',
+  },
+  momification: {
+    id: 'momification', name: 'Momification', short: 'MO', icon: ICON_SHIELD,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 5, range: { min: 0, max: 0 }, needsLOS: false,
+    target: 'self', area: { type: 'single' },
+    cooldown: 8,
+    effects: [{ type: 'buff', shield: 0.5, reflect: 0.4, duration: 4 }],
+    desc: 'Le Xelor se momifie 4 tours : -50% degats reçus et renvoie 40% des degats restants a l attaquant.',
   },
 
   // ---------- ECAFLIP ----------
@@ -606,6 +615,7 @@ export function spellEffectLines(spell) {
         if (eff.bonusPa) parts.push(`+${eff.bonusPa} PA`);
         if (eff.bonusPm) parts.push(`+${eff.bonusPm} PM`);
         if (eff.shield) parts.push(`-${Math.round(eff.shield * 100)}% degats reçus`);
+        if (eff.reflect) parts.push(`renvoie ${Math.round(eff.reflect * 100)}% des degats`);
         lines.push(`${parts.join(', ')} pendant ${eff.duration} tours${eff.damageMult ? ' (cumulable)' : ''}`);
         break;
       }

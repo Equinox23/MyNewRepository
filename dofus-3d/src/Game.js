@@ -181,6 +181,7 @@ export class Game {
     this.mode = 'move';
     this.selectedSpellId = null;
     cur._bombPlacedThisTurn = false;
+    cur._ralentiHits = new Set(); // cibles deja ralenties ce tour
     this.hud.update(cur, this.mode, null);
     this.hud.flash(`Tour ${this.turn.round}  -  ${cur.name}`, 1200);
     this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, cur);
@@ -335,6 +336,12 @@ export class Game {
     cur.pa -= spell.apCost;
     if (spell.cooldown) cur.setCooldown(spell.id, spell.cooldown);
     cur.character.popCost(spell.apCost, 'pa');
+    // Ralentissement : on memorise la cible pour ne pas la re-ralentir
+    // ce tour.
+    if (spell.id === 'ralentissement') {
+      const tgt = this.fighters.find(f => f.alive && f.c === c && f.r === r);
+      if (tgt) { cur._ralentiHits = cur._ralentiHits || new Set(); cur._ralentiHits.add(tgt); }
+    }
     this.hud.update(cur, this.mode, this.selectedSpellId);
     this.busy = true;
     this.picker.setHover(null);
@@ -352,7 +359,7 @@ export class Game {
     const dist = Math.abs(caster.c - c) + Math.abs(caster.r - r);
     if (dist < spell.range.min || dist > spell.range.max) return 'Hors de portee';
     if (this.map3d.isWall(c, r)) return 'Mur';
-    const blockers = this.bombBlockers();
+    const blockers = this.losBlockers();
     if (spell.needsLOS && !hasLOS(this.map3d.getData(), caster.c, caster.r, c, r, blockers)) return 'Pas de vue';
     if ((spell.area && spell.area.type === 'line') || spell.lineOnly) {
       const dc = c - caster.c, dr = r - caster.r;
@@ -362,6 +369,11 @@ export class Game {
     if (spell.target === 'self' && targetFighter !== caster) return 'Cible : soi-meme';
     if (spell.target === 'any' && !targetFighter) return 'Cible : un combattant ou une bombe';
     if (spell.target === 'enemy' && (!targetFighter || targetFighter.team === caster.team)) return 'Pas d ennemi';
+    // Ralentissement : une seule fois par adversaire et par tour.
+    if (spell.id === 'ralentissement' && targetFighter
+        && caster._ralentiHits && caster._ralentiHits.has(targetFighter)) {
+      return 'Deja ralenti ce tour';
+    }
     if (spell.target === 'ally') {
       if (!targetFighter || targetFighter.team !== caster.team) return 'Pas d allie';
       if (spell.targetFilter === 'bomb' && !targetFighter.isBomb) return 'Cible : une bombe';
@@ -395,11 +407,14 @@ export class Game {
     return null;
   }
 
-  // Set des positions des bombes (utilise pour bloquer la LOS).
-  bombBlockers() {
+  // Set des positions qui bloquent la ligne de vue : bombes ET
+  // combattants (un adversaire ou une invocation bloque la vue, comme
+  // un arbre). Le lanceur et la case ciblee ne sont pas testes par
+  // hasLOS, donc on peut tout inclure sans risque.
+  losBlockers() {
     const s = new Set();
     for (const f of this.fighters) {
-      if (f.alive && f.isBomb) s.add(`${f.c},${f.r}`);
+      if (f.alive) s.add(`${f.c},${f.r}`);
     }
     return s;
   }
@@ -521,14 +536,32 @@ export class Game {
           if (tf === caster) continue;
           const base = effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1));
           const dmg = Math.round(base * caster.damageMultiplier());
-          const actual = tf.takeDamage(dmg);
+          // Degats apres bouclier ; une part peut etre renvoyee a
+          // l attaquant (buff Momification du Xelor).
+          const postShield = tf.computeShielded(dmg);
+          const reflectFrac = tf.reflectFraction();
+          let reflected = 0;
+          if (reflectFrac > 0 && caster && caster !== tf && !caster.isBomb) {
+            reflected = Math.round(postShield * reflectFrac);
+          }
+          const actual = Math.max(0, postShield - reflected);
+          tf.hp = Math.max(0, tf.hp - actual);
+          if (tf.hp <= 0) tf.alive = false;
           tf.character.popDamage(actual);
           tf.character.hpBar.setHp(tf.hp, tf.maxHp);
-          // Flash d impact sur la cible
           if (this.vfx) this.vfx.flash(cell.c, cell.r, { color: 0xffd166, duration: 0.3 });
           this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} subit ${actual} degats`, 'attack');
           if (!tf.alive) dying.push(tf);
           touched++;
+          // Renvoi de degats vers l attaquant.
+          if (reflected > 0) {
+            const back = caster.takeDamage(reflected);
+            caster.character.popDamage(back);
+            caster.character.hpBar.setHp(caster.hp, caster.maxHp);
+            if (this.vfx) this.vfx.flash(caster.c, caster.r, { color: 0xb47bdd, duration: 0.35 });
+            this.hud.log && this.hud.log(`${tf.name} renvoie ${back} degats a ${caster.name}`, 'attack');
+            if (!caster.alive && !dying.includes(caster)) dying.push(caster);
+          }
         }
         if (touched === 0) {
           this.hud.log && this.hud.log(`${caster.name} lance ${spell.name} (sans cible)`, 'cast');
@@ -624,6 +657,7 @@ export class Game {
             bonusPa: effect.bonusPa,
             bonusPm: effect.bonusPm,
             shield: effect.shield,
+            reflect: effect.reflect,
           });
           if (effect.bonusPa) tf.pa += effect.bonusPa;
           if (effect.bonusPm) tf.pm += effect.bonusPm;
@@ -669,8 +703,11 @@ export class Game {
       case 'debuff_pa': {
         const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
         if (!tf) return;
-        const amount = effect.value !== undefined ? effect.value
+        let amount = effect.value !== undefined ? effect.value
           : (effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1)));
+        // Vol de PA (Horloge) : on ne peut prendre que ce qu il reste
+        // reellement a la cible. Si elle est deja a 0 PA effectif, rien.
+        if (effect.steal) amount = Math.min(amount, tf.effectiveMaxPa);
         const hasDamage = spell.effects.some(e => e.type === 'damage');
         if (this.vfx && caster !== tf && !hasDamage) {
           caster.character.faceToward(tf.c, tf.r);
@@ -679,6 +716,11 @@ export class Game {
             { c: tf.c, r: tf.r },
             { color: 0x6fa8d6, glow: 0.9, radius: 0.16, arcHeight: 1.5 },
           );
+        }
+        if (amount <= 0) {
+          this.hud.log && this.hud.log(`${spell.name} : ${tf.name} n a plus de PA a perdre`, 'cast');
+          await new Promise(r => setTimeout(r, 200));
+          return;
         }
         if (this.vfx) this.vfx.debuffCloud({ c: tf.c, r: tf.r }, { color: 0x4a6f9a });
         // Reduction immediate + malus persistant (vol de temps du Xelor) :
@@ -690,6 +732,13 @@ export class Game {
         });
         tf.character.flashGlow(0x2980b9, 500);
         this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} perd ${amount} PA`, 'buff');
+        // Les PA voles sont rendus au lanceur pour le tour en cours.
+        if (effect.steal && caster && caster !== tf) {
+          caster.pa += amount;
+          caster.character.popText('+' + amount + ' PA', '#7ec6ff', {
+            fontSize: 22, dx: 0.45, yStart: 1.5, scaleX: 1.1, scaleY: 0.42,
+          });
+        }
         this.hud.update(this.turn.current(), this.mode, this.selectedSpellId);
         await new Promise(r => setTimeout(r, 300));
         return;
@@ -1471,7 +1520,7 @@ export class Game {
         if (ai.pa < spell.apCost) continue;
         const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
         if (dist < spell.range.min || dist > spell.range.max) continue;
-        if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r, this.bombBlockers())) continue;
+        if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r, this.losBlockers())) continue;
         ai.pa -= spell.apCost;
         if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
         ai.character.popCost(spell.apCost, 'pa');
@@ -1502,7 +1551,7 @@ export class Game {
         for (const spell of shieldSpells) {
           const dist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
           if (dist < spell.range.min || dist > spell.range.max) continue;
-          if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r, this.bombBlockers())) continue;
+          if (spell.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, target.c, target.r, this.losBlockers())) continue;
           if (anyCast) await this.aiPause(350);
           ai.pa -= spell.apCost;
           if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
@@ -1547,7 +1596,7 @@ export class Game {
       const dc = tgt.c - ai.c, dr = tgt.r - ai.r;
       const d = Math.abs(dc) + Math.abs(dr);
       if (d < s.range.min || d > s.range.max) return false;
-      if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, tgt.c, tgt.r, this.bombBlockers())) return false;
+      if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, tgt.c, tgt.r, this.losBlockers())) return false;
       // Sort en ligne : la cible doit etre alignee orthogonalement.
       if ((s.lineOnly || (s.area && s.area.type === 'line')) && dc !== 0 && dr !== 0) return false;
       return true;
@@ -1640,7 +1689,7 @@ export class Game {
     const blocked = (c, r) => this.map3d.isBlockedFor(c, r, ai);
     const result = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, ai.pm, blocked);
     const mapData = this.map3d.getData();
-    const blockers = this.bombBlockers();
+    const blockers = this.losBlockers();
     // Score d une case (plus bas = mieux) :
     //  - sur la cible (d < 1)        : a eviter absolument.
     //  - hors de portee (d > maxDist): case d APPROCHE -> on veut le d

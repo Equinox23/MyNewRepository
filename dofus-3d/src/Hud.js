@@ -1189,6 +1189,7 @@ export class Hud {
         if (b.bonusPa) parts.push(`${b.bonusPa > 0 ? '+' : ''}${b.bonusPa} PA`);
         if (b.bonusPm) parts.push(`${b.bonusPm > 0 ? '+' : ''}${b.bonusPm} PM`);
         if (b.shield) parts.push(`-${Math.round(b.shield * 100)}% degats reçus`);
+        if (b.reflect) parts.push(`renvoie ${Math.round(b.reflect * 100)}% des degats`);
         if (b.dot) parts.push(`Poison ${b.dot.min}-${b.dot.max}/tour`);
         if (parts.length === 0) continue;
         const tag = b.permanent ? '(carte)' : `(${Math.max(0, b.duration - 1)}t)`;
@@ -1417,6 +1418,7 @@ export class Hud {
         if (b.bonusPa) bits.push(`${b.bonusPa > 0 ? '+' : ''}${b.bonusPa} PA`);
         if (b.bonusPm) bits.push(`${b.bonusPm > 0 ? '+' : ''}${b.bonusPm} PM`);
         if (b.shield) bits.push(`-${Math.round(b.shield * 100)}% reçus`);
+        if (b.reflect) bits.push(`renvoi ${Math.round(b.reflect * 100)}%`);
         if (b.dot) bits.push(`Poison ${b.dot.min}-${b.dot.max}`);
         if (!bits.length) continue;
         const tag = b.permanent ? '(carte)' : `(${Math.max(0, b.duration - 1)}t)`;

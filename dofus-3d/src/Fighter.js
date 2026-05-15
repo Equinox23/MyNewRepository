@@ -86,7 +86,7 @@ export const DEFS = {
     name: 'Xelor',
     role: 'Maitre du temps',
     hp: 100, pa: 8, pm: 4, initiative: 10,
-    spellIds: ['horloge', 'ralentissement', 'devouement', 'aiguille'],
+    spellIds: ['horloge', 'ralentissement', 'devouement', 'aiguille', 'momification'],
   },
   ecaflip: {
     name: 'Ecaflip',
@@ -231,12 +231,26 @@ export class Fighter {
     return total;
   }
 
-  takeDamage(amount) {
+  // Degats apres reduction des boucliers, sans toucher aux PV.
+  computeShielded(amount) {
     let dmg = amount;
     for (const b of this.buffs) {
       if (b.shield) dmg *= (1 - b.shield);
     }
-    dmg = Math.max(0, Math.round(dmg));
+    return Math.max(0, Math.round(dmg));
+  }
+
+  // Fraction de degats renvoyee a l attaquant (buff Momification).
+  reflectFraction() {
+    let r = 0;
+    for (const b of this.buffs) {
+      if (b.reflect) r += b.reflect;
+    }
+    return Math.min(0.95, r);
+  }
+
+  takeDamage(amount) {
+    const dmg = this.computeShielded(amount);
     this.hp = Math.max(0, this.hp - dmg);
     if (this.hp <= 0) this.alive = false;
     return dmg;
