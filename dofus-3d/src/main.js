@@ -179,14 +179,14 @@ function handleTap(x, y, pointerType = 'mouse') {
   const isTouch = pointerType && pointerType !== 'mouse';
   if (!hit) {
     // Tap dans le vide (hors map). Sur mobile, ça equivaut au clic droit
-    // PC : on annule la selection courante et on revient en mode deplacement.
-    hud.unpinFighterInfo();
+    // PC : on revient en mode deplacement. L infobulle epinglee reste.
     if (isTouch && game.mode === 'spell') game.setMode('move');
     return;
   }
   const fighter = game.fighters.find(f => f.alive && f.c === hit.c && f.r === hit.r);
+  // Un clic sur un combattant l epingle ; un clic sur une case vide
+  // ne depingle plus (le bouton X de l infobulle reste l unique sortie).
   if (fighter) hud.pinFighterInfo(fighter);
-  else hud.unpinFighterInfo();
   game.onTileTap(hit.c, hit.r, pointerType);
 }
 
