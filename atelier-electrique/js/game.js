@@ -57,7 +57,7 @@ const Game = (() => {
       comps, order: L.comps.map((c) => c.id), scenario: sc, scenarioIdx: idx,
       probes: { red: null, black: null }, nextProbe: 'red', mode: 'OFF',
       cost: 0, measurements: 0, safety: 0, hints: 0, hintIdx: 0, xray: false,
-      log: [], selected: null, lastMeasureKey: '', safetyFlag: false, reading: '- - -',
+      log: [], history: [], selected: null, lastMeasureKey: '', safetyFlag: false, reading: '- - -',
       testing: false, events: [], finished: false, startTime: Date.now(),
     };
     S.optimalCost = computeOptimalCost();
@@ -71,10 +71,18 @@ const Game = (() => {
       <h2>${L.icon} ${esc(L.name)}</h2>
       <p class="intro">${esc(L.intro)}</p>
       <div class="symptom"><b>Le client :</b> ${esc(sc.symptom)}</div>
+      <details class="parts" open><summary>Les pièces de cet appareil</summary>
+        <ul>${L.comps.map((c) => { const d = TYPES[c.type]; return `<li><span class="p-ico">${d.icon}</span><b>${esc(c.label || d.short)}</b> — ${firstSentence(d.fiche.role)}</li>`; }).join('')}</ul>
+      </details>
       <p class="muted">Diagnostiquez la panne avec le multimètre, remplacez la pièce défectueuse, puis lancez le <b>test final</b>. Chaque pièce coûte de l'argent : ne remplacez pas au hasard !</p>
       <div class="modal-actions"><button class="btn primary" onclick="Game.closeModal()">À l'atelier !</button></div>`);
   }
 
+  function firstSentence(html) {
+    const txt = html.replace(/<[^>]+>/g, '');
+    const m = txt.match(/^.*?[.!?](\s|$)/);
+    return esc(m ? m[0].trim() : txt);
+  }
   function cheapestPart(inst, strict) {
     const candidates = STOCK.filter((p) => p.type === inst.type && (!strict || Object.keys(p.params).every((k) => inst.params[k] === undefined || inst.params[k] === p.params[k])));
     if (!candidates.length) return null;
@@ -230,6 +238,7 @@ const Game = (() => {
   /* Multimètre                                                          */
   /* ------------------------------------------------------------------ */
   function updateMeter(prims, res, powered) {
+    if (S.testing) return; // le multimètre est posé pendant le test final
     const { red, black } = S.probes;
     const mode = S.mode;
     let reading = '- - -';
@@ -265,6 +274,7 @@ const Game = (() => {
         S.lastMeasureKey = key;
         if (!S.testing) {
           S.measurements++;
+          S.history.push({ mode, red, black, powered, reading, pair: (x, y) => (red === x && black === y) || (red === y && black === x) });
           if (reading !== 'ERR ⚠') log(`📟 ${mode} entre ${pinName(red)} et ${pinName(black)} : ${reading}`);
         }
       }
@@ -616,10 +626,26 @@ const Game = (() => {
     el('log').innerHTML = S.log.slice(0, 12).map((e) => `<li>${esc(e.msg)}</li>`).join('');
   }
 
-  function renderAll() { renderSvg(); renderHeader(); renderMeter(); renderConstat(); renderPanel(); renderLog(); }
+  function renderTutorial() {
+    const box = el('tutorial');
+    if (!L.tutorial) { box.hidden = true; return; }
+    box.hidden = false;
+    // les étapes validées le restent (sticky), une seule étape courante
+    S.tutoDone = S.tutoDone || [];
+    let cur = -1;
+    L.tutorial.forEach((st, i) => {
+      if (cur !== -1) return;
+      if (!S.tutoDone[i] && st.done(S)) S.tutoDone[i] = true;
+      if (!S.tutoDone[i]) cur = i;
+    });
+    const short = (html) => { const t = html.replace(/<[^>]+>/g, ''); return t.length > 60 ? t.slice(0, 58) + '…' : t; };
+    box.innerHTML = `<h3>🎓 Guide pas à pas <span class="muted small">(${S.tutoDone.filter(Boolean).length}/${L.tutorial.length})</span></h3><ol class="tuto">${L.tutorial.map((st, i) => S.tutoDone[i] ? `<li class="done">✔ ${esc(short(st.text))}</li>` : `<li class="${i === cur ? 'current' : 'todo'}">${i === cur ? st.text : esc(short(st.text))}</li>`).join('')}</ol>`;
+  }
+
+  function renderAll() { renderSvg(); renderHeader(); renderMeter(); renderConstat(); renderPanel(); renderLog(); renderTutorial(); }
   function renderDynamic() {
-    if (!S || S.finished && !document.hidden) { if (!S) return; }
-    renderSvg(); renderHeader(); renderMeter(); renderConstat(); renderLog();
+    if (!S) return;
+    renderSvg(); renderHeader(); renderMeter(); renderConstat(); renderLog(); renderTutorial();
     if (S.selected) { const inst = S.comps[S.selected]; if (inst.type === 'resistance') renderPanel(); }
   }
 

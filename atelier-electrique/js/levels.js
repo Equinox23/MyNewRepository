@@ -73,6 +73,14 @@ const LEVELS = [
       { faults: { cordon: 'coupeN' }, symptom: "« La lampe s'est éteinte quand j'ai déplacé le meuble. »", lesson: "Le neutre du cordon était coupé. Attention : la phase arrivait bien jusqu'à l'ampoule (230 V entre L et le neutre de la prise), mais le circuit n'était pas refermé." },
       { faults: { sw: 'colle' }, symptom: "« Impossible d'éteindre la lampe, l'interrupteur ne fait plus rien. »", lesson: "Les contacts de l'interrupteur étaient soudés : il laissait passer le courant même en position OFF (0 Ω dans les deux positions)." },
     ],
+    tutorial: [
+      { text: "Branchez la prise murale et mettez l'interrupteur sur ON (sélectionnez-les puis « Actionner »). Observez le constat : l'ampoule reste éteinte.", done: (S) => S.comps.prise.state.plugged && S.comps.sw.state.on },
+      { text: "Multimètre en <b>V~</b>. Posez la pointe rouge sur la borne L de la prise et la noire sur N : vous devez lire 230 V. Le courant arrive bien.", done: (S) => S.history.some((m) => m.mode === 'V~' && m.powered && m.pair('prise.L', 'prise.N')) },
+      { text: "Toujours en V~, mesurez aux <b>bornes de l'ampoule</b>. 230 V = la tension arrive jusqu'à elle (donc elle est coupée… ou tout va bien avant elle). 0 V = le circuit est ouvert ailleurs : remontez vers la prise en mesurant chaque élément.", done: (S) => S.history.some((m) => m.mode === 'V~' && m.powered && m.pair('lampe.a', 'lampe.b')) },
+      { text: "<b>Débranchez</b> la prise : on ne mesure jamais une résistance sous tension.", done: (S) => !S.comps.prise.state.plugged && S.history.some((m) => m.mode === 'V~' && m.pair('lampe.a', 'lampe.b')) },
+      { text: "Multimètre en <b>Ω</b>. Ampoule : ≈ 880 Ω si elle est bonne, ∞ si elle est grillée. Interrupteur en ON : 0 Ω attendu. Cordon : 0 Ω sur chaque conducteur (L1↔L2, N1↔N2).", done: (S) => S.history.some((m) => m.mode === 'Ω' && !m.powered) },
+      { text: "Vous avez trouvé la pièce à ∞ (ou à 0 Ω alors qu'elle devrait couper) ? Sélectionnez-la → <b>Remplacer</b>, puis lancez le <b>✅ Test final</b>.", done: (S) => S.finished },
+    ],
     tests: [
       { name: 'Interrupteur ON → la lampe éclaire', controls: { sw: { on: true } }, expect: { lampe: 'on' } },
       { name: "Interrupteur OFF → la lampe s'éteint", controls: { sw: { on: false } }, expect: { lampe: 'off' } },
