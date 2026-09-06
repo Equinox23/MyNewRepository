@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>L'Atelier Électrique — répare et comprends</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+
+  <!-- ================= MENU ================= -->
+  <section id="screen-menu" class="screen active">
+    <header class="menu-head">
+      <h1>⚡ L'Atelier Électrique</h1>
+      <p class="tagline">Répare des appareils, comprends à quoi sert chaque pièce.</p>
+    </header>
+    <div class="howto">
+      <h2>Comment jouer</h2>
+      <ol>
+        <li><b>Observe</b> la plainte du client et inspecte les pièces (🔍).</li>
+        <li><b>Mesure</b> avec le multimètre : branche l'appareil et suis les 230 V le long du circuit (V~), puis débranche et vérifie les pièces à l'ohmmètre (Ω).</li>
+        <li><b>Remplace</b> uniquement la pièce défectueuse : chaque pièce coûte de l'argent.</li>
+        <li><b>Teste</b> l'appareil (✅ Test final). Cherche toujours <i>pourquoi</i> une pièce a lâché : une deuxième panne se cache parfois derrière la première.</li>
+      </ol>
+      <p class="muted">⚠ Règle d'or : jamais d'ohmmètre sur un circuit sous tension.</p>
+    </div>
+    <div id="levels" class="levels"></div>
+    <div class="menu-actions">
+      <button class="btn primary" onclick="Game.showEncyclo()">📚 Encyclopédie des composants</button>
+    </div>
+    <footer class="muted small">Simulation pédagogique simplifiée (charges résistives, valeurs efficaces). Les valeurs sont réalistes mais la vraie électricité est dangereuse : ne reproduisez pas ces manipulations sans formation.</footer>
+  </section>
+
+  <!-- ================= JEU ================= -->
+  <section id="screen-game" class="screen">
+    <header class="hud">
+      <button class="btn small" onclick="Game.menu()">← Menu</button>
+      <div id="hud-level" class="hud-level"></div>
+      <div id="hud-power" class="badge off">○ hors tension</div>
+      <div class="hud-stats">
+        <span title="Dépenses en pièces">💶 <span id="hud-cost">0,00 €</span></span>
+        <span title="Nombre de mesures">📟 <span id="hud-meas">0</span></span>
+      </div>
+      <div class="hud-actions">
+        <button id="btn-xray" class="btn small" onclick="Game.toggleXray()" title="Colorer les fils selon leur tension (compte comme un indice)">👁 Tensions</button>
+        <button class="btn small" onclick="Game.hint()">💡 Indice</button>
+        <button class="btn small" onclick="Game.showEncyclo()">📚 Fiches</button>
+        <button class="btn small go" onclick="Game.runTests()">✅ Test final</button>
+      </div>
+    </header>
+
+    <main class="game">
+      <div class="board">
+        <svg id="schematic" viewBox="0 0 820 460" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+
+      <aside class="panel">
+        <section class="card constat">
+          <h3>🗣 Constat</h3>
+          <p id="symptom" class="symptom"></p>
+          <div id="outputs" class="outputs"></div>
+        </section>
+
+        <section class="card meter">
+          <h3>📟 Multimètre</h3>
+          <div id="meter-display" class="meter-display">- - -</div>
+          <div id="meter-modes" class="meter-modes"></div>
+          <div id="meter-probes" class="meter-probes"></div>
+          <p id="meter-help" class="muted small"></p>
+        </section>
+
+        <section class="card">
+          <h3>🔧 Pièce sélectionnée</h3>
+          <div id="selected"></div>
+        </section>
+
+        <section class="card journal">
+          <h3>📋 Journal</h3>
+          <ul id="log"></ul>
+        </section>
+      </aside>
+    </main>
+  </section>
+
+  <div id="modal" class="modal"><div id="modal-box" class="modal-box"></div></div>
+  <div id="toast" class="toast"></div>
+
+  <script src="./js/sim.js"></script>
+  <script src="./js/components.js"></script>
+  <script src="./js/levels.js"></script>
+  <script src="./js/game.js"></script>
+</body>
+</html>
