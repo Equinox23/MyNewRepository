@@ -19,6 +19,7 @@ import { buildChampignonRoyal } from './models/champignonRoyal.js';
 import { buildDragounetRouge } from './models/dragounetRouge.js';
 import { buildChatonBlanc } from './models/chatonBlanc.js';
 import { buildPandawa } from './models/pandawa.js';
+import { buildBombeRoublard } from './models/bombeRoublard.js';
 
 const BUILDERS = {
   iop: buildIop,
@@ -32,6 +33,7 @@ const BUILDERS = {
   dragounetRouge: buildDragounetRouge,
   chatonBlanc: buildChatonBlanc,
   pandawa: buildPandawa,
+  bombeRoublard: buildBombeRoublard,
   crapaud: buildCrapaud,
   crapaudChef: buildCrapaudChef,
   chafer: buildChafer,
@@ -47,6 +49,7 @@ const BUILDERS = {
 const FRAME = {
   iop: { y: 0.95, dist: 2.7, height: 1.15 },
   pandawa: { y: 1.0, dist: 2.9, height: 1.25 },
+  bombeRoublard: { y: 0.35, dist: 1.6, height: 0.6 },
   osamodas: { y: 0.95, dist: 2.7, height: 1.15 },
   roublard: { y: 0.90, dist: 2.5, height: 1.10 },
   xelor: { y: 1.05, dist: 3.0, height: 1.30 },
