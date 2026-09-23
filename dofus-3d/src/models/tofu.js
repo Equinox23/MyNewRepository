@@ -1,12 +1,13 @@
 import * as THREE from 'three';
+import { addEyes } from './kit.js';
 
 // Tofu : petit oiseau rond et duveteux. Corps spherique jaune, grands
 // yeux, bec orange, petites ailes et pattes fines.
 export function buildTofu() {
   const group = new THREE.Group();
 
-  const featherMat = new THREE.MeshStandardMaterial({ color: 0xf2c93a, roughness: 0.85 });
-  const featherDkMat = new THREE.MeshStandardMaterial({ color: 0xd9a324, roughness: 0.9 });
+  const featherMat = new THREE.MeshStandardMaterial({ color: 0xffd23a, roughness: 0.85 });
+  const featherDkMat = new THREE.MeshStandardMaterial({ color: 0xf0a820, roughness: 0.9 });
   const beakMat = new THREE.MeshStandardMaterial({ color: 0xe8762a, roughness: 0.6 });
   const legMat  = new THREE.MeshStandardMaterial({ color: 0xd9762a, roughness: 0.7 });
   const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
@@ -55,19 +56,8 @@ export function buildTofu() {
     group.add(tuft);
   }
 
-  // -- Yeux : tres grands --
-  for (const dx of [-0.13, 0.13]) {
-    const white = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 10), eyeWhiteMat);
-    white.position.set(dx, 0.60, 0.24);
-    white.scale.set(1, 1.15, 0.6);
-    group.add(white);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 8), eyeMat);
-    pupil.position.set(dx, 0.59, 0.31);
-    group.add(pupil);
-    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 6), eyeWhiteMat);
-    glint.position.set(dx + 0.02, 0.63, 0.35);
-    group.add(glint);
-  }
+  // -- Yeux : tres grands, facon Dofus --
+  addEyes(group, { x: 0, y: 0.62, z: 0.25, size: 0.11, spacing: 0.25, turn: 0.3 });
 
   // -- Bec : deux cones --
   const beakTop = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.16, 8), beakMat);

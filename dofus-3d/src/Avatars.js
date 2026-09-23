@@ -62,8 +62,8 @@ const FRAME = {
   chaferRoyal: { y: 1.15, dist: 3.4, height: 1.4 },
   tofu: { y: 0.45, dist: 1.9, height: 0.7 },
   tofuRoyal: { y: 0.65, dist: 2.6, height: 0.95 },
-  champignon: { y: 0.6, dist: 2.3, height: 0.95 },
-  champignonRoyal: { y: 0.85, dist: 3.0, height: 1.2 },
+  champignon: { y: 0.72, dist: 2.7, height: 1.1 },
+  champignonRoyal: { y: 1.05, dist: 3.6, height: 1.4 },
 };
 
 // Cache : classId -> dataURL.
@@ -106,8 +106,9 @@ export function getAvatar(classId, size = 64) {
 
   const model = builder();
   toonify(model, { width: 0.02, minRadius: 0.06 });
-  // Legere rotation pour ne pas etre full face.
-  model.rotation.y = -Math.PI / 5;
+  // La camera est a 45 deg (axe +X+Z) : on tourne le modele (qui regarde
+  // +Z) vers elle, avec un leger trois-quarts pour garder du volume.
+  model.rotation.y = Math.PI / 4 - 0.35;
   scene.add(model);
 
   camera.position.set(frame.dist * 0.85, frame.y + frame.height * 0.5, frame.dist * 0.85);

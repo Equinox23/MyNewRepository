@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addEyes } from './kit.js';
 
 // Roublard : assassin-artificier, style chibi -- grosse tete sous une
 // capuche profonde, masque de metal couvrant le bas du visage, yeux
@@ -118,19 +119,18 @@ export function buildRoublard() {
   group.add(head);
 
   // Capuche profonde + pointe.
-  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.43, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.62), cloakMat);
+  // Capuche ouverte devant (le visage reste visible) + visiere au-dessus.
+  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.43, 22, 18, Math.PI / 2 + 0.8, Math.PI * 2 - 1.6, 0, Math.PI * 0.62), cloakMat);
   hood.position.set(0, 1.12, -0.02);
+  const hoodFront = new THREE.Mesh(new THREE.SphereGeometry(0.43, 16, 8, Math.PI / 2 - 0.8, 1.6, 0, Math.PI * 0.3), cloakMat);
+  hoodFront.position.set(0, 1.12, -0.02);
+  group.add(hoodFront);
   hood.castShadow = true;
   group.add(hood);
   const hoodTip = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.30, 14), cloakMat);
   hoodTip.position.set(0, 1.40, -0.16);
   hoodTip.rotation.x = -0.6;
   group.add(hoodTip);
-  // Ombre profonde sous la capuche.
-  const shadow = new THREE.Mesh(new THREE.CircleGeometry(0.22, 18), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-  shadow.position.set(0, 1.14, 0.20);
-  group.add(shadow);
-
   // Masque metallique (bas du visage).
   const mask = new THREE.Mesh(new THREE.SphereGeometry(0.30, 16, 12, 0, Math.PI, 0, Math.PI), plateMat);
   mask.scale.set(1, 0.6, 0.6);
@@ -148,15 +148,14 @@ export function buildRoublard() {
     group.add(slit);
   }
 
-  // Yeux rouges brillants + halo.
-  for (const dx of [-0.10, 0.10]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.052, 12, 10), eyeMat);
-    eye.position.set(dx, 1.15, 0.27);
-    group.add(eye);
-    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.085, 10, 8),
-      new THREE.MeshBasicMaterial({ color: 0xff5544, transparent: true, opacity: 0.32 }));
-    halo.position.set(dx, 1.15, 0.27);
-    group.add(halo);
+  // Regard malicieux : grands yeux a iris rouge, paupieres plissees.
+  addEyes(group, { x: 0, y: 1.14, z: 0.335, size: 0.095, spacing: 0.26, turn: 0.3, iris: 0xd8322a, lid: 0x1c1c26, angry: true });
+  // Sourcils narquois.
+  for (const dx of [-0.13, 0.13]) {
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.035, 0.05), new THREE.MeshStandardMaterial({ color: 0x1a1010 }));
+    brow.position.set(dx, 1.25, 0.35);
+    brow.rotation.z = dx > 0 ? 0.25 : -0.4;
+    group.add(brow);
   }
 
   // ============ DEUX DAGUES croisees dans le dos ============

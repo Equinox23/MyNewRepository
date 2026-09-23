@@ -1,3 +1,4 @@
+import { paintedSpellIcon } from './SpellIcons.js';
 // Registre central des sorts. Chaque sort a son propre dessin SVG (icon),
 // sa couleur de categorie (rouge = attaque, rose = soin, jaune = boost,
 // vert = deplacement), et ses effets composables.
@@ -845,4 +846,11 @@ export function spellEffectLines(spell) {
     }
   }
   return lines;
+}
+
+// Icones peintes facon Dofus (cf. SpellIcons.js) : remplacent les
+// pictogrammes quand une illustration dediee existe.
+for (const spell of Object.values(SPELLS)) {
+  const painted = paintedSpellIcon(spell);
+  if (painted) spell.paintedIcon = painted;
 }

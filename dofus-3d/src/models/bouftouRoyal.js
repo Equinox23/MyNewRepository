@@ -1,38 +1,21 @@
 import * as THREE from 'three';
 import { buildBouftou } from './bouftou.js';
 
-// Bouftou Royal : la silhouette du Bouftou normal en plus grand, plus
-// dore + une couronne d or a 5 epis sertis de gemmes posee sur la tete.
+// Bouftou Royal : la silhouette du Bouftou en plus grand, laine doree
+// plus sombre + une couronne d or a 5 epis sertis de gemmes.
 export function buildBouftouRoyal() {
   const group = new THREE.Group();
 
-  // Base : un Bouftou ordinaire, scale 1.4 pour le faire ressortir.
-  const body = buildBouftou();
+  // Base : un Bouftou en version Royal (laine doree, grosses cornes),
+  // agrandi pour le faire ressortir.
+  const body = buildBouftou({ royal: true });
   body.scale.setScalar(1.4);
-  // Teinte plus doree : on recolore uniquement le jaune / fluffy de la
-  // laine (les masques noirs, yeux rouges et cornes blanches restent
-  // identifies par leurs valeurs RGB caracteristiques).
-  body.traverse(o => {
-    if (!o.isMesh || !o.material || !o.material.color) return;
-    const c = o.material.color;
-    // Repere la palette laine claire / jaune dans buildBouftou
-    // (0xf1c40f vif et 0xfff3a0 clair) et la pousse vers un or plus vif.
-    const isMainYellow = Math.abs(c.r - 0.945) < 0.05 && Math.abs(c.g - 0.769) < 0.05 && c.b < 0.20;
-    const isLight = c.r > 0.95 && c.g > 0.85 && c.b > 0.50;
-    if (isMainYellow) {
-      o.material = o.material.clone();
-      o.material.color.setHex(0xffc000);
-    } else if (isLight) {
-      o.material = o.material.clone();
-      o.material.color.setHex(0xffe066);
-    }
-  });
   group.add(body);
 
-  // Couronne d or posee au-dessus de la tete (qui se trouve a ~y=0.95
-  // sur le Bouftou non-scale, soit ~1.33 apres scale 1.4).
+  // Couronne d or posee sur le toupet (y~1.02 sur le Bouftou normal).
   const crown = buildCrown();
-  crown.position.y = 1.42;
+  crown.position.set(0, 1.5, 0.1);
+  crown.rotation.x = 0.12;
   group.add(crown);
 
   return group;

@@ -45,6 +45,8 @@ const BUILDERS = {
   champignonRoyal: buildChampignonRoyal,
 };
 
+const WHITE = new THREE.Color(0xffffff);
+
 const HP_BAR_Y = {
   iop: 1.95,
   osamodas: 2.00,
@@ -64,8 +66,8 @@ const HP_BAR_Y = {
   chaferRoyal: 2.30,
   tofu: 1.05,
   tofuRoyal: 1.55,
-  champignon: 1.25,
-  champignonRoyal: 1.80,
+  champignon: 1.45,
+  champignonRoyal: 2.15,
 };
 
 export class Character3D {
@@ -80,9 +82,20 @@ export class Character3D {
     this.busy = false;
 
     const builder = BUILDERS[classId] || buildIop;
-    this.group = builder();
+    // `group` = racine (position / orientation / cercles / barre de vie),
+    // `body` = le modele seul, anime (respiration, sauts, recul...).
+    this.group = new THREE.Group();
+    this.body = builder();
     // Style Dofus : cel-shading + contour sombre.
-    toonify(this.group, { width: 0.018, minRadius: 0.06 });
+    toonify(this.body, { width: 0.018, minRadius: 0.06 });
+    this.group.add(this.body);
+    this._materials = [];
+    this.body.traverse(o => {
+      if (o.isMesh && !o.userData.isOutline && o.material && o.material.emissive && !this._materials.includes(o.material)) {
+        this._materials.push(o.material);
+      }
+    });
+    this._baseEmissive = this._materials.map(m => m.emissive.clone());
     this.group.position.set(c, 0, r);
     scene.add(this.group);
 
@@ -129,14 +142,75 @@ export class Character3D {
   }
 
   update(dt, time) {
-    if (this.busy) return;
-    // Idle subtil
-    this.group.position.y = Math.sin(time * 1.6 + this.idleOffset) * 0.035;
     // L anneau du tour pulse
     if (this.turnRing.visible) {
       const pulse = 0.85 + Math.sin(time * 3) * 0.15;
       this.turnRing.material.opacity = pulse;
     }
+    if (this.busy || this._anim) return;
+    // Respiration : leger ecrasement / etirement (squash & stretch).
+    const b = Math.sin(time * 2.4 + this.idleOffset);
+    this.body.scale.set(1 - b * 0.018, 1 + b * 0.03, 1 - b * 0.018);
+    this.body.position.y = 0;
+    this.body.rotation.set(0, 0, Math.sin(time * 1.2 + this.idleOffset) * 0.02);
+  }
+
+  // Petite animation "procedurale" du corps pendant `duration` ms :
+  // fn(t) recoit t in [0,1] et modifie this.body. Remet la pose a zero.
+  _animate(duration, fn) {
+    this._anim = true;
+    return new Promise(resolve => {
+      const start = performance.now();
+      const step = (now) => {
+        const t = Math.min(1, (now - start) / duration);
+        fn(t);
+        if (t < 1) requestAnimationFrame(step);
+        else {
+          this.body.scale.set(1, 1, 1);
+          this.body.position.set(0, 0, 0);
+          this.body.rotation.set(0, 0, 0);
+          this._anim = false;
+          resolve();
+        }
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  // Pose de lancement de sort : accroupi, puis bond etire vers le haut.
+  castPose() {
+    return this._animate(420, (t) => {
+      if (t < 0.3) {
+        const k = t / 0.3;
+        this.body.scale.set(1 + 0.12 * k, 1 - 0.18 * k, 1 + 0.12 * k);
+      } else {
+        const k = (t - 0.3) / 0.7;
+        const hop = Math.sin(k * Math.PI);
+        this.body.position.y = hop * 0.28;
+        const st = Math.sin(Math.min(1, k * 2) * Math.PI) * 0.16;
+        this.body.scale.set(1 - st * 0.5, 1 + st, 1 - st * 0.5);
+        this.body.rotation.x = -hop * 0.15;
+      }
+    });
+  }
+
+  // Reaction a un coup : flash blanc, recul et tremblement.
+  hitReact() {
+    const mats = this._materials;
+    const base = this._baseEmissive;
+    return this._animate(380, (t) => {
+      const f = t < 0.5 ? 1 - t * 2 : 0;
+      for (let i = 0; i < mats.length; i++) {
+        mats[i].emissive.copy(base[i]).lerp(WHITE, f * 0.85);
+      }
+      const k = Math.sin(t * Math.PI);
+      this.body.rotation.x = k * 0.28;
+      this.body.position.z = -k * 0.12;
+      this.body.position.x = Math.sin(t * 40) * 0.04 * (1 - t);
+      this.body.scale.set(1 + k * 0.08, 1 - k * 0.1, 1 + k * 0.08);
+    }).then(() => {
+      for (let i = 0; i < mats.length; i++) mats[i].emissive.copy(base[i]);
+    });
   }
 
   setTile(c, r) {
@@ -176,10 +250,20 @@ export class Character3D {
         const e = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
         this.group.position.x = sx + dx * e;
         this.group.position.z = sz + dz * e;
+        // Demarche sautillante facon Dofus : petit bond par case, corps
+        // penche en avant, ecrasement a l atterrissage.
+        const hop = Math.sin(t * Math.PI);
+        this.body.position.y = hop * 0.13;
+        this.body.rotation.x = 0.12 * hop;
+        const land = t > 0.8 ? Math.sin((t - 0.8) / 0.2 * Math.PI) * 0.1 : 0;
+        this.body.scale.set(1 + land, 1 - land * 1.2 + hop * 0.05, 1 + land);
         if (t < 1) requestAnimationFrame(step);
         else {
           this.group.position.x = c;
           this.group.position.z = r;
+          this.body.position.y = 0;
+          this.body.rotation.x = 0;
+          this.body.scale.set(1, 1, 1);
           this.busy = false;
           resolve();
         }
@@ -201,18 +285,33 @@ export class Character3D {
       const ux = dx / len, uz = dz / len;
       this.facing = Math.atan2(dx, dz);
       this.group.rotation.y = this.facing;
-      const lungeDist = 0.45;
+      const lungeDist = 0.5;
       const start = performance.now();
       const step = (now) => {
         const t = Math.min(1, (now - start) / duration);
-        // Aller-retour en sinus
-        const offset = Math.sin(t * Math.PI) * lungeDist;
+        // Prise d elan (recul + ecrasement) puis frappe rapide vers
+        // l avant et retour.
+        let offset, lean, sq;
+        if (t < 0.3) {
+          const k = t / 0.3;
+          offset = -0.12 * k; lean = -0.22 * k; sq = 0.1 * k;
+        } else if (t < 0.55) {
+          const k = (t - 0.3) / 0.25;
+          offset = -0.12 + (lungeDist + 0.12) * (1 - (1 - k) * (1 - k)); lean = -0.22 + 0.62 * k; sq = 0.1 - 0.25 * k;
+        } else {
+          const k = (t - 0.55) / 0.45;
+          offset = lungeDist * (1 - k); lean = 0.4 * (1 - k); sq = -0.15 * (1 - k);
+        }
         this.group.position.x = sx + ux * offset;
         this.group.position.z = sz + uz * offset;
+        this.body.rotation.x = lean;
+        this.body.scale.set(1 + sq, 1 - sq, 1 + sq);
         if (t < 1) requestAnimationFrame(step);
         else {
           this.group.position.x = sx;
           this.group.position.z = sz;
+          this.body.rotation.x = 0;
+          this.body.scale.set(1, 1, 1);
           this.busy = false;
           resolve();
         }
@@ -275,14 +374,20 @@ export class Character3D {
     const canvas = document.createElement('canvas');
     canvas.width = 160; canvas.height = 56;
     const ctx = canvas.getContext('2d');
-    ctx.font = `bold ${fontSize}px "Trebuchet MS", sans-serif`;
+    ctx.font = `600 ${fontSize}px Fredoka, "Trebuchet MS", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = '#000';
-    ctx.strokeText(text, 80, 28);
-    ctx.fillStyle = color;
-    ctx.fillText(text, 80, 28);
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = '#1a0c02';
+    ctx.strokeText(text, 80, 29);
+    // Degrade vertical clair -> couleur (chiffres "bonbon" facon Dofus).
+    const grad = ctx.createLinearGradient(0, 12, 0, 44);
+    grad.addColorStop(0, '#ffffff');
+    grad.addColorStop(0.45, color);
+    grad.addColorStop(1, color);
+    ctx.fillStyle = grad;
+    ctx.fillText(text, 80, 29);
     const tex = new THREE.CanvasTexture(canvas);
     tex.minFilter = THREE.LinearFilter;
     const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
@@ -294,8 +399,11 @@ export class Character3D {
     const start = performance.now();
     const tick = (now) => {
       const t = Math.min(1, (now - start) / duration);
-      sprite.position.y = yStart + t * yRise;
-      sprite.material.opacity = 1 - t;
+      // Apparition "pop" (rebond) puis montee et fondu.
+      const pop = t < 0.12 ? 0.5 + (t / 0.12) * 0.8 : t < 0.25 ? 1.3 - ((t - 0.12) / 0.13) * 0.3 : 1;
+      sprite.scale.set(scaleX * pop, scaleY * pop, 1);
+      sprite.position.y = yStart + (1 - (1 - t) * (1 - t)) * yRise;
+      sprite.material.opacity = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
       if (t < 1) requestAnimationFrame(tick);
       else {
         this.scene.remove(sprite);
@@ -309,6 +417,7 @@ export class Character3D {
   // Pop chiffre de degats : "-15" en rouge.
   popDamage(value, color = '#ff5577') {
     this.popText('-' + value, color);
+    if (value > 0 && !this._dying) this.hitReact();
   }
 
   // Pop "+30" en vert pour les soins.
@@ -417,6 +526,7 @@ export class Character3D {
 
   // Animation de mort : le perso s effondre (scale.y -> 0) + alpha.
   die(duration = 600) {
+    this._dying = true;
     return new Promise(resolve => {
       this.busy = true;
       this.turnRing.visible = false;

@@ -35,6 +35,7 @@ const rangeOverlay = new RangeOverlay(scene3d.scene, MAP_SIZE);
 const hud = new Hud();
 const vfx = new VFX(scene3d.scene);
 const audio = new AudioEngine();
+vfx.onShake = (i, d) => scene3d.shake(i, d);
 hud.audio = audio;
 hud.refreshAudioControls();
 const game = new Game({ scene3d, map3d, picker, hud, rangeOverlay, vfx, audio });

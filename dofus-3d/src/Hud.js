@@ -1,5 +1,6 @@
 import { spellEffectLines } from './Spells.js';
 import { getAvatar } from './Avatars.js';
+import { spellIconFrame } from './SpellIcons.js';
 
 // HUD DOM : panneau bas avec stats + barre de sorts.
 // Chaque slot affiche le numero de touche (haut-gauche), une icone SVG
@@ -1184,12 +1185,22 @@ export class Hud {
       // Sort d invocation : l icone represente la creature a invoquer
       // (snapshot 3D du modele) plutot qu un pictogramme generique.
       let iconHtml = spell.icon || '';
+      let painted = false;
+      if (spell.paintedIcon) {
+        iconHtml = spell.paintedIcon;
+        painted = true;
+      }
       const summonEff = spell.effects && spell.effects.find(e => e.type === 'summon');
       if (summonEff) {
         let avatar = null;
         try { avatar = getAvatar(summonEff.creatureId, 96); } catch (_) { avatar = null; }
-        if (avatar) iconHtml = `<img class="summon-icon" src="${avatar}" alt="">`;
+        if (avatar) {
+          // Portrait de la creature sur un fond d icone "invocation".
+          iconHtml = `${spellIconFrame(spell)}<img class="summon-icon" src="${avatar}" alt="">`;
+          painted = true;
+        }
       }
+      if (painted) btn.classList.add('painted');
       btn.innerHTML = `
         <div class="accent" style="background: ${spell.color};"></div>
         <div class="key">${keyLabel}</div>

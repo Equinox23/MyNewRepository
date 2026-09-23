@@ -1,129 +1,99 @@
 import * as THREE from 'three';
+import { M, mesh } from './kit.js';
 
-// Craqueleur : petit golem de pierre. Corps cube allonge avec
-// vertices perturbes, bras massifs, tete cubique avec yeux jaunes
-// brillants, plaque de mousse sur le crane.
+// Craqueleur facon Dofus : golem de roche trapu et voute. Enorme torse
+// en rocher arrondi, petite tete enfoncee entre les epaules avec deux
+// yeux jaunes lumineux, gros bras qui tombent jusqu au sol termines par
+// des poings-rochers, mousse et petites pousses sur le dos.
 export function buildCraqueleur() {
   const group = new THREE.Group();
   const rng = mulberry32(31415);
 
-  const stone = 0x8a7868;
-  const stoneDark = 0x5a4b3a;
-  const stoneDeep = 0x2a1a0c;
-  const eyeGlow = 0xfff066;
-  const mossColor = 0x4a7a32;
+  const stone = M(0x9a8a78, { r: 0.95 });
+  const stoneLt = M(0xb8a894, { r: 0.95 });
+  const stoneDk = M(0x6a5a4a, { r: 0.95 });
+  const crack = M(0x2a1a0c, { r: 1 });
+  const moss = M(0x5a9a32, { r: 0.95 });
+  const mossLt = M(0x86c24a, { r: 0.95 });
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0xfff27a });
+  const eyeHalo = new THREE.MeshBasicMaterial({ color: 0xffd23a, transparent: true, opacity: 0.45 });
 
-  const stoneMat = new THREE.MeshStandardMaterial({ color: stone, roughness: 0.95, flatShading: true });
-  const darkMat  = new THREE.MeshStandardMaterial({ color: stoneDark, roughness: 0.95, flatShading: true });
-  const deepMat  = new THREE.MeshStandardMaterial({ color: stoneDeep, roughness: 1 });
-  const eyeMat   = new THREE.MeshBasicMaterial({ color: eyeGlow });
-  const eyeHalo  = new THREE.MeshBasicMaterial({ color: eyeGlow, transparent: true, opacity: 0.4 });
-  const mossMat  = new THREE.MeshStandardMaterial({ color: mossColor, roughness: 0.95, flatShading: true });
+  const rock = (r, detail, amt) => {
+    const g = new THREE.IcosahedronGeometry(r, detail);
+    perturb(g, rng, amt);
+    return g;
+  };
 
-  // -- 2 pattes courtes cubiques --
-  for (const dx of [-0.16, 0.16]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.22, 0.22), darkMat);
-    leg.position.set(dx, 0.12, 0);
-    leg.castShadow = true;
-    group.add(leg);
+  // -- Jambes : deux gros rochers courts --
+  for (const sx of [-1, 1]) {
+    group.add(mesh(rock(0.15, 1, 0.03), stoneDk, [sx * 0.17, 0.13, 0], [1, 0.9, 1.1]));
   }
 
-  // -- Corps : grand cube allonge, vertices perturbes --
-  const bodyGeom = new THREE.BoxGeometry(0.68, 0.52, 0.54);
-  perturb(bodyGeom, rng, 0.06);
-  const body = new THREE.Mesh(bodyGeom, stoneMat);
-  body.position.y = 0.56;
-  body.castShadow = true;
-  group.add(body);
-  // Fissures (rectangles fins sombres incrustes)
-  for (const [x, y, z, w, h] of [
-    [-0.20, 0.62, 0.27, 0.22, 0.03],
-    [0.18, 0.55, 0.27, 0.04, 0.18],
-    [-0.10, 0.45, 0.27, 0.16, 0.025],
-  ]) {
-    const cr = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.005), deepMat);
+  // -- Torse voute --
+  group.add(mesh(rock(0.42, 2, 0.05), stone, [0, 0.6, -0.02], [1.15, 0.95, 0.95]));
+  // Plaques de roche plus claires sur le ventre / les epaules.
+  group.add(mesh(rock(0.24, 1, 0.03), stoneLt, [0, 0.5, 0.24], [1.2, 0.9, 0.6]));
+  for (const sx of [-1, 1]) {
+    group.add(mesh(rock(0.2, 1, 0.04), stoneLt, [sx * 0.36, 0.86, 0.02], [1.1, 0.8, 1]));
+  }
+  // Fissures sombres.
+  for (const [x, y, z, rz, len] of [[-0.14, 0.62, 0.36, 0.5, 0.2], [0.16, 0.52, 0.37, -0.7, 0.16], [0.02, 0.72, 0.38, 0.1, 0.12]]) {
+    const cr = new THREE.Mesh(new THREE.BoxGeometry(len, 0.018, 0.02), crack);
     cr.position.set(x, y, z);
+    cr.rotation.z = rz;
     group.add(cr);
   }
 
-  // -- Petits cailloux sur les epaules --
-  for (const [dx, dy, dz] of [[-0.30, 0.82, 0.08], [0.30, 0.82, 0.08], [0, 0.88, -0.10]]) {
-    const r = 0.10 + rng() * 0.04;
-    const g = new THREE.IcosahedronGeometry(r, 0);
-    perturb(g, rng, 0.03);
-    const s = new THREE.Mesh(g, stoneMat);
-    s.position.set(dx, dy, dz);
-    s.castShadow = true;
-    group.add(s);
-  }
-
-  // -- Bras massifs (cube + poing icosahedre) --
-  for (const dx of [-0.42, 0.42]) {
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.34, 0.20), stoneMat);
-    arm.position.set(dx, 0.50, 0);
-    arm.castShadow = true;
-    group.add(arm);
-    const fistGeom = new THREE.IcosahedronGeometry(0.14, 0);
-    perturb(fistGeom, rng, 0.03);
-    const fist = new THREE.Mesh(fistGeom, darkMat);
-    fist.position.set(dx, 0.33, 0);
-    fist.castShadow = true;
-    group.add(fist);
-  }
-
-  // -- Tete cubique --
-  const headGeom = new THREE.BoxGeometry(0.46, 0.34, 0.44);
-  perturb(headGeom, rng, 0.04);
-  const head = new THREE.Mesh(headGeom, stoneMat);
-  head.position.y = 1.00;
-  head.castShadow = true;
-  group.add(head);
-
-  // Yeux jaunes brillants (rectangles + halo)
-  for (const dx of [-0.10, 0.10]) {
-    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), eyeHalo);
-    halo.position.set(dx, 1.02, 0.22);
+  // -- Tete enfoncee entre les epaules --
+  group.add(mesh(rock(0.2, 1, 0.03), stone, [0, 0.95, 0.18], [1.1, 0.85, 1]));
+  // Arcade sourciliere lourde.
+  group.add(mesh(new THREE.BoxGeometry(0.3, 0.06, 0.1), stoneDk, [0, 1.0, 0.32], null, [0.25, 0, 0]));
+  // Yeux lumineux.
+  for (const sx of [-1, 1]) {
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), eyeHalo);
+    halo.position.set(sx * 0.075, 0.95, 0.35);
     group.add(halo);
-    const eye = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.045, 0.04), eyeMat);
-    eye.position.set(dx, 1.02, 0.24);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), eyeMat);
+    eye.position.set(sx * 0.075, 0.95, 0.37);
+    eye.scale.set(1.3, 0.8, 0.6);
     group.add(eye);
   }
+  // Bouche : fente sombre.
+  group.add(mesh(new THREE.BoxGeometry(0.14, 0.02, 0.02), crack, [0, 0.86, 0.36]));
 
-  // Bouche : trait fissure sombre
-  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.04, 0.04), deepMat);
-  mouth.position.set(0, 0.90, 0.22);
-  group.add(mouth);
+  // -- Bras massifs + poings-rochers --
+  for (const sx of [-1, 1]) {
+    group.add(mesh(rock(0.14, 1, 0.03), stoneDk, [sx * 0.5, 0.66, 0.04], [0.9, 1.3, 0.9], [0, 0, sx * 0.2]));
+    group.add(mesh(rock(0.2, 1, 0.04), stone, [sx * 0.56, 0.26, 0.12], [1.05, 0.95, 1.1]));
+    // Jointures plus claires.
+    for (let k = 0; k < 3; k++) {
+      group.add(mesh(rock(0.055, 0, 0.01), stoneLt, [sx * 0.5 + sx * k * 0.02, 0.3 + k * 0.05, 0.3], null));
+    }
+  }
 
-  // -- Plaque de mousse sur le crane --
-  const moss = new THREE.Mesh(
-    new THREE.SphereGeometry(0.20, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.45),
-    mossMat
-  );
-  moss.position.y = 1.16;
-  moss.scale.set(1, 0.55, 1);
-  group.add(moss);
-  // Petites herbes sur la mousse
-  for (let i = 0; i < 4; i++) {
-    const a = rng() * Math.PI * 2;
-    const blade = new THREE.Mesh(new THREE.ConeGeometry(0.022, 0.08, 4), mossMat);
-    blade.position.set(Math.cos(a) * 0.10, 1.22, Math.sin(a) * 0.10);
-    blade.rotation.x = (rng() - 0.5) * 0.4;
-    blade.rotation.z = (rng() - 0.5) * 0.4;
-    group.add(blade);
+  // -- Mousse et pousses sur le dos --
+  for (const [x, y, z, s] of [[0, 0.98, -0.12, 0.16], [-0.2, 0.9, -0.2, 0.12], [0.22, 0.88, -0.18, 0.11], [0.36, 0.98, 0.0, 0.08]]) {
+    group.add(mesh(new THREE.IcosahedronGeometry(s, 2), moss, [x, y, z], [1.2, 0.5, 1.1]));
+  }
+  for (const [x, z, a] of [[0.04, -0.14, 0.2], [-0.06, -0.16, -0.3]]) {
+    const stem = mesh(new THREE.CylinderGeometry(0.01, 0.015, 0.16, 5), moss, [x, 1.1, z], null, [0, 0, a]);
+    group.add(stem);
+    group.add(mesh(new THREE.SphereGeometry(0.04, 8, 6), mossLt, [x - a * 0.08, 1.19, z], [1.4, 0.5, 0.9]));
   }
 
   return group;
 }
 
-function perturb(geom, rng, amount) {
+// Deforme les sommets d une geometrie (en gardant les sommets partages
+// soudes pour ne pas creer de trous).
+function perturb(geom, rng, amt) {
   const pos = geom.attributes.position;
+  const seen = new Map();
   for (let i = 0; i < pos.count; i++) {
-    pos.setXYZ(
-      i,
-      pos.getX(i) + (rng() - 0.5) * amount,
-      pos.getY(i) + (rng() - 0.5) * amount,
-      pos.getZ(i) + (rng() - 0.5) * amount
-    );
+    const key = `${pos.getX(i).toFixed(3)},${pos.getY(i).toFixed(3)},${pos.getZ(i).toFixed(3)}`;
+    let d = seen.get(key);
+    if (!d) { d = [(rng() - 0.5) * amt, (rng() - 0.5) * amt, (rng() - 0.5) * amt]; seen.set(key, d); }
+    pos.setXYZ(i, pos.getX(i) + d[0], pos.getY(i) + d[1], pos.getZ(i) + d[2]);
   }
   geom.computeVertexNormals();
 }

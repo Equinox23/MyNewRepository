@@ -197,7 +197,26 @@ export class Scene3D {
     return hit ? point : null;
   }
 
+  // Tremblement de camera (gros impacts de sorts).
+  shake(intensity = 0.12, duration = 0.25) {
+    this._shake = { i: intensity, d: duration, t0: performance.now() };
+  }
+
   render() {
+    const sh = this._shake;
+    if (sh) {
+      const t = (performance.now() - sh.t0) / 1000 / sh.d;
+      if (t >= 1) {
+        this._shake = null;
+      } else {
+        const a = sh.i * (1 - t);
+        const ox = (Math.random() - 0.5) * 2 * a, oy = (Math.random() - 0.5) * 2 * a;
+        this.camera.position.x += ox; this.camera.position.y += oy;
+        this.renderer.render(this.scene, this.camera);
+        this.camera.position.x -= ox; this.camera.position.y -= oy;
+        return;
+      }
+    }
     this.renderer.render(this.scene, this.camera);
   }
 }

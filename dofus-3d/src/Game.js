@@ -3,6 +3,7 @@ import { Character3D } from './Character3D.js';
 import { TurnManager } from './TurnManager.js';
 import { bfs, pathTo, hasLOS } from './Path.js';
 import { SPELLS } from './Spells.js';
+import { spellElementColor } from './SpellIcons.js';
 import { MAP_BOOSTS } from './Map3D.js';
 import { recordWin } from './Progress.js';
 
@@ -533,6 +534,15 @@ export class Game {
 
   async applySpellEffects(caster, spell, target) {
     this.audio && this.audio.cast(spell.category);
+    // Lancement facon Dofus : le lanceur prend la pose et un glyphe
+    // runique de la couleur de l element du sort s illumine sous lui.
+    if (target && (target.c !== caster.c || target.r !== caster.r)) {
+      caster.character.faceToward(target.c, target.r);
+    }
+    caster.character.castPose && caster.character.castPose();
+    if (this.vfx && this.vfx.castGlyph) {
+      await this.vfx.castGlyph(caster.c, caster.r, { color: spellElementColor(spell) });
+    }
     for (const effect of spell.effects) {
       await this.applyEffect(effect, caster, spell, target);
       if (this.ended) return;
@@ -611,17 +621,18 @@ export class Game {
           let projColor = 0xffcc66;
           let glow = 0.8;
           let arcHeight = 1.6;
-          if (id === 'crachat') { projColor = 0x88dd55; arcHeight = 1.3; }
-          else if (id === 'crachatEmpoisonne') { projColor = 0xb471dd; arcHeight = 1.3; }
-          else if (id === 'lancerRocher') { projColor = 0x7c6655; glow = 0.4; arcHeight = 1.8; }
+          let kind = 'orb';
+          projColor = spellElementColor(spell);
+          if (id === 'crachat') { projColor = 0x5ad0ff; arcHeight = 1.3; kind = 'spit'; }
+          else if (id === 'crachatEmpoisonne') { projColor = 0xb471dd; arcHeight = 1.3; kind = 'spit'; }
+          else if (id === 'lancerRocher') { projColor = 0x7c6655; glow = 0.4; arcHeight = 1.8; kind = 'rock'; }
           if (this.vfx) {
             await this.vfx.projectile(
               { c: caster.c, r: caster.r },
               { c: target.c, r: target.r },
-              { color: projColor, glow, arcHeight },
+              { color: projColor, glow, arcHeight, kind },
             );
           }
-          this.vfx && this.vfx.flash(target.c, target.r, { color: projColor });
         } else {
           // Corps a corps : on plonge sur la cible + arc tranchant.
           lunge = caster.character.lungeTo(firstCell.c, firstCell.r, 320);
@@ -662,7 +673,7 @@ export class Game {
           if (tf.hp <= 0) tf.alive = false;
           tf.character.popDamage(actual);
           tf.character.hpBar.setHp(tf.hp, tf.maxHp);
-          if (this.vfx) this.vfx.flash(cell.c, cell.r, { color: 0xffd166, duration: 0.3 });
+          if (this.vfx) this.vfx.impact(cell.c, cell.r, { color: spellElementColor(spell), big: actual >= 40 });
           this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} subit ${actual} degats`, 'attack');
           if (!tf.alive) dying.push(tf);
           touched++;
@@ -702,7 +713,7 @@ export class Game {
             await this.vfx.projectile(
               { c: caster.c, r: caster.r },
               { c: tf.c, r: tf.r },
-              { color: 0xff8ec5, glow: 1, radius: 0.18, arcHeight: 1.8 },
+              { color: 0xff8ec5, glow: 1, radius: 0.18, arcHeight: 1.8, kind: 'heal' },
             );
           }
         }
