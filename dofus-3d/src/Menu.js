@@ -1088,6 +1088,7 @@ export class Menu {
     // rafraichit les etoiles (la progression a pu changer apres un combat).
     this.view = 'home';
     this.step = 0;
+    document.body.classList.add('in-menu');
     this.render();
     this.root.style.display = 'flex';
   }
@@ -1096,5 +1097,6 @@ export class Menu {
     if (!this.root) return;
     this.hideOptionTooltip();
     this.root.style.display = 'none';
+    document.body.classList.remove('in-menu');
   }
 }

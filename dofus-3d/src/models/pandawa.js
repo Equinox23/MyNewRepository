@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addEyes } from './kit.js';
 
 // Pandawa : bambouseur fetard, style chibi -- gros panda debout, tete
 // ronde blanche a taches noires, oreilles rondes, un tonneau sous le
@@ -85,15 +86,8 @@ export function buildPandawa() {
     patch.rotation.z = side * 0.55;
     group.add(patch);
   }
-  // Yeux.
-  for (const side of [-1, 1]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.062, 12, 10), eyeW);
-    eye.position.set(side * 0.16, 1.22, 0.43);
-    group.add(eye);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.033, 8, 8), eyeD);
-    pupil.position.set(side * 0.16, 1.21, 0.48);
-    group.add(pupil);
-  }
+  // Grands yeux ronds dans les taches noires (air jovial, un peu pompette).
+  addEyes(group, { x: 0, y: 1.22, z: 0.4, size: 0.085, spacing: 0.32, turn: 0.3, iris: 0x6a3a1a, lid: 0x16121a, sleepy: true });
   // Museau + truffe + bouche.
   const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.16, 14, 12), cream);
   muzzle.scale.set(1, 0.68, 0.7);

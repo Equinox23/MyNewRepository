@@ -35,12 +35,12 @@ export class HpBar3D {
     ctx.clearRect(0, 0, w, h);
 
     // Fond noir avec un peu d arrondi
-    ctx.fillStyle = 'rgba(20, 20, 28, 0.92)';
+    ctx.fillStyle = 'rgba(30, 22, 14, 0.92)';
     roundRect(ctx, 0, 0, w, h, 8);
     ctx.fill();
 
     // Bordure couleur d equipe
-    ctx.strokeStyle = this.team === 'player' ? '#2ecc71' : '#e74c3c';
+    ctx.strokeStyle = this.team === 'player' ? '#2f7de0' : '#d8322a';
     ctx.lineWidth = 3;
     roundRect(ctx, 2, 2, w - 4, h - 4, 6);
     ctx.stroke();

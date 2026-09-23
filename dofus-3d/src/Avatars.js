@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { toonify } from './Toon.js';
 import { buildIop } from './models/iop.js';
 import { buildOsamodas } from './models/osamodas.js';
 import { buildBouftou } from './models/bouftou.js';
@@ -18,6 +19,7 @@ import { buildChampignonRoyal } from './models/champignonRoyal.js';
 import { buildDragounetRouge } from './models/dragounetRouge.js';
 import { buildChatonBlanc } from './models/chatonBlanc.js';
 import { buildPandawa } from './models/pandawa.js';
+import { buildBombeRoublard } from './models/bombeRoublard.js';
 
 const BUILDERS = {
   iop: buildIop,
@@ -31,6 +33,7 @@ const BUILDERS = {
   dragounetRouge: buildDragounetRouge,
   chatonBlanc: buildChatonBlanc,
   pandawa: buildPandawa,
+  bombeRoublard: buildBombeRoublard,
   crapaud: buildCrapaud,
   crapaudChef: buildCrapaudChef,
   chafer: buildChafer,
@@ -46,6 +49,7 @@ const BUILDERS = {
 const FRAME = {
   iop: { y: 0.95, dist: 2.7, height: 1.15 },
   pandawa: { y: 1.0, dist: 2.9, height: 1.25 },
+  bombeRoublard: { y: 0.35, dist: 1.6, height: 0.6 },
   osamodas: { y: 0.95, dist: 2.7, height: 1.15 },
   roublard: { y: 0.90, dist: 2.5, height: 1.10 },
   xelor: { y: 1.05, dist: 3.0, height: 1.30 },
@@ -61,8 +65,8 @@ const FRAME = {
   chaferRoyal: { y: 1.15, dist: 3.4, height: 1.4 },
   tofu: { y: 0.45, dist: 1.9, height: 0.7 },
   tofuRoyal: { y: 0.65, dist: 2.6, height: 0.95 },
-  champignon: { y: 0.6, dist: 2.3, height: 0.95 },
-  champignonRoyal: { y: 0.85, dist: 3.0, height: 1.2 },
+  champignon: { y: 0.72, dist: 2.7, height: 1.1 },
+  champignonRoyal: { y: 1.05, dist: 3.6, height: 1.4 },
 };
 
 // Cache : classId -> dataURL.
@@ -76,14 +80,12 @@ function ensureShared(size) {
   renderer.setPixelRatio(2);
   renderer.setSize(size, size, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
   renderer.setClearColor(0x000000, 0);
 
   const scene = new THREE.Scene();
-  const ambient = new THREE.AmbientLight(0xffffff, 0.75);
+  const ambient = new THREE.HemisphereLight(0xfff4d6, 0x6b5a3a, 1.4);
   scene.add(ambient);
-  const dir = new THREE.DirectionalLight(0xfff5d9, 1.1);
+  const dir = new THREE.DirectionalLight(0xfff5d9, 1.6);
   dir.position.set(1.2, 2.0, 1.5);
   scene.add(dir);
   const rim = new THREE.DirectionalLight(0xb4cfff, 0.5);
@@ -106,8 +108,10 @@ export function getAvatar(classId, size = 64) {
   const frame = FRAME[classId] || { y: 0.7, dist: 2.4, height: 0.9 };
 
   const model = builder();
-  // Legere rotation pour ne pas etre full face.
-  model.rotation.y = -Math.PI / 5;
+  toonify(model, { width: 0.02, minRadius: 0.06 });
+  // La camera est a 45 deg (axe +X+Z) : on tourne le modele (qui regarde
+  // +Z) vers elle, avec un leger trois-quarts pour garder du volume.
+  model.rotation.y = Math.PI / 4 - 0.35;
   scene.add(model);
 
   camera.position.set(frame.dist * 0.85, frame.y + frame.height * 0.5, frame.dist * 0.85);

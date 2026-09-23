@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addEyes } from './kit.js';
 
 // Iop : guerrier emblematique, style "chibi" facon Dofus -- tres
 // grosse tete ronde, corps trapu et compact, larges epaulieres, casque
@@ -37,6 +38,9 @@ export function buildIop() {
   const clothMat   = M(cloth, { r: 0.85 });
   const blackMat   = M(0x1a1320, { r: 0.5 });
   const whiteMat   = M(0xfdfdfd, { r: 0.4 });
+  const hairMat    = M(0xe0561c, { r: 0.7 });
+  const hairLtMat  = M(0xff8a2a, { r: 0.7 });
+  const hairDkMat  = M(0x8a2a0c, { r: 0.7 });
 
   // ============ JAMBES (courtes et trapues) ============
   for (const dx of [-0.15, 0.15]) {
@@ -151,72 +155,64 @@ export function buildIop() {
   group.add(jaw);
 
   // ----- Visage -----
-  // Gros sourcils fronces (air determine).
+  // Gros sourcils fronces (air determine, typique de l Iop).
   for (const dx of [-0.15, 0.15]) {
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.055, 0.08), skinDkMat);
-    brow.position.set(dx, 1.24, 0.345);
-    brow.rotation.z = dx > 0 ? 0.32 : -0.32;
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.05, 0.07), hairDkMat);
+    brow.position.set(dx, 1.29, 0.35);
+    brow.rotation.z = dx > 0 ? 0.35 : -0.35;
     group.add(brow);
   }
-  // Yeux : grands blancs + pupilles.
-  for (const dx of [-0.15, 0.15]) {
-    const white = new THREE.Mesh(new THREE.SphereGeometry(0.105, 14, 12), whiteMat);
-    white.scale.set(0.85, 1.05, 0.5);
-    white.position.set(dx, 1.16, 0.34);
-    group.add(white);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.052, 12, 10), blackMat);
-    pupil.position.set(dx + (dx > 0 ? -0.012 : 0.012), 1.15, 0.40);
-    group.add(pupil);
-    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), whiteMat);
-    glint.position.set(dx + 0.03, 1.20, 0.43);
-    group.add(glint);
-  }
-  // Nez.
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), skinDkMat);
-  nose.position.set(0, 1.08, 0.40);
+  // Grands yeux cartoon, paupiere fronce.
+  addEyes(group, { x: 0, y: 1.17, z: 0.365, size: 0.1, spacing: 0.3, turn: 0.28, iris: 0x8a4a1a, lid: skin, angry: true });
+  // Petit nez + sourire en coin plein d assurance.
+  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), skinDkMat);
+  nose.position.set(0, 1.07, 0.4);
   group.add(nose);
-  // Bouche : sourire confiant (arc).
-  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.085, 0.022, 8, 14, Math.PI), blackMat);
-  mouth.rotation.x = Math.PI;
-  mouth.rotation.z = Math.PI;
-  mouth.position.set(0, 0.99, 0.36);
+  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.02, 8, 14, Math.PI * 0.8), blackMat);
+  mouth.rotation.z = Math.PI * 1.1;
+  mouth.position.set(0.02, 1.0, 0.37);
   group.add(mouth);
 
-  // ============ CASQUE (dome + crete + protege-joues) ============
-  const helm = new THREE.Mesh(new THREE.SphereGeometry(0.43, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.56), armorMat);
-  helm.position.y = 1.22;
-  helm.castShadow = true;
-  group.add(helm);
-  // Bandeau dore du casque.
-  const helmBand = new THREE.Mesh(new THREE.TorusGeometry(0.42, 0.045, 10, 28), goldMat);
-  helmBand.rotation.x = Math.PI / 2;
-  helmBand.position.y = 1.30;
-  group.add(helmBand);
-  // Protege-joues lateraux.
-  for (const dx of [-0.40, 0.40]) {
-    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.7), armorMat);
-    cheek.scale.set(0.55, 1.1, 0.9);
-    cheek.position.set(dx, 1.16, 0.05);
-    group.add(cheek);
-  }
-  // Nasale (barre verticale sur le nez).
-  const nasal = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.26, 0.07), armorLtMat);
-  nasal.position.set(0, 1.26, 0.42);
-  group.add(nasal);
-  // CRETE : grande lame doree qui arque le casque d avant en arriere.
-  const crest = new THREE.Mesh(new THREE.TorusGeometry(0.30, 0.055, 10, 24, Math.PI), goldMat);
-  crest.rotation.y = Math.PI / 2;
-  crest.position.set(0, 1.40, 0);
-  group.add(crest);
-  // Petits piquants le long de la crete.
-  for (let i = 0; i < 5; i++) {
-    const t = i / 4;
-    const ang = Math.PI * t;
-    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 6), goldDkMat);
-    spike.position.set(0, 1.40 + Math.sin(ang) * 0.30, Math.cos(ang) * 0.30);
-    spike.rotation.x = -Math.cos(ang) * 1.2;
-    group.add(spike);
-  }
+  // ============ CHEVELURE : la crete en flamme de l Iop ============
+  // Calotte de cheveux sur le crane.
+  const scalp = new THREE.Mesh(new THREE.SphereGeometry(0.42, 22, 16, 0, Math.PI * 2, 0, Math.PI * 0.5), hairMat);
+  scalp.position.set(0, 1.21, -0.02);
+  scalp.scale.set(1, 0.9, 1);
+  scalp.castShadow = true;
+  group.add(scalp);
+  // Meches en pointe, dressees vers le haut et rabattues vers l arriere.
+  const spikes = [
+    // x, y, z, longueur, rayon, inclinaison avant/arriere, laterale
+    [0, 1.6, 0.14, 0.42, 0.12, -0.55, 0],
+    [-0.14, 1.56, 0.08, 0.36, 0.1, -0.7, 0.35],
+    [0.14, 1.56, 0.08, 0.36, 0.1, -0.7, -0.35],
+    [0, 1.58, -0.08, 0.44, 0.13, -1.05, 0],
+    [-0.2, 1.46, -0.12, 0.34, 0.1, -1.2, 0.6],
+    [0.2, 1.46, -0.12, 0.34, 0.1, -1.2, -0.6],
+    [0, 1.45, -0.26, 0.4, 0.12, -1.5, 0],
+    [-0.3, 1.3, 0.06, 0.26, 0.08, -0.4, 1.0],
+    [0.3, 1.3, 0.06, 0.26, 0.08, -0.4, -1.0],
+  ];
+  spikes.forEach(([x, y, z, len, rad, rx, rz], i) => {
+    const sp = new THREE.Mesh(new THREE.ConeGeometry(rad, len, 8), i % 3 === 0 ? hairLtMat : hairMat);
+    sp.position.set(x, y, z);
+    sp.rotation.set(rx, 0, rz);
+    sp.castShadow = true;
+    group.add(sp);
+  });
+  // Meche qui retombe sur le front.
+  const fringe = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.22, 8), hairMat);
+  fringe.position.set(-0.08, 1.4, 0.36);
+  fringe.rotation.set(2.3, 0, 0.3);
+  group.add(fringe);
+  // Bandeau dore sur le front.
+  const band = new THREE.Mesh(new THREE.TorusGeometry(0.405, 0.04, 10, 30), goldMat);
+  band.rotation.x = Math.PI / 2 - 0.12;
+  band.position.set(0, 1.33, 0.0);
+  group.add(band);
+  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.05), M(0xe8322a, { r: 0.2, m: 0.3 }));
+  gem.position.set(0, 1.36, 0.41);
+  group.add(gem);
 
   // ============ CAPE ============
   const capeMat = new THREE.MeshStandardMaterial({ color: armorDark, roughness: 0.85, side: THREE.DoubleSide });

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addEyes } from './kit.js';
 
 // Ecaflip : felin joueur et chanceux, style chibi -- grosse tete de
 // chat ronde, grandes oreilles, museau creme, gilet rouge de croupier,
@@ -123,19 +124,8 @@ export function buildEcaflip() {
   }
 
   // ============ Yeux felins + sourcils ============
-  for (const dx of [-0.16, 0.16]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.085, 14, 12), eyeMat);
-    eye.scale.set(0.95, 1.1, 0.5);
-    eye.position.set(dx, 1.16, 0.33);
-    group.add(eye);
-    // Pupille fendue verticale.
-    const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.10, 0.02), blackMat);
-    pupil.position.set(dx, 1.16, 0.40);
-    group.add(pupil);
-    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 6), M(0xffffff, { r: 0.3 }));
-    glint.position.set(dx + 0.03, 1.20, 0.41);
-    group.add(glint);
-  }
+  // Grands yeux de chat verts a pupille fendue, air espiegle.
+  addEyes(group, { x: 0, y: 1.17, z: 0.35, size: 0.105, spacing: 0.32, turn: 0.3, iris: 0x3ad17a, slit: true, lid: 0xe0873a, angry: true });
   // Moustaches.
   for (const side of [-1, 1]) {
     for (let i = 0; i < 3; i++) {

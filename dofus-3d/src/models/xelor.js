@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 
-// Xelor : maitre du temps, style chibi -- grosse tete ronde, robe
-// conique bleu nuit, large chapeau pointu, cadran d horloge lumineux,
-// baton a sablier. Regard cyan brillant.
+// Xelor : maitre du temps, style chibi facon Dofus -- tete et mains de
+// momie enroulees de bandelettes, regard cyan lumineux au fond d une
+// fente sombre, robe conique bleu nuit, chapeau pointu, cadran d horloge
+// et baton a sablier.
 export function buildXelor() {
   const group = new THREE.Group();
 
@@ -11,8 +12,8 @@ export function buildXelor() {
   const robeLt   = 0x3e52a6;
   const gold     = 0xe8c14a;
   const goldDk   = 0x9a7d28;
-  const skin     = 0xeccfa6;
-  const skinDk   = 0xcdaa7e;
+  const skin     = 0xf0e6cc; // bandelettes
+  const skinDk   = 0xc8b48a;
   const glow     = 0x73e0ff;
 
   const M = (c, o = {}) => new THREE.MeshStandardMaterial({
@@ -110,24 +111,34 @@ export function buildXelor() {
   jaw.scale.set(1, 0.5, 0.8);
   jaw.position.set(0, 1.00, 0.07);
   group.add(jaw);
-  // Yeux cyan brillants.
-  for (const dx of [-0.15, 0.15]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 12), glowMat);
-    eye.scale.set(0.8, 1.1, 0.5);
-    eye.position.set(dx, 1.16, 0.34);
+  // Bandelettes enroulees en travers de la tete.
+  const bandLines = [[1.3, 0.25], [1.22, -0.2], [1.06, 0.18], [0.98, -0.12]];
+  for (const [y, tilt] of bandLines) {
+    const band = new THREE.Mesh(new THREE.TorusGeometry(Math.sqrt(0.39 * 0.39 - (y - 1.16) * (y - 1.16)) + 0.012, 0.03, 6, 26), skinDkMat);
+    band.rotation.set(Math.PI / 2, tilt, 0);
+    band.position.set(0, y, 0);
+    group.add(band);
+  }
+  // Fente sombre du regard + deux yeux cyan lumineux.
+  const slit = new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 10), blackMat);
+  slit.scale.set(1.35, 0.42, 0.5);
+  slit.position.set(0, 1.15, 0.3);
+  group.add(slit);
+  const haloMat = new THREE.MeshBasicMaterial({ color: glow, transparent: true, opacity: 0.35 });
+  for (const dx of [-0.12, 0.12]) {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.06, 14, 12), new THREE.MeshBasicMaterial({ color: 0xc8f6ff }));
+    eye.scale.set(1, 1.15, 0.5);
+    eye.position.set(dx, 1.15, 0.37);
     group.add(eye);
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), haloMat);
+    halo.position.set(dx, 1.15, 0.36);
+    group.add(halo);
   }
-  // Sourcils fins, air severe.
-  for (const dx of [-0.15, 0.15]) {
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.04, 0.06), skinDkMat);
-    brow.position.set(dx, 1.27, 0.35);
-    brow.rotation.z = dx > 0 ? 0.28 : -0.28;
-    group.add(brow);
-  }
-  // Petite bouche neutre.
-  const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.028, 0.04), blackMat);
-  mouth.position.set(0, 1.01, 0.36);
-  group.add(mouth);
+  // Bout de bandelette qui pend sur le cote.
+  const tail = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.28, 0.02), skinMat);
+  tail.position.set(0.33, 0.98, 0.14);
+  tail.rotation.set(0.2, 0.6, 0.35);
+  group.add(tail);
 
   // ============ CHAPEAU pointu a large bord ============
   const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.52, 0.05, 28), robeDkMat);
