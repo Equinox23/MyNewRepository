@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { buildTree } from './models/tree.js';
 import { buildRock } from './models/rock.js';
+import { buildBush, buildFlowerPatch, buildStump, buildMushroomCluster } from './models/foliage.js';
+import { paintBoard, paintOuterGround } from './GroundPainter.js';
+import { toonify, bakeStatic } from './Toon.js';
 
 export const MAP_SIZE = 15;
 export const TILE_SIZE = 1;
@@ -195,6 +198,14 @@ const GRASS_STYLE = {
   swamp:     { density: 34, colors: [0x5f8a3e, 0x6e7a3a, 0x4f7030] },
 };
 
+const LIGHTING = {
+  forest:    { sky: 0xfff4d6, ground: 0x6b7a3a, hemi: 1.35, sun: 0xfff0d0, sunI: 1.9 },
+  river:     { sky: 0xf0f8ff, ground: 0x5a7a4a, hemi: 1.35, sun: 0xfff6e0, sunI: 1.9 },
+  graveyard: { sky: 0xb4aee0, ground: 0x3a3a2a, hemi: 1.15, sun: 0xcfc6ff, sunI: 1.25 },
+  cliff:     { sky: 0xfff8e8, ground: 0x8a7a5a, hemi: 1.4, sun: 0xfff0d4, sunI: 2.0 },
+  swamp:     { sky: 0xdfe8b8, ground: 0x3a4a22, hemi: 1.2, sun: 0xeef2c4, sunI: 1.45 },
+};
+
 export class Map3D {
   constructor(scene, mapId = 'foret') {
     this.scene = scene;
@@ -221,6 +232,7 @@ export class Map3D {
     // directement, mais Map3D peut aussi customiser le ground exterieur).
     if (this.scene.background) this.scene.background.setHex(map.bgColor);
     if (this.scene.fog) this.scene.fog.color.setHex(map.bgColor);
+    this.applyLighting(map.style);
 
     this.tileGroup = new THREE.Group();
     this.scene.add(this.tileGroup);
@@ -231,6 +243,24 @@ export class Map3D {
     this.buildBackgroundDecor(map);
     if (map.waterfall) this.buildWaterfall(map.waterfall);
     if (map.lilyPads) this.buildLilyPads(map.lilyPads);
+    // Style cartoon : materiaux toon + contours sur les props du plateau.
+    toonify(this.tileGroup, { width: 0.02, minRadius: 0.1 });
+    for (const obj of this.spawned) {
+      if (obj !== this.tileGroup && !obj.userData.baked) toonify(obj, { width: 0.025, minRadius: 0.12 });
+    }
+  }
+
+  // Eclairage d ambiance propre a chaque theme (soleil dore en foret,
+  // clair de lune au cimetiere, lumiere verdatre au marais...).
+  applyLighting(style) {
+    const L = LIGHTING[style] || LIGHTING.forest;
+    this.scene.traverse(o => {
+      if (o.isHemisphereLight) {
+        o.color.setHex(L.sky); o.groundColor.setHex(L.ground); o.intensity = L.hemi;
+      } else if (o.isDirectionalLight) {
+        o.color.setHex(L.sun); o.intensity = L.sunI;
+      }
+    });
   }
 
   // Anime les elements vivants de la carte. Appele chaque frame depuis
@@ -275,7 +305,10 @@ export class Map3D {
           if (o.geometry) o.geometry.dispose();
           if (o.material) {
             if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
-            else o.material.dispose();
+            else {
+              if (o.material.map) o.material.map.dispose();
+              o.material.dispose();
+            }
           }
         }
       });
@@ -284,29 +317,45 @@ export class Map3D {
     this.tileGroup = null;
   }
 
-  // Vaste plan vert sombre (foret) ou greisatre humide (cascade).
+  // Sol peint a la main : grand plan exterieur (texture raccordable) +
+  // plateau de combat peint avec son quadrillage, fondu sur les bords.
   buildGround(map) {
-    const baseGeom = new THREE.PlaneGeometry(120, 120);
-    const baseMat = new THREE.MeshStandardMaterial({
-      color: map.groundColor, roughness: 1,
-    });
-    const base = new THREE.Mesh(baseGeom, baseMat);
+    const center = (MAP_SIZE - 1) / 2;
+    const outerTex = paintOuterGround(map.style, 4242);
+    outerTex.repeat.set(120 / 6, 120 / 6);
+    const base = new THREE.Mesh(
+      new THREE.PlaneGeometry(120, 120),
+      new THREE.MeshToonMaterial({ map: outerTex, color: 0xf2f2ea })
+    );
     base.rotation.x = -Math.PI / 2;
-    base.position.set((MAP_SIZE - 1) / 2, -0.06, (MAP_SIZE - 1) / 2);
+    base.position.set(center, -0.08, center);
     base.receiveShadow = true;
+    base.userData.baked = true;
     this.scene.add(base);
     this.spawned.push(base);
+
+    const board = paintBoard(map.grid, map.style, { margin: 2, seed: 777 });
+    const boardMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(board.units, board.units),
+      new THREE.MeshToonMaterial({
+        map: board.texture, transparent: true, alphaTest: 0.02, depthWrite: true,
+      })
+    );
+    boardMesh.rotation.x = -Math.PI / 2;
+    boardMesh.position.set(center, 0.05, center);
+    boardMesh.receiveShadow = true;
+    boardMesh.renderOrder = -1;
+    boardMesh.userData.baked = true;
+    boardMesh.raycast = () => {};
+    this.scene.add(boardMesh);
+    this.spawned.push(boardMesh);
   }
 
   buildTiles(map) {
     const tileW = 0.96;
     const tileH = 0.1;
     const tileGeom = new THREE.BoxGeometry(tileW, tileH, tileW);
-    const grassColors = [0x6a9540, 0x5a8838, 0x4a7a30, 0x5d8e3a, 0x4f7d31];
-    const grassMats = grassColors.map(c =>
-      new THREE.MeshStandardMaterial({ color: c, roughness: 0.95 })
-    );
-    const dirtTileMat = new THREE.MeshStandardMaterial({ color: 0x3a2818, roughness: 0.95 });
+    const pickMat = new THREE.MeshBasicMaterial({ visible: false });
     const bridgeMat = new THREE.MeshStandardMaterial({ color: 0x6e4a20, roughness: 0.85 });
 
     this.tiles = [];
@@ -349,8 +398,9 @@ export class Map3D {
 
         // Sol / mur
         const isWall = t === 1;
-        const mat = isWall ? dirtTileMat : grassMats[hash % grassMats.length];
-        const tile = new THREE.Mesh(tileGeom, mat);
+        // Case invisible : sert uniquement au ciblage (raycast). Le visuel
+        // du sol est peint dans la texture du plateau.
+        const tile = new THREE.Mesh(tileGeom, pickMat);
         tile.position.set(c, 0, r);
         tile.receiveShadow = true;
         tile.userData = { c, r, terrain: t };
@@ -364,9 +414,12 @@ export class Map3D {
           let model;
           if (map.wallStyle === 'tombstone') {
             model = buildTombstone(seed);
+          } else if (map.style === 'forest') {
+            // Foret d Amakna : arbres ronds, buissons, souches, rochers.
+            const k = wallIdx % 4;
+            model = k === 0 ? buildRock(seed) : k === 2 ? buildBush(seed) : k === 3 && wallIdx > 6 ? buildStump(seed) : buildTree(seed, { compact: true });
           } else {
-            const useTree = map.style === 'forest' && (wallIdx % 3) !== 0;
-            model = useTree ? buildTree(seed) : buildRock(seed);
+            model = buildRock(seed);
           }
           model.position.set(c, 0.05, r);
           const s = 0.85 + ((seed % 100) / 100) * 0.35;
@@ -402,6 +455,7 @@ export class Map3D {
         ((((hash + i * 53) % 20) - 10) / 10) * 0.22,
       );
       blade.rotation.z = ((((hash + i * 17) % 14) - 7) / 7) * 0.25;
+      blade.userData.noOutline = true;
       tuft.add(blade);
     }
     tuft.position.set(c, 0.05, r);
@@ -584,55 +638,83 @@ export class Map3D {
     }
   }
 
-  // Decor exterieur au plateau, propre a chaque theme de carte.
+  // Decor exterieur au plateau, propre a chaque theme de carte. Tout est
+  // fusionne (bakeStatic) en quelques meshes pour rester fluide.
   buildBackgroundDecor(map) {
+    const props = [];
+    const ring = (builder, count, opts) => this._scatterRing(builder, count, opts, props);
     switch (map.style) {
       case 'forest':
-        this._scatterRing(buildTree, 130, { seedBase: 424242, scale: [0.9, 1.8] });
+        ring(buildTree, 150, { tall: true, seedBase: 424242, minD: 9.2, maxD: 24, scale: [1.0, 1.9] });
+        ring(buildBush, 70, { seedBase: 5353, minD: 8.4, maxD: 13, scale: [0.9, 1.5] });
+        ring(buildFlowerPatch, 40, { seedBase: 9191, minD: 8.2, maxD: 12, scale: [0.9, 1.3] });
+        ring(buildStump, 8, { seedBase: 1212, minD: 8.6, maxD: 12, scale: [0.9, 1.2] });
         break;
       case 'river':
-        this._scatterRing(buildTree, 60, { seedBase: 71717, scale: [0.9, 1.7] });
-        this._scatterRing(buildPeak, 8, { seedBase: 313, minD: 17, maxD: 27, scale: [2.0, 3.6] });
-        this._buildClouds(6);
+        ring(buildTree, 70, { tall: true, seedBase: 71717, minD: 9.4, maxD: 22, scale: [1.0, 1.8] });
+        ring(buildBush, 50, { seedBase: 6464, minD: 8.4, maxD: 13, scale: [0.9, 1.4] });
+        ring(buildFlowerPatch, 34, { seedBase: 2828, minD: 8.2, maxD: 12, scale: [0.9, 1.3] });
+        ring(buildPeak, 8, { backOnly: true, seedBase: 313, minD: 14, maxD: 24, scale: [1.3, 2.2] });
         break;
       case 'graveyard':
-        this._scatterRing(buildDeadTree, 78, { seedBase: 99001, scale: [0.9, 1.7] });
-        this._scatterRing(buildTombstone, 24, { seedBase: 5151, minD: 9, maxD: 15, scale: [0.8, 1.4] });
+        ring(buildDeadTree, 78, { tall: true, seedBase: 99001, minD: 9.2, scale: [0.9, 1.7] });
+        ring(buildTombstone, 24, { seedBase: 5151, minD: 8.6, maxD: 15, scale: [0.8, 1.4] });
+        ring(buildMushroomCluster, 18, { seedBase: 4545, minD: 8.4, maxD: 12, scale: [0.8, 1.2] });
         break;
       case 'cliff':
-        this._scatterRing(buildPeak, 28, { seedBase: 8080, minD: 11, maxD: 27, scale: [2.4, 5.2] });
+        ring(buildPeak, 22, { backOnly: true, seedBase: 8080, minD: 11, maxD: 24, scale: [1.2, 2.4] });
+        ring(buildRock, 30, { seedBase: 1717, minD: 8.4, maxD: 13, scale: [0.9, 1.8] });
+        ring(buildBush, 18, { seedBase: 2626, minD: 8.4, maxD: 12, scale: [0.7, 1.1] });
         break;
       case 'swamp':
-        this._scatterRing(buildDeadTree, 54, { seedBase: 33221, scale: [0.9, 1.6] });
-        this._scatterRing(buildReed, 64, { seedBase: 7777, minD: 9, maxD: 18, scale: [0.8, 1.5] });
+        ring(buildDeadTree, 54, { tall: true, seedBase: 33221, minD: 9.2, scale: [0.9, 1.6] });
+        ring(buildReed, 64, { seedBase: 7777, minD: 8.4, maxD: 18, scale: [0.8, 1.5] });
+        ring(buildMushroomCluster, 16, { seedBase: 8686, minD: 8.4, maxD: 12, scale: [0.8, 1.3] });
         break;
+    }
+    if (props.length) {
+      const baked = bakeStatic(props, { width: 0.035, minRadius: 0.1 });
+      baked.userData.baked = true;
+      this.scene.add(baked);
+      this.spawned.push(baked);
     }
   }
 
-  // Disperse `count` props (builder(seed)) en couronne autour du plateau.
-  _scatterRing(builder, count, opts = {}) {
+  // Disperse `count` props (builder(seed)) en couronne autour du plateau,
+  // sans jamais empieter sur les cases de combat. Les props sont pousses
+  // dans `out` (fusionnes ensuite).
+  _scatterRing(builder, count, opts = {}, out = []) {
     const rng = mulberry32(opts.seedBase || 12345);
     const center = (MAP_SIZE - 1) / 2;
     const minD = opts.minD !== undefined ? opts.minD : MAP_SIZE / 2 + 1.5;
     const maxD = opts.maxD !== undefined ? opts.maxD : MAP_SIZE / 2 + 14;
     const [sMin, sMax] = opts.scale || [0.9, 1.6];
+    const keepOut = MAP_SIZE / 2 + 0.35;
     let placed = 0, attempts = 0;
-    while (placed < count && attempts < count * 6) {
+    while (placed < count && attempts < count * 8) {
       attempts++;
       const angle = rng() * Math.PI * 2;
       const dist = minD + rng() * (maxD - minD);
       const x = center + Math.cos(angle) * dist + (rng() - 0.5) * 1.6;
       const z = center + Math.sin(angle) * dist + (rng() - 0.5) * 1.6;
-      const prop = builder(Math.floor(rng() * 1e7));
-      prop.position.set(x, 0, z);
       const s = sMin + rng() * (sMax - sMin);
+      const seed = Math.floor(rng() * 1e7);
+      const rotY = rng() * Math.PI * 2;
+      if (Math.abs(x - center) < keepOut + s * 0.3 && Math.abs(z - center) < keepOut + s * 0.3) continue;
+      // Cote camera (sud-est, vue par defaut) : pas de grands props qui
+      // masqueraient le plateau, sauf loin hors cadre.
+      if (opts.tall && (x - center) + (z - center) > 4 && dist < 19) continue;
+      // Montagnes : uniquement a l arriere-plan (en vue orthographique,
+      // un pic place devant cacherait tout le plateau).
+      if (opts.backOnly && (x - center) + (z - center) > -7) continue;
+      const prop = builder(seed);
+      prop.position.set(x, 0, z);
       prop.scale.setScalar(s);
-      prop.rotation.y = rng() * Math.PI * 2;
-      prop.traverse(o => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = false; } });
-      this.scene.add(prop);
-      this.spawned.push(prop);
+      prop.rotation.y = rotY;
+      out.push(prop);
       placed++;
     }
+    return out;
   }
 
   // Nuages qui derivent lentement dans le ciel.

@@ -1246,7 +1246,7 @@ export class Game {
         const [c, r] = key.split(',').map(Number);
         tiles.push({ c, r });
       }
-      this.rangeOverlay.paint(tiles, 0x6ee7b6, 0.30);
+      this.rangeOverlay.paint(tiles, 0x4fb02e, 0.55);
       return;
     }
 
@@ -1277,8 +1277,8 @@ export class Game {
           }
         }
       }
-      const color = parseInt(spell.color.replace('#', ''), 16);
-      this.rangeOverlay.paint(tiles, color, 0.33);
+      // Portee des sorts en bleu, comme dans Dofus.
+      this.rangeOverlay.paint(tiles, 0x3f7fe8, 0.55);
     }
   }
 

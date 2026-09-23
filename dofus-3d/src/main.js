@@ -68,6 +68,7 @@ hud.on('onResetCamera', () => scene3d.resetCamera());
 // tourne en arriere-plan mais aucun combattant n est encore spawn.
 const menu = new Menu(selection => {
   menu.hide();
+  scene3d.resetCamera();
   document.body.style.cursor = POINTER_CURSOR;
   game.setup({
     playerClasses: selection.playerClasses,
@@ -292,6 +293,11 @@ function loop(now) {
   }
   vfx.update(dt);
   map3d.update(dt, now / 1000);
+  // Pendant le menu, la camera tourne lentement autour de la foret.
+  if (menu.root && menu.root.style.display !== 'none' && !scene3d._snapping) {
+    scene3d.azimuth += dt * 0.06;
+    scene3d.updateCamera();
+  }
   scene3d.render();
   requestAnimationFrame(loop);
 }

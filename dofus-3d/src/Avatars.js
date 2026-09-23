@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { toonify } from './Toon.js';
 import { buildIop } from './models/iop.js';
 import { buildOsamodas } from './models/osamodas.js';
 import { buildBouftou } from './models/bouftou.js';
@@ -76,14 +77,12 @@ function ensureShared(size) {
   renderer.setPixelRatio(2);
   renderer.setSize(size, size, false);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
   renderer.setClearColor(0x000000, 0);
 
   const scene = new THREE.Scene();
-  const ambient = new THREE.AmbientLight(0xffffff, 0.75);
+  const ambient = new THREE.HemisphereLight(0xfff4d6, 0x6b5a3a, 1.4);
   scene.add(ambient);
-  const dir = new THREE.DirectionalLight(0xfff5d9, 1.1);
+  const dir = new THREE.DirectionalLight(0xfff5d9, 1.6);
   dir.position.set(1.2, 2.0, 1.5);
   scene.add(dir);
   const rim = new THREE.DirectionalLight(0xb4cfff, 0.5);
@@ -106,6 +105,7 @@ export function getAvatar(classId, size = 64) {
   const frame = FRAME[classId] || { y: 0.7, dist: 2.4, height: 0.9 };
 
   const model = builder();
+  toonify(model, { width: 0.02, minRadius: 0.06 });
   // Legere rotation pour ne pas etre full face.
   model.rotation.y = -Math.PI / 5;
   scene.add(model);

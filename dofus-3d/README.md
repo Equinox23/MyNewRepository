@@ -31,6 +31,28 @@ cd dofus-3d && python3 -m http.server 8080
 - Le perso ne peut pas marcher sur les cases marquees comme murs (cube
   marron) : le pathfinding contourne automatiquement.
 
+## Style graphique facon Dofus
+
+- **Vue isometrique orthographique** (azimut 45 deg, camera a 30 deg de
+  l horizon) : les cases apparaissent en losanges 2:1 comme dans Dofus.
+- **Cel-shading + contours** (`src/Toon.js`) : tous les modeles passent en
+  `MeshToonMaterial` (3 paliers de lumiere) avec un contour sombre par
+  coque inversee, pour un rendu "dessin anime / Flash".
+- **Sol peint a la main** (`src/GroundPainter.js`) : texture generee sur
+  canvas (taches de couleur, coups de pinceau d herbe, fleurs, terre) avec
+  le quadrillage de combat integre (cases alternees + liseres).
+- **Vegetation d Amakna** : arbres ronds et touffus, buissons, fleurs,
+  souches, champignons (`src/models/tree.js`, `src/models/foliage.js`).
+  Le decor autour du plateau est fusionne en quelques meshes
+  (`bakeStatic`) pour rester fluide sur mobile.
+- **Cases de portee facon Dofus** : vert pour le deplacement, bleu pour la
+  portee des sorts, case survolee illuminee.
+- **Cercles d equipe** bleu (allies) / rouge (ennemis) sous les persos.
+- **Interface bois sombre + dore** (`src/dofus-theme.css`), titres orange,
+  logo "Luckiest Guy", menu par-dessus la foret 3D qui tourne.
+- **Ambiance lumineuse par carte** : soleil dore, clair de lune au
+  cimetiere, lumiere verdatre au marais...
+
 ## Stack technique
 
 - **Three.js 0.160** charge en module ES depuis jsDelivr (import map).

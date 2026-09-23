@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { cellTexture } from './RangeOverlay.js';
 
 // Raycasting case-par-case + visuels de survol (anneau jaune sur la case
 // pointee). Marche pour souris ET tactile : on lui passe directement les
@@ -11,22 +12,26 @@ export class Picker {
     this.pointer = new THREE.Vector2();
     this.hovered = null;
 
-    // Anneau jaune fluo qui suit le curseur.
-    const ringGeom = new THREE.TorusGeometry(0.45, 0.04, 8, 32);
-    const ringMat = new THREE.MeshBasicMaterial({ color: 0xf1c40f, transparent: true, opacity: 0.95 });
-    this.hoverRing = new THREE.Mesh(ringGeom, ringMat);
-    this.hoverRing.rotation.x = Math.PI / 2;
-    this.hoverRing.visible = false;
-    this.scene3d.scene.add(this.hoverRing);
-
-    // Disque transparent jaune (rempli) pour mieux voir la case sur la
-    // surface inclinee, en plus du contour.
-    const fillGeom = new THREE.CircleGeometry(0.42, 32);
-    const fillMat = new THREE.MeshBasicMaterial({ color: 0xf1c40f, transparent: true, opacity: 0.22 });
-    this.hoverFill = new THREE.Mesh(fillGeom, fillMat);
+    // Survol facon Dofus : la case pointee s illumine (remplissage clair
+    // + liseré), plutot qu un anneau.
+    const tex = cellTexture();
+    const cellGeom = new THREE.PlaneGeometry(1.0, 1.0);
+    this.hoverFill = new THREE.Mesh(cellGeom, new THREE.MeshBasicMaterial({
+      color: 0xfff6c8, map: tex, transparent: true, opacity: 0.85, depthWrite: false,
+    }));
     this.hoverFill.rotation.x = -Math.PI / 2;
+    this.hoverFill.renderOrder = 4;
     this.hoverFill.visible = false;
     this.scene3d.scene.add(this.hoverFill);
+    // Contour fin supplementaire (garde la lisibilite sur les cases colorees).
+    const edges = new THREE.EdgesGeometry(new THREE.PlaneGeometry(0.94, 0.94));
+    this.hoverRing = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({
+      color: 0xffffff, transparent: true, opacity: 0.95, depthWrite: false,
+    }));
+    this.hoverRing.rotation.x = -Math.PI / 2;
+    this.hoverRing.renderOrder = 5;
+    this.hoverRing.visible = false;
+    this.scene3d.scene.add(this.hoverRing);
   }
 
   // Renvoie { c, r, isWall } ou null.
@@ -59,13 +64,12 @@ export class Picker {
     this.hoverRing.visible = true;
     this.hoverFill.visible = true;
     // Place au-dessus du sol pour eviter le z-fighting avec les tuiles.
-    const y = isWall ? 1.07 : 0.07;
-    this.hoverRing.position.set(c, y, r);
-    this.hoverFill.position.set(c, y - 0.005, r);
+    const y = 0.075;
+    this.hoverRing.position.set(c, y + 0.002, r);
+    this.hoverFill.position.set(c, y, r);
     // Couleur rouge si on survole un mur (case incible).
-    const col = isWall ? 0xe74c3c : 0xf1c40f;
-    this.hoverRing.material.color.setHex(col);
-    this.hoverFill.material.color.setHex(col);
+    this.hoverRing.material.color.setHex(isWall ? 0xff6a5a : 0xffffff);
+    this.hoverFill.material.color.setHex(isWall ? 0xe74c3c : 0xfff6c8);
     this.hovered = { c, r, isWall };
   }
 }

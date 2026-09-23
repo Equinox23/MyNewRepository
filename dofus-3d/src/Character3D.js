@@ -20,6 +20,7 @@ import { buildTofuRoyal } from './models/tofuRoyal.js';
 import { buildChampignon } from './models/champignon.js';
 import { buildChampignonRoyal } from './models/champignonRoyal.js';
 import { HpBar3D } from './HpBar3D.js';
+import { toonify } from './Toon.js';
 
 const BUILDERS = {
   iop: buildIop,
@@ -80,17 +81,29 @@ export class Character3D {
 
     const builder = BUILDERS[classId] || buildIop;
     this.group = builder();
+    // Style Dofus : cel-shading + contour sombre.
+    toonify(this.group, { width: 0.018, minRadius: 0.06 });
     this.group.position.set(c, 0, r);
     scene.add(this.group);
 
-    // Anneau d equipe au sol
-    const ringColor = team === 'player' ? 0x2ecc71 : 0xe74c3c;
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: ringColor, transparent: true, opacity: 0.6, depthWrite: false,
+    // Cercle d equipe au sol, facon Dofus : disque translucide + liseré
+    // vif (bleu pour les allies, rouge pour les ennemis).
+    const ringColor = team === 'player' ? 0x2f7de0 : 0xd8322a;
+    const discMat = new THREE.MeshBasicMaterial({
+      color: ringColor, transparent: true, opacity: 0.28, depthWrite: false,
     });
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.32, 0.42, 32), ringMat);
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(0.4, 32), discMat);
+    disc.rotation.x = -Math.PI / 2;
+    disc.position.y = 0.058;
+    disc.renderOrder = 2;
+    this.group.add(disc);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: ringColor, transparent: true, opacity: 0.95, depthWrite: false,
+    });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(0.36, 0.43, 40), ringMat);
     ring.rotation.x = -Math.PI / 2;
     ring.position.y = 0.06;
+    ring.renderOrder = 3;
     this.group.add(ring);
     this.teamRing = ring;
 

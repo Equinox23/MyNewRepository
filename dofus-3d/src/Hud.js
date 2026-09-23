@@ -1441,7 +1441,7 @@ export class Hud {
       slot.className = 'to-slot';
       if (!f.alive) slot.classList.add('dead');
       if (f === current) slot.classList.add('active');
-      const teamColor = f.team === 'player' ? '#27ae60' : '#c0392b';
+      const teamColor = f.team === 'player' ? '#2f7de0' : '#d8322a';
       const ratio = Math.max(0, Math.min(1, f.hp / f.maxHp));
       const shortName = f.name.replace(/\s*\(Invoc\.\)\s*/, '');
       // Avatar 3D : snapshot du modele rendu en PNG (memoise).
