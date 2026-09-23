@@ -44,7 +44,9 @@ export function addEyes(group, opts = {}) {
     }
     const p = new THREE.Mesh(new THREE.SphereGeometry(size * (irisMat ? 0.4 : 0.58), 12, 10), pupil);
     p.position.set(side * -size * 0.08, -size * 0.05, size * 0.4);
-    p.scale.set(1, 1.2, 0.5);
+    // Pupille fendue (yeux de chat) ou ronde.
+    if (opts.slit) p.scale.set(0.35, 1.9, 0.5);
+    else p.scale.set(1, 1.2, 0.5);
     g.add(p);
     const s1 = new THREE.Mesh(new THREE.SphereGeometry(size * 0.2, 8, 6), shine);
     s1.position.set(side * -size * 0.25 + size * 0.2, size * 0.3, size * 0.56);

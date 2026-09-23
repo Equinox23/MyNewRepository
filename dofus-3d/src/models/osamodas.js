@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addEyes } from './kit.js';
 
 // Osamodas : invocateur draconique, style chibi -- grosse tete ronde,
 // capuche a cornes, petites ailes membraneuses, queue ecailleuse,
@@ -117,15 +118,22 @@ export function buildOsamodas() {
   jaw.scale.set(1, 0.5, 0.82);
   jaw.position.set(0, 0.99, 0.07);
   group.add(jaw);
+  // Grands yeux verts bienveillants de dresseur + sourcils arques.
+  addEyes(group, { x: 0, y: 1.13, z: 0.35, size: 0.1, spacing: 0.3, turn: 0.28, iris: 0x2f9a48 });
   for (const dx of [-0.15, 0.15]) {
-    const white = new THREE.Mesh(new THREE.SphereGeometry(0.10, 14, 12), whiteMat);
-    white.scale.set(0.85, 1.05, 0.5);
-    white.position.set(dx, 1.13, 0.34);
-    group.add(white);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 10),
-      new THREE.MeshStandardMaterial({ color: 0x2f9a48, roughness: 0.4 }));
-    pupil.position.set(dx, 1.12, 0.40);
-    group.add(pupil);
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.035, 0.05), robeDkMat);
+    brow.position.set(dx, 1.27, 0.35);
+    brow.rotation.z = dx > 0 ? -0.2 : 0.2;
+    group.add(brow);
+  }
+  // Petites taches d ecailles sur les joues (sang draconique).
+  for (const dx of [-0.25, 0.25]) {
+    for (let i = 0; i < 3; i++) {
+      const sc = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), scaleMat);
+      sc.position.set(dx + (dx > 0 ? i * 0.025 : -i * 0.025), 1.03 + i * 0.03, 0.3 - i * 0.02);
+      sc.scale.set(1, 1, 0.5);
+      group.add(sc);
+    }
   }
   const nose = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), skinDkMat);
   nose.position.set(0, 1.06, 0.40);
@@ -144,13 +152,14 @@ export function buildOsamodas() {
   hoodRim.rotation.x = Math.PI / 2 + 0.25;
   hoodRim.position.y = 1.30;
   group.add(hoodRim);
-  // Cornes de dragon (3 segments par cote).
+  // Grandes cornes de dragon recourbees vers l arriere (signature
+  // Osamodas) : chapelet de segments qui s affinent.
   for (const side of [-1, 1]) {
-    for (let i = 0; i < 3; i++) {
-      const seg = new THREE.Mesh(new THREE.ConeGeometry(0.07 - i * 0.018, 0.16, 7), hornMat);
-      seg.position.set(side * (0.30 + i * 0.07), 1.42 + i * 0.13, -0.06 - i * 0.04);
-      seg.rotation.z = side * (0.5 + i * 0.18);
-      seg.rotation.x = -0.2;
+    for (let i = 0; i < 7; i++) {
+      const k = i / 6;
+      const seg = new THREE.Mesh(new THREE.SphereGeometry(0.085 * (1 - k * 0.7), 10, 8), hornMat);
+      seg.position.set(side * (0.27 + k * 0.14), 1.44 + Math.sin(k * 2.2) * 0.22, -0.02 - k * 0.3);
+      seg.castShadow = true;
       group.add(seg);
     }
   }

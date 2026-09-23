@@ -1,21 +1,23 @@
 import * as THREE from 'three';
 import { M, mesh, addEyes, ramHorn } from './kit.js';
 
-// Bouftou facon Dofus : grosse boule de laine jaune paille toute douce,
+// Bouftou facon Dofus : grosse boule de laine blanche toute douce,
 // museau brun qui depasse devant, grands yeux ronds, deux dents, cornes
 // de belier enroulees de chaque cote et quatre petites pattes sombres.
-// `opts.royal` : variante Royal (laine doree plus sombre, plus grosses
+// `opts.royal` : variante Royal (laine creme a reflets dores, plus grosses
 // cornes) utilisee par bouftouRoyal.js.
 export function buildBouftou(opts = {}) {
   const group = new THREE.Group();
   const royal = !!opts.royal;
 
-  const woolMid = M(royal ? 0xe0a62a : 0xf4d46a, { r: 0.95 });
-  const woolLight = M(royal ? 0xf6cc5a : 0xfff0a8, { r: 0.95 });
-  const woolDark = M(royal ? 0xb87a18 : 0xd8ae3e, { r: 0.95 });
+  // Laine blanche bien moelleuse (Royal : blanc creme avec reflets dores).
+  const woolMid = M(royal ? 0xf2e8d0 : 0xf2efe8, { r: 0.95 });
+  const woolLight = M(royal ? 0xfffaee : 0xffffff, { r: 0.95 });
+  const woolDark = M(royal ? 0xd4c29a : 0xd6d0c4, { r: 0.95 });
   const face = M(royal ? 0x4a2410 : 0x6a3a1c, { r: 0.8 });
   const faceLight = M(royal ? 0x6a3a1c : 0x8a5430, { r: 0.8 });
-  const hornMat = M(royal ? 0xf2e2c0 : 0xf6ecd6, { r: 0.5 });
+  const hornMat = M(royal ? 0xe8b850 : 0xe6cfa0, { r: 0.5 });
+  const cheekMat = M(0xf08a8a, { r: 0.8 });
   const hoof = M(0x2a1608, { r: 0.8 });
   const tooth = M(0xffffff, { r: 0.4 });
   const nose = M(0x2a120a, { r: 0.4 });
@@ -80,6 +82,22 @@ export function buildBouftou(opts = {}) {
     horn.position.set(side * 0.3, 0.8, 0.22);
     horn.rotation.y = side * 0.35;
     group.add(horn);
+  }
+
+  // ---- Frange de laine qui retombe sur le front ----
+  for (const [x, y, z, sz] of [[-0.14, 0.78, 0.36, 0.1], [0, 0.8, 0.4, 0.11], [0.14, 0.78, 0.36, 0.1], [-0.07, 0.75, 0.43, 0.075], [0.07, 0.75, 0.43, 0.075]]) {
+    group.add(mesh(new THREE.IcosahedronGeometry(sz, 2), woolLight, [x, y, z]));
+  }
+  // ---- Petites oreilles tombantes sous les cornes ----
+  for (const side of [-1, 1]) {
+    group.add(mesh(new THREE.SphereGeometry(0.08, 12, 8), face, [side * 0.3, 0.6, 0.3], [0.5, 0.9, 1.3], [0.3, 0, side * 0.9]));
+  }
+  // ---- Joues roses ----
+  for (const side of [-1, 1]) {
+    const ch = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 8), cheekMat);
+    ch.position.set(side * 0.17, 0.5, faceZ + 0.16);
+    ch.scale.set(1.3, 0.8, 0.5);
+    group.add(ch);
   }
 
   // ---- Petite queue en pompon ----

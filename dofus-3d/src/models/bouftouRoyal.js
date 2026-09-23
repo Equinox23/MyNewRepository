@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { buildBouftou } from './bouftou.js';
 
-// Bouftou Royal : la silhouette du Bouftou en plus grand, laine doree
-// plus sombre + une couronne d or a 5 epis sertis de gemmes.
+// Bouftou Royal : la silhouette du Bouftou en plus grand, laine creme
+// a reflets dores + une couronne d or a 5 epis sertis de gemmes.
 export function buildBouftouRoyal() {
   const group = new THREE.Group();
 
-  // Base : un Bouftou en version Royal (laine doree, grosses cornes),
+  // Base : un Bouftou en version Royal (laine creme, cornes dorees),
   // agrandi pour le faire ressortir.
   const body = buildBouftou({ royal: true });
   body.scale.setScalar(1.4);
