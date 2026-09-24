@@ -349,7 +349,8 @@ export const SPELLS = {
     apCost: 4, range: { min: 1, max: 3 }, needsLOS: false,
     target: 'tile', area: { type: 'single' },
     effects: [{ type: 'placeBomb' }],
-    desc: 'Pose une bombe sur une case libre (50 PV, bloque la vue). Explose dans 3 tours en zone rayon 2 pour 50 degats, +75% par tour ecoule. Max 3 bombes sur le terrain, 2 posees par tour.',
+    levels: { 3: { apCost: 3 } },
+    desc: 'Pose une bombe sur une case libre (bloque la vue). Explose dans 3 tours en zone rayon 2, +75% de degats par tour ecoule. Max 3 bombes, 2 posees par tour. Ameliorer le sort rend les bombes plus solides et plus puissantes.',
   },
   entourloupe: {
     id: 'entourloupe', name: 'Entourloupe', short: 'ET', icon: ICON_BOMB_SWAP,
@@ -357,8 +358,9 @@ export const SPELLS = {
     apCost: 3, range: { min: 1, max: 6 }, needsLOS: false,
     target: 'ally', area: { type: 'single' },
     targetFilter: 'bomb',
-    cooldown: 5,
+    cooldown: 4,
     effects: [{ type: 'swapWithBomb' }],
+    levels: { 2: { cooldown: 3 }, 3: { cooldown: 2, apCost: 2 } },
     desc: 'Echange la position du lanceur avec celle d une de ses bombes (portee 6).',
   },
   detonationManuelle: {
@@ -368,7 +370,8 @@ export const SPELLS = {
     target: 'ally', area: { type: 'single' },
     targetFilter: 'bomb',
     effects: [{ type: 'detonateBomb' }],
-    desc: 'Selectionne une de vos bombes et la fait exploser immediatement. Une bombe touchee par l explosion declenche une explosion en chaîne.',
+    levels: { 3: { apCost: 1 } },
+    desc: 'Fait exploser immediatement une de vos bombes (explosion en chaine sur les bombes touchees). Ameliore : explosion plus forte, 1 PA au niveau 3.',
   },
   bouclierBombe: {
     id: 'bouclierBombe', name: 'Bouclier de Bombe', short: 'BB', icon: ICON_SHIELD,
@@ -378,6 +381,7 @@ export const SPELLS = {
     targetFilter: 'bomb',
     cooldown: 3,
     effects: [{ type: 'buff', shield: 0.5, duration: 3 }],
+    levels: { 3: { apCost: 2 } },
     desc: 'Pose un bouclier (-50% degats reçus) sur une de vos bombes pendant 3 tours.',
   },
   pulsar: {
@@ -385,11 +389,12 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 4, range: { min: 1, max: 6 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
+    cooldown: 1,
     effects: [
-      { type: 'damage', min: 40, max: 60 },
+      { type: 'damage', min: 38, max: 55 },
       { type: 'knockback', distance: 2 },
     ],
-    desc: 'Onde de choc : 40-60 degats et repousse la cible de 2 cases. Portee 6.',
+    desc: 'Onde de choc : 38-55 degats et repousse la cible de 2 cases. Portee 6.',
   },
 
   // ---------- OSAMODAS ----------
@@ -887,16 +892,18 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 18, max: 28 }],
-    desc: 'Un tir de pistolet explosif : 18-28 degats.',
+    effects: [{ type: 'damage', min: 20, max: 30 }],
+    levels: { 3: { effects: [null, { type: 'knockback', distance: 1 }] } },
+    desc: 'Un tir de pistolet explosif : 20-30 degats (repousse de 1 case au niveau 3).',
   },
   tromblon: {
     id: 'tromblon', name: 'Tromblon', short: 'TR', icon: ICON_LINE,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'tile', area: { type: 'line', length: 3 }, lineOnly: true,
-    effects: [{ type: 'damage', min: 18, max: 26 }],
-    desc: 'Decharge de tromblon en ligne sur 3 cases : 18-26 degats.',
+    effects: [{ type: 'damage', min: 30, max: 40 }],
+    levels: { 3: { area: { length: 4 } } },
+    desc: 'Decharge de tromblon en ligne sur 3 cases (4 au niveau 3) : 30-40 degats a chaque cible.',
   },
   fourberie: {
     id: 'fourberie', name: 'Fourberie', short: 'FB', icon: ICON_HASTE,
@@ -905,6 +912,7 @@ export const SPELLS = {
     target: 'self', area: { type: 'single' },
     cooldown: 3,
     effects: [{ type: 'buff', shield: 0.25, bonusPm: 2, duration: 1 }],
+    levels: { 3: { apCost: 1 } },
     desc: 'Le Roublard se faufile : +2 PM et 25% de degats en moins pendant 1 tour.',
   },
 
@@ -1020,6 +1028,14 @@ export const SPELLS = {
   },
 };
 
+// Stats des bombes par niveau du sort (heros niveau 1 ; +7% PV et +6%
+// degats par niveau du heros en plus) -- cf. Leveling.bombBonus.
+const BOMB_LEVELS = [
+  { hp: 50, dmg: 50, res: 0 },
+  { hp: 70, dmg: 63, res: 10 },
+  { hp: 90, dmg: 75, res: 20 },
+];
+
 const SUMMON_NAMES = {
   craqueleur: 'Craqueleur', dragounetRouge: 'Dragounet Rouge', chatonBlanc: 'Chaton Blanc', bouftouInvoc: 'Bouftou apprivoise',
 };
@@ -1099,11 +1115,13 @@ export function spellEffectLines(spell) {
       case 'dot':
         lines.push(`Poison : ${eff.min}-${eff.max} degats pendant ${eff.duration} tours`);
         break;
-      case 'placeBomb':
-        lines.push('Pose une bombe (50 PV)');
-        lines.push('Explose en zone (rayon 2) dans 3 tours');
-        lines.push('Degats : 50 + 75% par tour ecoule');
+      case 'placeBomb': {
+        const lv = eff.bombLevel || 1;
+        const b = BOMB_LEVELS[lv - 1];
+        lines.push(`Bombe : ${b.hp} PV${b.res ? `, resistance ${b.res}%` : ''}`);
+        lines.push(`Explosion : ${b.dmg} degats (+75% par tour), rayon 2, dans 3 tours`);
         break;
+      }
       case 'moveBomb':
         lines.push('Deplace la bombe la plus proche');
         break;
@@ -1111,7 +1129,7 @@ export function spellEffectLines(spell) {
         lines.push('Echange la position du lanceur avec la bombe ciblee');
         break;
       case 'detonateBomb':
-        lines.push('Detonation de la bombe ciblee');
+        lines.push(`Detonation de la bombe ciblee${eff.bonus ? ` (+${Math.round(eff.bonus * 100)}% degats)` : ''}`);
         lines.push('Chaine sur les bombes touchees');
         break;
       case 'detonateBombs':

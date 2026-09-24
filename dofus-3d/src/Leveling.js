@@ -225,8 +225,42 @@ export function scaledSpell(spell, level = 1, extraMult = 1) {
         // La creature invoquee profite du niveau du sort (cf. summonBonus).
         x.summonLevel = lv;
         break;
+      case 'placeBomb':
+        // La bombe profite du niveau du sort (cf. bombBonus).
+        x.bombLevel = lv;
+        break;
+      case 'detonateBomb':
+        x.bonus = +(0.15 * (lv - 1)).toFixed(2);
+        break;
     }
     return x;
   });
+  // Bonus specifiques a un sort pour un palier (spell.levels[lv]) :
+  // cout en PA, recharge, portee, zone, et retouches d effets par index.
+  const ov = spell.levels && spell.levels[lv];
+  if (ov) {
+    for (const [key, val] of Object.entries(ov)) {
+      if (key === 'effects') {
+        val.forEach((patch, i) => {
+          if (!patch) return;
+          if (s.effects[i]) s.effects[i] = { ...s.effects[i], ...patch };
+          else s.effects.push({ ...patch });
+        });
+        s.effects = s.effects.slice();
+      } else if (key === 'range' || key === 'area') {
+        s[key] = { ...s[key], ...val };
+      } else {
+        s[key] = val;
+      }
+    }
+  }
   return s;
+}
+
+// Bombe du Roublard selon le niveau du sort Poser une Bombe :
+// niv. 2 : PV +40%, degats +25%, resistance 10% ;
+// niv. 3 : PV +80%, degats +50%, resistance 20%.
+export function bombBonus(bombLevel = 1) {
+  const lv = Math.max(1, Math.min(MAX_SPELL_LEVEL, bombLevel));
+  return { level: lv, hp: 1 + 0.4 * (lv - 1), damage: 1 + 0.25 * (lv - 1), shield: 0.1 * (lv - 1) };
 }
