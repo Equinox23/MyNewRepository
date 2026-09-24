@@ -166,30 +166,6 @@ export const MAPS = {
 };
 
 // Boosts permanents donnes a certaines creatures sur certaines cartes.
-export const MAP_BOOSTS = {
-  foret: {
-    bouftou: { bonusPm: 1 },
-    bouftouRoyal: { bonusPm: 1 },
-    wabbit: { bonusPm: 1 },
-    waWabbit: { bonusPm: 1 },
-  },
-  cascade: {
-    crapaud: { damageMult: 0.3 },
-    crapaudChef: { damageMult: 0.3 },
-  },
-  cimetiere: {
-    chafer: { damageMult: 0.3 },
-    chaferRoyal: { damageMult: 0.3 },
-  },
-  falaise: {
-    tofu: { bonusPa: 2 },
-    tofuRoyal: { bonusPa: 2 },
-  },
-  marais: {
-    champignon: { bonusPm: 1 },
-    champignonRoyal: { bonusPm: 1 },
-  },
-};
 
 // Aspect des touffes d herbe selon le style de carte.
 const GRASS_STYLE = {

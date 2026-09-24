@@ -1,5 +1,6 @@
 import { itemIcon } from './ItemArt.js';
 import { getHero } from './Leveling.js';
+import { FAMILY_OF_MONSTER, MONSTER_FAMILIES } from './Bestiary.js';
 
 // ===========================================================================
 // Equipement et panoplies facon Dofus.
@@ -96,17 +97,8 @@ export const FAMILIES = {
 };
 export const FAMILY_ORDER = Object.keys(FAMILIES);
 
-// Monstre -> panoplie.
-const FAMILY_OF = {
-  bouftou: 'bouftou', bouftouRoyal: 'bouftou',
-  crapaud: 'crapaud', crapaudChef: 'crapaud',
-  chafer: 'chafer', chaferRoyal: 'chafer',
-  tofu: 'tofu', tofuRoyal: 'tofu',
-  wabbit: 'wabbit', waWabbit: 'wabbit',
-  champignon: 'champignon', champignonRoyal: 'champignon',
-  craqueleurSauvage: 'craqueleur', craqueleurLegendaire: 'craqueleur',
-  kwakwa: 'kwakwa', minotoror: 'minotoror',
-};
+// Monstre -> panoplie : la famille du bestiaire.
+const FAMILY_OF = FAMILY_OF_MONSTER;
 
 // ---------------------------------------------------------------------------
 // Jets fixes : statistiques d un objet (panoplie, emplacement, rarete).
@@ -329,9 +321,9 @@ export function statsDiff(a = {}, b = {}) {
 
 // ---------------------------------------------------------------------------
 // Butin : les objets rares sont... rares.
-//   Monstre normal : 10% de chance de lacher un objet
+//   Sbire 8%, variante 10%, chef 25%, royal 40% de chance de lacher un objet
 //     (commun 75% - rare 20% - epique 4.5% - legendaire 0.5%).
-//   Chef / Royal : 35%. Boss : 100% (rare 70% - epique 25% - legendaire 5%).
+//   Boss : 100% (rare 70% - epique 25% - legendaire 5%).
 // ---------------------------------------------------------------------------
 function pickRarity(boss, luck = 0) {
   const r = Math.random() - luck;
@@ -352,8 +344,9 @@ export function rollLoot(enemies, opts = {}) {
     const fam = FAMILY_OF[e.classId];
     if (!fam) continue;
     const isBoss = !!(e.def && e.def.isBoss);
-    const chief = !isBoss && !!(e.def && /Royal|Chef|Roi/.test(e.def.name + ' ' + e.def.role));
-    const chance = isBoss ? 1 : chief ? 0.35 : 0.1;
+    // Rang dans la famille : sbire / variante / chef / royal.
+    const rank = MONSTER_FAMILIES[fam].members.lastIndexOf(e.classId);
+    const chance = isBoss ? 1 : [0.08, 0.1, 0.25, 0.4][Math.max(0, rank)];
     if (Math.random() < chance * (opts.dropMult || 1)) {
       drops.push(makeItem(fam, pickRarity(isBoss, opts.luck || 0)));
     }

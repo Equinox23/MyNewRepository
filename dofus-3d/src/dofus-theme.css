@@ -605,3 +605,12 @@ html, body { height: 100%; }
 #menu-root .req-bad { color: #ff6a5a; font-weight: 700; }
 #menu-root .req-ok { color: #9ad85a; }
 #menu-root .req-warn { color: #ff8a6a; font-size: 12px; margin-bottom: 6px; }
+#menu-root .menu-option .opt-faces { display: flex; gap: 2px; margin-top: 4px; justify-content: flex-end; }
+#menu-root .menu-option .opt-faces img { width: 34px; height: 34px; object-fit: contain; background: rgba(0,0,0,0.3); border-radius: 50%; }
+#menu-root .menu-option .opt-tierbadge { position: absolute; top: 5px; right: 6px; font: 700 10px var(--d-font-title); color: var(--d-cream-dim); background: rgba(0,0,0,0.45); border-radius: 8px; padding: 1px 6px; }
+#menu-root .menu-option .opt-tierbadge.on { color: #9ad85a; }
+@media (max-width: 640px) {
+  #menu-root .menu-option .opt-faces { justify-content: center; }
+  #menu-root .menu-option .opt-faces img { width: 22px; height: 22px; }
+  #menu-root .menu-option .opt-tierbadge { font-size: 8px; top: 2px; right: 2px; }
+}

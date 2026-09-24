@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { toonify } from './Toon.js';
-import { BUILDERS } from './models/index.js';
+import { BUILDERS, VARIANTS } from './models/index.js';
 import { attachWearables } from './models/wearables.js';
 
 
@@ -91,7 +91,9 @@ export function getAvatar(classId, size = 64, frameOverride = null, items = null
   if (!builder) return null;
 
   const { renderer, scene, camera } = ensureShared(size);
-  const frame = frameOverride || FRAME[classId] || { y: 0.7, dist: 2.4, height: 0.9 };
+  const vr = VARIANTS[classId];
+  const vf = vr && FRAME[vr.base] && { y: FRAME[vr.base].y * vr.scale, dist: FRAME[vr.base].dist * vr.scale, height: FRAME[vr.base].height * vr.scale };
+  const frame = frameOverride || FRAME[classId] || vf || { y: 0.7, dist: 2.4, height: 0.9 };
 
   const model = builder();
   if (items && items.length) attachWearables(model, items);

@@ -1,41 +1,40 @@
 // ===========================================================================
 // Mode Aventure : donjons facon Dofus.
-//  - Un donjon = une suite de salles (combats) puis la salle du boss.
+//  - Un donjon = 3 salles (combats) puis la salle du boss, monstres de
+//    niveau fixe (bestiaire) : les derniers donjons sont tres durs.
 //  - Les PV des heros ne remontent pas entierement entre deux salles
 //    (seulement 25% de repos) ; un heros tombe revient a 20%.
 //  - Battre le boss ouvre un coffre (objets garantis) et debloque le
 //    donjon suivant.
 // ===========================================================================
 
+import { MONSTER_FAMILIES } from './Bestiary.js';
+import { DEFS } from './Fighter.js';
+
 const KEY = 'dofus3d.dungeons';
 
-export const DUNGEONS = [
-  {
-    id: 'bouftous', name: 'Donjon des Bouftous', map: 'foret', level: 2, family: 'bouftou', boss: 'bouftouRoyal',
-    desc: 'La meute garde l enclos du Bouftou Royal.',
-    rooms: [['bouftou', 'bouftou'], ['bouftou', 'bouftou', 'bouftou'], ['bouftou', 'bouftou', 'bouftouRoyal']],
-  },
-  {
-    id: 'wabbits', name: 'Terrier du Wa Wabbit', map: 'foret', level: 5, family: 'wabbit', boss: 'waWabbit',
-    desc: 'Au fond du terrier, le roi des Wabbits et ses carottes geantes.',
-    rooms: [['wabbit', 'wabbit'], ['wabbit', 'wabbit', 'wabbit'], ['wabbit', 'wabbit', 'waWabbit']],
-  },
-  {
-    id: 'craqueleurs', name: 'Grotte du Craqueleur Legendaire', map: 'falaise', level: 8, family: 'craqueleur', boss: 'craqueleurLegendaire',
-    desc: 'Un golem de cristal qui enracine ses proies. Craint l eau.',
-    rooms: [['craqueleurSauvage', 'tofu'], ['craqueleurSauvage', 'craqueleurSauvage', 'tofu'], ['craqueleurSauvage', 'craqueleurLegendaire']],
-  },
-  {
-    id: 'kwakwa', name: 'Canopee du Kwakwa', map: 'cascade', level: 11, family: 'kwakwa', boss: 'kwakwa',
-    desc: 'Le Kwakwa change d element a chaque tour : frappe-le dans l element oppose !',
-    rooms: [['crapaud', 'tofu', 'tofu'], ['crapaud', 'crapaud', 'tofuRoyal'], ['tofu', 'tofu', 'kwakwa']],
-  },
-  {
-    id: 'minotoror', name: 'Labyrinthe du Minotoror', map: 'cimetiere', level: 14, family: 'minotoror', boss: 'minotoror',
-    desc: 'Le Minotoror charge en ligne droite : ne reste pas aligne !',
-    rooms: [['chafer', 'chafer'], ['chafer', 'chafer', 'chaferRoyal'], ['chafer', 'chafer', 'minotoror']],
-  },
+// Salles d un donjon (indices dans les membres de la famille : 0 sbire,
+// 1 variante, 2 chef, 3 royal / boss). 4 salles, la derniere avec le boss.
+const ROOMS = [[0, 0, 1], [0, 1, 1, 2], [1, 2, 2, 1], [1, 2, 3, 2]];
+
+const DUNGEON_INFO = [
+  ['bouftous', 'bouftou', 'Donjon des Bouftous', 'La meute garde l enclos du Bouftou Royal.'],
+  ['wabbits', 'wabbit', 'Terrier du Wa Wabbit', 'Au fond du terrier, le roi des Wabbits et ses carottes geantes.'],
+  ['crapauds', 'crapaud', 'Mare du Crapaud Chef', 'Crapauds venimeux et mages protegent leur chef. Ils resistent a l eau.'],
+  ['tofus', 'tofu', 'Nid des Tofus', 'Des oiseaux rapides qui fuient le tacle. Le Tofu Royal niche au sommet.'],
+  ['chafers', 'chafer', 'Crypte des Chafers', 'Archers et gardes d elite squelettes, pieges caches. Ils craignent le feu.'],
+  ['champignons', 'champignon', 'Champignonniere', 'Spores toxiques partout. Le Champignon Royal craint le feu.'],
+  ['craqueleurs', 'craqueleur', 'Grotte du Craqueleur Legendaire', 'Des golems qui enracinent et tapent fort. Ils craignent l eau.'],
+  ['kwakwa', 'kwakwa', 'Canopee du Kwakwa', 'Chaque Kwak a son element ; le Kwakwa en change a chaque tour.'],
+  ['minotoror', 'minotoror', 'Labyrinthe du Minotoror', 'Le Minotoror et ses gardiens chargent en ligne droite.'],
 ];
+
+export const DUNGEONS = DUNGEON_INFO.map(([id, family, name, desc]) => {
+  const fam = MONSTER_FAMILIES[family];
+  const rooms = ROOMS.map(r => r.map(i => fam.members[i]));
+  const boss = fam.members[3];
+  return { id, family, name, desc, map: fam.map, boss, rooms, level: DEFS[boss].level, minLevel: DEFS[fam.members[0]].level };
+});
 
 export const REST_HEAL = 0.25;
 export const REVIVE_HP = 0.2;
@@ -68,7 +67,7 @@ export function dungeonUnlocked(index) {
 // par heros supplementaire.
 export function roomComposition(dungeon, roomIndex, heroCount) {
   const base = dungeon.rooms[roomIndex].slice();
-  const minion = base[0];
-  for (let i = 1; i < heroCount; i++) base.unshift(minion);
+  const extra = MONSTER_FAMILIES[dungeon.family].members[1];
+  for (let i = 1; i < heroCount; i++) base.unshift(extra);
   return base;
 }

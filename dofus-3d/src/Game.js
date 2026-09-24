@@ -1,69 +1,31 @@
 import * as THREE from 'three';
-import { Fighter } from './Fighter.js';
+import { Fighter, DEFS } from './Fighter.js';
 import { Character3D } from './Character3D.js';
 import { TurnManager } from './TurnManager.js';
 import { bfs, pathTo, hasLOS } from './Path.js';
 import { SPELLS } from './Spells.js';
 import { spellElementColor } from './SpellIcons.js';
 import { getHero, addXp, monsterXp, bombBonus, heroStats } from './Leveling.js';
-import { MAP_BOOSTS } from './Map3D.js';
-import { recordWin, recordTier } from './Progress.js';
+import { recordTier } from './Progress.js';
+import { MONSTER_FAMILIES, tierComposition } from './Bestiary.js';
 import { damageElementOf, elementHex, ELEMENT_LABEL } from './Elements.js';
 import { equipmentStats, equippedList, rollLoot, addItems, FAMILIES } from './Items.js';
 
-// `homeMap` : la carte "maison" du monstre. Le vaincre dessus rapporte
-// une etoile d or, ailleurs une etoile d argent.
+// Combats du mode classique : une famille de monstres, jouee sur sa carte.
+// Le palier (1 a 10) fixe le nombre et la composition du groupe (cf.
+// Bestiary.tierComposition) ; la force des monstres depend de leur niveau.
 export const COMBATS = {
-  bouftou: {
-    name: 'Meute de Bouftous',
-    enemyComposition: ['bouftou', 'bouftou', 'bouftou', 'bouftouRoyal'],
-    homeMap: 'foret',
-  },
-  crapaud: {
-    name: 'Crapauds de la mare',
-    enemyComposition: ['crapaud', 'crapaud', 'crapaud', 'crapaudChef'],
-    homeMap: 'cascade',
-  },
-  chafer: {
-    name: 'Patrouille de Chafers',
-    enemyComposition: ['chafer', 'chafer', 'chafer', 'chaferRoyal'],
-    homeMap: 'cimetiere',
-  },
-  tofu: {
-    name: 'Volee de Tofus',
-    enemyComposition: ['tofu', 'tofu', 'tofu', 'tofuRoyal'],
-    homeMap: 'falaise',
-  },
-  wabbit: {
-    name: 'Terrier des Wabbits',
-    enemyComposition: ['wabbit', 'wabbit', 'wabbit', 'waWabbit'],
-    homeMap: 'foret',
-  },
-  champignon: {
-    name: 'Colonie de Champignons',
-    enemyComposition: ['champignon', 'champignon', 'champignon', 'champignonRoyal'],
-    homeMap: 'marais',
-  },
-  // ---------- BOSS ----------
-  craqueleurLegendaire: {
-    name: 'Craqueleur Legendaire',
-    enemyComposition: ['craqueleurSauvage', 'craqueleurSauvage', 'craqueleurLegendaire'],
-    homeMap: 'falaise',
-    boss: true,
-  },
-  kwakwa: {
-    name: 'Kwakwa',
-    enemyComposition: ['tofu', 'tofu', 'kwakwa'],
-    homeMap: 'cascade',
-    boss: true,
-  },
-  minotoror: {
-    name: 'Minotoror',
-    enemyComposition: ['chafer', 'chafer', 'minotoror'],
-    homeMap: 'cimetiere',
-    boss: true,
-  },
+  bouftou: { name: 'Meute de Bouftous', family: 'bouftou' },
+  wabbit: { name: 'Terrier des Wabbits', family: 'wabbit' },
+  crapaud: { name: 'Crapauds de la mare', family: 'crapaud' },
+  tofu: { name: 'Volee de Tofus', family: 'tofu' },
+  chafer: { name: 'Patrouille de Chafers', family: 'chafer' },
+  champignon: { name: 'Colonie de Champignons', family: 'champignon' },
+  craqueleurLegendaire: { name: 'Craqueleurs', family: 'craqueleur' },
+  kwakwa: { name: 'Kwaks et Kwakwa', family: 'kwakwa' },
+  minotoror: { name: 'Labyrinthe du Minotoror', family: 'minotoror' },
 };
+for (const c of Object.values(COMBATS)) c.map = MONSTER_FAMILIES[c.family].map;
 
 const PLAYER_SPAWNS = [
   { c: 3, r: 7 }, { c: 2, r: 5 }, { c: 2, r: 9 },
@@ -72,19 +34,6 @@ const ENEMY_SPAWNS = [
   { c: 11, r: 7 }, { c: 12, r: 5 }, { c: 12, r: 9 }, { c: 13, r: 7 },
   { c: 13, r: 4 }, { c: 13, r: 10 }, { c: 10, r: 6 }, { c: 10, r: 8 },
 ];
-
-// Composition ennemie adaptee au nombre de heros du joueur : plus on est
-// nombreux, plus le combat amene de cretures (et de boss "royaux").
-function buildEnemyComposition(combat, playerCount) {
-  const base = (combat && combat.enemyComposition) || ['bouftou'];
-  const minion = base[0];
-  const royal = base[base.length - 1];
-  const comp = base.slice();
-  if (playerCount >= 2) comp.push(minion, minion);
-  // Un seul boss par combat : les combats de boss ne gagnent que des sbires.
-  if (playerCount >= 3) comp.push(minion, combat && combat.boss ? minion : royal);
-  return comp;
-}
 
 export class Game {
   constructor({ scene3d, map3d, picker, hud, rangeOverlay, zoneOverlay, vfx, audio }) {
@@ -126,11 +75,15 @@ export class Game {
     this.lastResult = null;
 
     // Rebuild la carte si necessaire (eau/pont/foret/cascade).
-    if (config.mapId) this.map3d.rebuild(config.mapId);
+    // Chaque famille de monstres a sa carte.
+    const combat0 = COMBATS[config.combatId];
+    const mapId = config.mapId || (combat0 && combat0.map) || 'foret';
+    config.mapId = mapId;
+    this.map3d.rebuild(mapId);
 
     const playerClasses = config.playerClasses || ['iop'];
     const enemyComposition = config.enemyComposition
-      || buildEnemyComposition(COMBATS[config.combatId], playerClasses.length);
+      || tierComposition(combat0 ? combat0.family : 'bouftou', config.tier || 1, playerClasses.length);
 
     // Placement : on cherche une case libre et marchable autour de chaque
     // ancre de spawn (les compositions etendues depassent le nb d ancres).
@@ -146,7 +99,8 @@ export class Game {
         const hero = getHero(cls);
         opts = { kind: 'hero', level: hero.level, spellLevels: hero.spellLevels, equipment: equipmentStats(cls) };
       } else {
-        opts = { kind: 'monster', level: monsterLevel };
+        // Niveau fixe du monstre (bestiaire).
+        opts = { kind: 'monster', level: DEFS[cls].level || monsterLevel };
       }
       const f = new Fighter(cls, team, pos.c, pos.r, opts);
       // Aventure : les PV sont conserves d une salle a l autre.
@@ -159,6 +113,7 @@ export class Game {
         if (f.hasSpecial('osDurs')) f.buffs.push({ permanent: true, duration: 9999, reflect: 0.1, setBonus: true });
         if (f.hasSpecial('pierre')) f.buffs.push({ permanent: true, duration: 9999, stabilized: true, shield: 0.1, setBonus: true });
       }
+      if (f.def.fixedElement) f.currentElement = f.def.fixedElement;
       if (f.def.elementCycle) {
         f.currentElement = f.def.elementCycle[0];
         f.character.setElementTint(elementHex(f.currentElement));
@@ -172,7 +127,7 @@ export class Game {
     this.initialEnemies = this.fighters.filter(f => f.team !== 'player');
 
     // Boosts de map : applique des buffs permanents aux creatures concernees.
-    this.applyMapBoosts(config.mapId);
+
 
     for (const f of this.fighters) {
       const other = this.fighters.find(o => o.alive && o.team !== f.team);
@@ -297,26 +252,6 @@ export class Game {
     this.startTurn();
   }
 
-  applyMapBoosts(mapId) {
-    const boosts = MAP_BOOSTS[mapId];
-    if (!boosts) return;
-    for (const f of this.fighters) {
-      const boost = boosts[f.classId];
-      if (!boost) continue;
-      const buff = {
-        permanent: true,
-        duration: 9999,
-        damageMult: boost.damageMult,
-        bonusPa: boost.bonusPa,
-        bonusPm: boost.bonusPm,
-        shield: boost.shield,
-      };
-      f.buffs.push(buff);
-      // Application immediate des bonus PA / PM.
-      if (boost.bonusPa) f.pa += boost.bonusPa;
-      if (boost.bonusPm) f.pm += boost.bonusPm;
-    }
-  }
 
   // Cherche une case libre et marchable (sol ou pont) au plus pres de
   // l ancre donnee, en spirale. `occupied` evite les superpositions.
@@ -2764,18 +2699,7 @@ export class Game {
       const adv = this.config && this.config.adventure;
       const combat = !adv && this.config && COMBATS[this.config.combatId];
       const enemyLabel = adv ? adv.roomName : combat ? combat.name : 'tes adversaires';
-      // Victoire : on enregistre l etoile (or si vaincu sur la carte
-      // maison du monstre, argent sinon).
-      let starResult = null;
-      if (winner === 'player' && combat && this.config) {
-        starResult = (this.config.mapId === combat.homeMap) ? 'gold' : 'silver';
-        // En multi, chaque heros engage recoit l etoile.
-        const classes = this.config.playerClasses
-          || (this.config.classId ? [this.config.classId] : []);
-        for (const classId of classes) {
-          recordWin(classId, this.config.combatId, starResult);
-        }
-      }
+      const starResult = null;
       // Experience : chaque monstre vaincu rapporte de l XP a chaque heros
       // (partagee avec un bonus de groupe en multi), et le palier est valide.
       let xpResults = null;

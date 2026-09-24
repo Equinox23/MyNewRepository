@@ -137,10 +137,10 @@ export function heroStats(def, level) {
 
 export function monsterStats(def, level) {
   return {
-    hp: Math.round(def.hp * (1 + 0.14 * (level - 1))),
+    hp: Math.round(def.hp * (1 + 0.11 * (level - 1))),
     pa: def.pa + (level >= 13 ? 1 : 0),
     pm: def.pm,
-    damage: 1 + 0.08 * (level - 1),
+    damage: 1 + 0.07 * (level - 1),
   };
 }
 

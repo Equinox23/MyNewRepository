@@ -22,6 +22,8 @@ import { buildTofuRoyal } from './tofuRoyal.js';
 import { buildChampignon } from './champignon.js';
 import { buildChampignonRoyal } from './champignonRoyal.js';
 import { buildCraqueleurLegendaire, buildCraqueleurSauvage, buildKwakwa, buildMinotoror } from './bosses.js';
+import { VARIANTS, buildVariant } from './variants.js';
+export { VARIANTS };
 
 // Registre unique des modeles (combat, portraits, timeline).
 export const BUILDERS = {
@@ -54,3 +56,4 @@ export const BUILDERS = {
   kwakwa: buildKwakwa,
   minotoror: buildMinotoror,
 };
+for (const id of Object.keys(VARIANTS)) BUILDERS[id] = () => buildVariant(id);
