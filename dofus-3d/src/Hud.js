@@ -1245,9 +1245,11 @@ export class Hud {
         if (e.pointerType === 'mouse') this.hideTooltip();
       });
       // Tactile : long-press 450ms.
+      let lpX = 0, lpY = 0;
       btn.addEventListener('pointerdown', (e) => {
         if (e.pointerType === 'mouse') return;
         lpFired = false;
+        lpX = e.clientX; lpY = e.clientY;
         cancelLp();
         lpTimer = setTimeout(() => {
           lpFired = true;
@@ -1256,20 +1258,19 @@ export class Hud {
       });
       btn.addEventListener('pointermove', (e) => {
         if (e.pointerType === 'mouse') return;
-        cancelLp();
+        // Tolerance : un doigt bouge toujours un peu pendant l appui long.
+        if (Math.hypot(e.clientX - lpX, e.clientY - lpY) > 12) cancelLp();
       });
       btn.addEventListener('pointerup', (e) => {
         if (e.pointerType === 'mouse') return;
         cancelLp();
-        if (lpFired) {
-          // Laisse l infobulle un instant puis la masque.
-          setTimeout(() => this.hideTooltip(), 1500);
-        }
+        // L infobulle reste affichee : elle se ferme au prochain appui.
       });
       btn.addEventListener('pointercancel', () => {
         cancelLp();
-        if (lpFired) this.hideTooltip();
       });
+      // iOS / Android : l appui long ouvre sinon le menu contextuel.
+      btn.addEventListener('contextmenu', (e) => e.preventDefault());
       this.spellBar.appendChild(btn);
       this.spellSlots.push({ btn, spell });
     });
@@ -1280,6 +1281,10 @@ export class Hud {
     const el = document.createElement('div');
     el.id = 'spell-tooltip';
     document.body.appendChild(el);
+    // Tactile : l infobulle ouverte par appui long se ferme au prochain appui.
+    document.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse' && el.classList.contains('show')) this.hideTooltip();
+    }, true);
     this.tooltipEl = el;
     return el;
   }
