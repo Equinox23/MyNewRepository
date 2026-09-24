@@ -30,6 +30,8 @@ export const SPELL_ELEMENT = {
   picole: 'boost', tirPandatak: 'terre', karcham: 'terre', vaguePandawa: 'eau', laitDeBambou: 'soin',
   coupDeLance: 'neutre', coupDeLanceRoyal: 'neutre', invisibilite: 'air',
   coupDeBec: 'air', bourrasque: 'air', sporeToxique: 'poison', nuageDeSpores: 'poison',
+  motBlessant: 'feu', motSoignant: 'soin', motDeFrayeur: 'air', motStimulant: 'boost', motDeReconstitution: 'soin',
+  morsureWabbit: 'terre', lancerCarotte: 'terre', carotteGeante: 'terre',
 };
 
 export function spellElement(spell) {
@@ -378,6 +380,40 @@ const ART = {
     <g fill="#d8a8ff" ${O} stroke-width="1.2"><circle cx="12" cy="${cloud ? 54 : 12}" r="3"/><circle cx="52" cy="${cloud ? 54 : 10}" r="2.5"/><circle cx="54" cy="${cloud ? 8 : 44}" r="2"/><circle cx="8" cy="${cloud ? 12 : 48}" r="2.4"/></g>`,
 };
 
+ART.word = (p, fill) => `
+    <path d="M10 14 Q10 8 16 8 L48 8 Q54 8 54 14 L54 36 Q54 42 48 42 L28 42 L16 54 L18 42 L16 42 Q10 42 10 36 Z" fill="url(#${p}${fill})" ${O}/>
+    <path d="M18 18 H46 M18 25 H40 M18 32 H44" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity="0.9"/>
+    <path d="M14 12 Q20 10 26 11" stroke="#fff" stroke-width="2" fill="none" opacity="0.7"/>`;
+ART.wordHeart = (p) => `
+    <path d="M10 14 Q10 8 16 8 L48 8 Q54 8 54 14 L54 36 Q54 42 48 42 L28 42 L16 54 L18 42 L16 42 Q10 42 10 36 Z" fill="url(#${p}white)" ${O}/>
+    <path d="M32 37 C18 28 20 16 27 16 C30 16 31 18 32 20 C33 18 34 16 37 16 C44 16 46 28 32 37 Z" fill="url(#${p}pink)" ${O} stroke-width="1.6"/>`;
+ART.wordStar = (p) => `
+    <path d="M10 14 Q10 8 16 8 L48 8 Q54 8 54 14 L54 36 Q54 42 48 42 L28 42 L16 54 L18 42 L16 42 Q10 42 10 36 Z" fill="url(#${p}white)" ${O}/>
+    <path d="M32 12 L35 21 L45 21 L37 27 L40 36 L32 31 L24 36 L27 27 L19 21 L29 21 Z" fill="url(#${p}gold)" ${O} stroke-width="1.6"/>`;
+ART.wordFear = (p) => `
+    <path d="M10 14 Q10 8 16 8 L48 8 Q54 8 54 14 L54 36 Q54 42 48 42 L28 42 L16 54 L18 42 L16 42 Q10 42 10 36 Z" fill="url(#${p}purple)" ${O}/>
+    <text x="32" y="36" font-size="28" font-weight="900" text-anchor="middle" fill="#fff" stroke="#241208" stroke-width="1.5" font-family="Arial Black, sans-serif">!!</text>
+    <g stroke="#fff" stroke-width="2.4" stroke-linecap="round"><path d="M56 48 L62 54"/><path d="M54 56 L60 62"/></g>`;
+ART.wordBig = (p) => `
+    <circle cx="32" cy="30" r="22" fill="#fff" opacity="0.25"/>
+    <path d="M32 54 C8 38 10 16 22 14 C27 13 30 16 32 20 C34 16 37 13 42 14 C54 16 56 38 32 54 Z" fill="url(#${p}pink)" ${O}/>
+    <g fill="#fff"><path d="M14 8 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2z"/><path d="M50 6 l1.5 4 4 1.5 -4 1.5 -1.5 4 -1.5 -4 -4 -1.5 4 -1.5z"/><path d="M54 40 l1.5 4 4 1.5 -4 1.5 -1.5 4 -1.5 -4 -4 -1.5 4 -1.5z"/></g>
+    <path d="M22 30 L28 36 L42 24" stroke="#fff" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+ART.carrot = (p, big) => `
+    <g transform="rotate(${big ? 30 : 40} 32 32)">
+      <path d="M26 16 L38 16 L32 ${big ? 62 : 58} Z" fill="url(#${p}fire)" ${O}/>
+      <path d="M28 24 L34 25 M29 32 L35 33 M30 40 L34 41" stroke="#a8400a" stroke-width="2"/>
+      <path d="M32 16 Q24 4 26 2 Q30 8 32 12 Q34 6 38 2 Q40 6 32 16 Z" fill="url(#${p}leaf)" ${O} stroke-width="1.6"/>
+    </g>
+    ${big ? '<g stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M6 50 L14 46"/><path d="M8 58 L16 54"/></g>' : '<g stroke="#fff" stroke-width="2.4" stroke-dasharray="3 4" stroke-linecap="round"><path d="M4 12 L16 20"/></g>'}`;
+ART.bunnyBite = (p) => `
+    <path d="M14 30 Q14 12 32 12 Q50 12 50 30 Q50 46 32 46 Q14 46 14 30 Z" fill="url(#${p}white)" ${O}/>
+    <rect x="25" y="36" width="7" height="12" rx="1.5" fill="#fff" ${O} stroke-width="1.6"/>
+    <rect x="32" y="36" width="7" height="12" rx="1.5" fill="#fff" ${O} stroke-width="1.6"/>
+    <ellipse cx="32" cy="32" rx="4" ry="3" fill="#e8589a" ${O} stroke-width="1.4"/>
+    <circle cx="24" cy="24" r="3.5" fill="#241208"/><circle cx="40" cy="24" r="3.5" fill="#241208"/>
+    <circle cx="25" cy="23" r="1.2" fill="#fff"/><circle cx="41" cy="23" r="1.2" fill="#fff"/>`;
+
 // Sort -> illustration.
 const SPELL_ART = {
   pression: (p) => ART.sword(p),
@@ -425,6 +461,14 @@ const SPELL_ART = {
   bourrasque: (p) => ART.wind(p),
   sporeToxique: (p) => ART.spore(p, false),
   nuageDeSpores: (p) => ART.spore(p, true),
+  motBlessant: (p) => ART.word(p, 'red'),
+  motSoignant: (p) => ART.wordHeart(p),
+  motDeFrayeur: (p) => ART.wordFear(p),
+  motStimulant: (p) => ART.wordStar(p),
+  motDeReconstitution: (p) => ART.wordBig(p),
+  morsureWabbit: (p) => ART.bunnyBite(p),
+  lancerCarotte: (p) => ART.carrot(p, false),
+  carotteGeante: (p) => ART.carrot(p, true),
 };
 
 // Renvoie l icone peinte d un sort (null si aucune illustration dediee,

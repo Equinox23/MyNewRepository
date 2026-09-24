@@ -751,6 +751,80 @@ export const SPELLS = {
     effects: [{ type: 'damage', min: 14, max: 20 }],
     desc: 'Liberе un nuage de spores : degats en zone (rayon 1).',
   },
+
+  // ---------- ENIRIPSA (fee soigneuse) ----------
+  motBlessant: {
+    id: 'motBlessant', name: 'Mot Blessant', short: 'MB', icon: ICON_FEATHER,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 22, max: 32 }],
+    desc: 'Un mot cinglant lance a distance : 22-32 degats.',
+  },
+  motSoignant: {
+    id: 'motSoignant', name: 'Mot Soignant', short: 'MS', icon: ICON_HEAL_CROSS,
+    category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
+    apCost: 3, range: { min: 0, max: 5 }, needsLOS: true,
+    target: 'ally', area: { type: 'single' },
+    effects: [{ type: 'heal', min: 28, max: 40 }],
+    desc: 'Un mot doux qui referme les plaies : soigne 28-40 PV (allie ou soi-meme).',
+  },
+  motDeFrayeur: {
+    id: 'motDeFrayeur', name: 'Mot de Frayeur', short: 'MF', icon: ICON_GHOST,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 3 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    cooldown: 2,
+    effects: [
+      { type: 'damage', min: 8, max: 14 },
+      { type: 'knockback', distance: 3 },
+    ],
+    desc: 'Terrifie la cible : 8-14 degats et la repousse de 3 cases.',
+  },
+  motStimulant: {
+    id: 'motStimulant', name: 'Mot Stimulant', short: 'MT', icon: ICON_BOOST,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 2, range: { min: 0, max: 4 }, needsLOS: true,
+    target: 'ally', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'buff', bonusPa: 2, bonusPm: 1, duration: 2 }],
+    desc: 'Galvanise un allie : +2 PA et +1 PM pendant 2 tours.',
+  },
+  motDeReconstitution: {
+    id: 'motDeReconstitution', name: 'Mot de Reconstitution', short: 'MR', icon: ICON_HEAL_CROSS,
+    category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
+    apCost: 5, range: { min: 0, max: 3 }, needsLOS: true,
+    target: 'ally', area: { type: 'single' },
+    cooldown: 4,
+    effects: [{ type: 'heal_percent', percent: 0.5 }],
+    desc: 'Le grand mot de soin : rend 50% des PV max d un allie (recharge 4 tours).',
+  },
+
+  // ---------- WABBITS (lapins) ----------
+  morsureWabbit: {
+    id: 'morsureWabbit', name: 'Morsure du Wabbit', short: 'MW', icon: ICON_BITE,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 14, max: 22 }],
+    desc: 'Deux grandes dents qui croquent : 14-22 degats.',
+  },
+  lancerCarotte: {
+    id: 'lancerCarotte', name: 'Lancer de Carotte', short: 'LC', icon: ICON_SPEAR,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 2, range: { min: 2, max: 5 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 8, max: 14 }],
+    desc: 'Lance une carotte bien dure : 8-14 degats a distance.',
+  },
+  carotteGeante: {
+    id: 'carotteGeante', name: 'Carotte Geante', short: 'CG', icon: ICON_SPEAR,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 4 }, needsLOS: true,
+    target: 'tile', area: { type: 'circle', radius: 1 },
+    effects: [{ type: 'damage', min: 22, max: 32 }],
+    desc: 'Le Wa Wabbit abat une carotte geante : 22-32 degats en zone (rayon 1).',
+  },
 };
 
 // Helpers pour fabriquer le contenu du tooltip a partir d un spell.

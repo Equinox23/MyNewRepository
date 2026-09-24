@@ -11,6 +11,8 @@ import { buildBombeRoublard } from './models/bombeRoublard.js';
 import { buildDragounetRouge } from './models/dragounetRouge.js';
 import { buildChatonBlanc } from './models/chatonBlanc.js';
 import { buildPandawa } from './models/pandawa.js';
+import { buildEniripsa } from './models/eniripsa.js';
+import { buildWabbit, buildWaWabbit } from './models/wabbit.js';
 import { buildXelor } from './models/xelor.js';
 import { buildEcaflip } from './models/ecaflip.js';
 import { buildChafer } from './models/chafer.js';
@@ -38,6 +40,9 @@ const BUILDERS = {
   dragounetRouge: buildDragounetRouge,
   chatonBlanc: buildChatonBlanc,
   pandawa: buildPandawa,
+  eniripsa: buildEniripsa,
+  wabbit: buildWabbit,
+  waWabbit: buildWaWabbit,
   chafer: buildChafer,
   chaferRoyal: buildChaferRoyal,
   tofu: buildTofu,
@@ -63,6 +68,9 @@ const HP_BAR_Y = {
   dragounetRouge: 1.40,
   chatonBlanc: 1.45,
   pandawa: 2.05,
+  eniripsa: 1.9,
+  wabbit: 1.65,
+  waWabbit: 2.4,
   chafer: 1.85,
   chaferRoyal: 2.6,
   tofu: 1.05,

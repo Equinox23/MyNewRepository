@@ -257,6 +257,17 @@ function tex(name) {
         ctx.closePath(); ctx.fill();
       });
       break;
+    case 'word': // bulle de parole (sorts de mots de l Eniripsa)
+      TEX.word = canvasTex(s, (ctx) => {
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.ellipse(h, h * 0.9, s * 0.42, s * 0.32, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.beginPath(); ctx.moveTo(h - 10, h * 1.4); ctx.lineTo(h - 24, s * 0.95); ctx.lineTo(h + 6, h * 1.45); ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,0.55)';
+        for (let i = -1; i <= 1; i++) { ctx.beginPath(); ctx.arc(h + i * 20, h * 0.9, 6, 0, Math.PI * 2); ctx.fill(); }
+      });
+      break;
     case 'wheel':
       TEX.wheel = canvasTex(256, (ctx, S) => {
         const H = S / 2;
@@ -644,6 +655,25 @@ export class VFX {
       case 'bondDuFelin':
         this.burst(V(caster, 0.1), { tex: 'smoke', color: 0xc8b890, normalBlend: true, count: 10, speed: [1, 2], upward: 0.3, gravity: 0, life: 0.6, size: [0.35, 0.55], grow: 1.3, opacity: 0.7, drag: 3 });
         break;
+      case 'motSoignant':
+      case 'motDeReconstitution':
+        this.burst(V(caster, 1.2), { tex: 'word', color: 0xffc8e0, count: 3, speed: [0.3, 0.6], upward: 1.5, gravity: 0.3, life: 0.8, size: [0.3, 0.4], normalBlend: true });
+        break;
+      case 'motStimulant':
+        at(delay, () => this.burst(V(tc, 1.0), { tex: 'star', color: [0xffd040, 0xffffff], count: 18, speed: [1, 2], upward: 1.5, gravity: 0, life: 0.7, size: [0.16, 0.28] }));
+        break;
+      case 'motDeFrayeur':
+        at(delay, () => {
+          this._pop(V(tc, 1.7), 'word', 0xd8a8ff, { from: 0.4, to: 1.2, duration: 0.6, rotation: 0 });
+          this.burst(V(tc, 0.9), { tex: 'smoke', color: 0x6a3a9a, normalBlend: true, count: 8, speed: [0.8, 1.6], upward: 0.3, gravity: 0, life: 0.6, size: [0.35, 0.5], grow: 1.2, opacity: 0.7, drag: 3 });
+        });
+        break;
+      case 'morsureWabbit':
+        at(delay, () => this.burst(V(tc, 0.8), { tex: 'star', color: [0xffffff, 0xffc8d8], count: 10, speed: [1.5, 2.5], upward: 0.3, gravity: -2, life: 0.4, size: [0.16, 0.26] }));
+        break;
+      case 'carotteGeante':
+        at(delay, () => this.burst(V(tc, 0.3), { tex: 'leaf', color: [0x5aa832, 0x9ad85a], count: 12, speed: [1.2, 2.2], upward: 1.4, gravity: -3, life: 0.8, size: [0.18, 0.28], normalBlend: true }));
+        break;
       case 'pression':
         at(delay, () => this._pop(V(tc, 0.9), 'slash', 0xffe08a, { from: 1.2, to: 2.4, duration: 0.3, rotation: 0.8 }));
         break;
@@ -830,6 +860,19 @@ export class VFX {
           const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.04, 20), new THREE.MeshToonMaterial({ color: 0xffc830, emissive: 0x6a4a00 }));
           grp.add(coin);
           grp.userData.spinner = coin;
+        } else if (kind === 'carrot') {
+          const car = new THREE.Group();
+          const cone = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.8, radius * 4, 10), new THREE.MeshToonMaterial({ color: 0xf07a1a }));
+          cone.rotation.x = Math.PI;
+          car.add(cone);
+          for (let i = 0; i < 3; i++) {
+            const lf = new THREE.Mesh(new THREE.ConeGeometry(radius * 0.3, radius * 1.6, 5), new THREE.MeshToonMaterial({ color: 0x5aa832 }));
+            lf.position.set((i - 1) * radius * 0.35, radius * 2.6, 0);
+            lf.rotation.z = (i - 1) * 0.4;
+            car.add(lf);
+          }
+          grp.add(car);
+          grp.userData.spinner = car;
         } else if (kind === 'needle') {
           const n = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.6, 6), new THREE.MeshToonMaterial({ color: 0xffd24a, emissive: 0x6a4a00 }));
           n.rotation.x = Math.PI / 2;
@@ -838,7 +881,7 @@ export class VFX {
           holder.lookAt(dx, 0, dz);
           grp.add(holder);
         } else {
-          const coreTex = { spit: 'drop', heal: 'heart', feather: 'feather', fire: 'glow' }[kind] || 'glow';
+          const coreTex = { spit: 'drop', heal: 'heart', feather: 'feather', fire: 'glow', word: 'word' }[kind] || 'glow';
           const core = mkSprite(spriteMat(coreTex, kind === 'orb' ? 0xffffff : lighten(color, 0.3)));
           core.scale.setScalar(radius * (kind === 'orb' ? 3.2 : 3.6));
           grp.add(core);
@@ -884,7 +927,7 @@ export class VFX {
             tex: 'smoke', color: 0xb8a078, normalBlend: true, count: 1, speed: [0.1, 0.3],
             gravity: 0, life: 0.5, size: [0.3, 0.45], grow: 1, opacity: 0.6,
           });
-        } else if (kind !== 'rock' && kind !== 'barrel' && kind !== 'coin' && kind !== 'needle' && sec - lastEmit > 0.03) {
+        } else if (kind !== 'rock' && kind !== 'barrel' && kind !== 'coin' && kind !== 'needle' && kind !== 'carrot' && sec - lastEmit > 0.03) {
           lastEmit = sec;
           this.burst(new THREE.Vector3(x, y, z), {
             tex: kind === 'heal' ? 'heart' : 'star', color: [color, lighten(color, 0.5), 0xffffff], count: 3,

@@ -220,6 +220,32 @@ const CLASS_OPTIONS = [
       <circle cx="42" cy="27" r="2.6" fill="#e88a8a" opacity="0.8"/>
     </svg>`,
   },
+  {
+    id: 'eniripsa',
+    name: 'Eniripsa',
+    desc: 'Fee soigneuse (8 PA, 4 PM, 90 PV). Mots qui blessent, soignent, effraient et galvanisent.',
+    available: true,
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="32" cy="60" rx="20" ry="3" fill="#000" opacity="0.4"/>
+      <path d="M22 30 Q6 18 8 34 Q12 44 24 38 Z" fill="#c8f0ff" opacity="0.8" stroke="#4ab0d8" stroke-width="1.4"/>
+      <path d="M42 30 Q58 18 56 34 Q52 44 40 38 Z" fill="#c8f0ff" opacity="0.8" stroke="#4ab0d8" stroke-width="1.4"/>
+      <path d="M22 56 L26 36 L38 36 L42 56 Z" fill="#fdf6f8" stroke="#b8406a" stroke-width="1.6"/>
+      <path d="M22 56 L42 56" stroke="#f05a9a" stroke-width="3"/>
+      <rect x="25" y="32" width="14" height="8" rx="4" fill="#f05a9a"/>
+      <line x1="48" y1="50" x2="52" y2="26" stroke="#f2c84a" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M52 27 C47 23 48 18 51 19 C52 19 52 20 52.5 21 C53 20 53.5 19 54.5 19 C57 19 57 23 52 27 Z" fill="#f05a9a" stroke="#8a1a4a" stroke-width="1"/>
+      <circle cx="32" cy="20" r="13" fill="#f8dcc0" stroke="#8a4a3a" stroke-width="1.6"/>
+      <path d="M18 22 Q16 6 32 6 Q48 6 46 22 Q44 14 32 14 Q20 14 18 22 Z" fill="#ff7ab8" stroke="#b8406a" stroke-width="1.6"/>
+      <ellipse cx="18" cy="24" rx="3.5" ry="7" fill="#ff7ab8"/>
+      <ellipse cx="46" cy="24" rx="3.5" ry="7" fill="#ff7ab8"/>
+      <ellipse cx="27" cy="21" rx="3" ry="3.8" fill="#fff" stroke="#2a1420" stroke-width="1"/>
+      <ellipse cx="37" cy="21" rx="3" ry="3.8" fill="#fff" stroke="#2a1420" stroke-width="1"/>
+      <circle cx="27.3" cy="21.6" r="2" fill="#3a8ae8"/><circle cx="37.3" cy="21.6" r="2" fill="#3a8ae8"/>
+      <circle cx="27.8" cy="20.6" r="0.8" fill="#fff"/><circle cx="37.8" cy="20.6" r="0.8" fill="#fff"/>
+      <path d="M29 27 Q32 29.5 35 27" stroke="#2a1420" stroke-width="1.4" fill="none" stroke-linecap="round"/>
+      <circle cx="22" cy="26" r="2" fill="#ff9ab8" opacity="0.8"/><circle cx="42" cy="26" r="2" fill="#ff9ab8" opacity="0.8"/>
+    </svg>`,
+  },
 ];
 
 const COMBAT_OPTIONS = [
@@ -232,7 +258,7 @@ const COMBAT_OPTIONS = [
     icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="bouW" cx="42%" cy="34%" r="72%">
-          <stop offset="0" stop-color="#fff7c2"/><stop offset="1" stop-color="#e6b41f"/>
+          <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#cfc8ba"/>
         </radialGradient>
       </defs>
       <ellipse cx="32" cy="60" rx="23" ry="3.5" fill="#000" opacity="0.35"/>
@@ -383,6 +409,30 @@ const COMBAT_OPTIONS = [
       <ellipse cx="19" cy="27" rx="4.6" ry="3" fill="#f3ead2"/>
       <ellipse cx="34" cy="17" rx="5.4" ry="3.4" fill="#f3ead2"/>
       <ellipse cx="45" cy="28" rx="4" ry="2.6" fill="#f3ead2"/>
+    </svg>`,
+  },
+  {
+    id: 'wabbit',
+    name: 'Terrier des Wabbits',
+    desc: '3 Wabbits + 1 Wa Wabbit. Lapins rapides : morsures et carottes lancees.',
+    available: true,
+    homeMap: 'foret',
+    icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <ellipse cx="32" cy="60" rx="20" ry="3.5" fill="#000" opacity="0.35"/>
+      <ellipse cx="22" cy="14" rx="5" ry="13" fill="#e8e8ee" stroke="#5a5a6a" stroke-width="1.6" transform="rotate(-12 22 14)"/>
+      <ellipse cx="22" cy="14" rx="2.4" ry="9" fill="#f5a0b8" transform="rotate(-12 22 14)"/>
+      <ellipse cx="42" cy="14" rx="5" ry="13" fill="#e8e8ee" stroke="#5a5a6a" stroke-width="1.6" transform="rotate(14 42 14)"/>
+      <ellipse cx="42" cy="14" rx="2.4" ry="9" fill="#f5a0b8" transform="rotate(14 42 14)"/>
+      <ellipse cx="32" cy="48" rx="13" ry="11" fill="#e8e8ee" stroke="#5a5a6a" stroke-width="1.6"/>
+      <circle cx="32" cy="32" r="13" fill="#e8e8ee" stroke="#5a5a6a" stroke-width="1.6"/>
+      <ellipse cx="27" cy="30" rx="3" ry="3.8" fill="#fff" stroke="#2a1418" stroke-width="1"/>
+      <ellipse cx="37" cy="30" rx="3" ry="3.8" fill="#fff" stroke="#2a1418" stroke-width="1"/>
+      <circle cx="27" cy="30.6" r="2" fill="#d8403a"/><circle cx="37" cy="30.6" r="2" fill="#d8403a"/>
+      <ellipse cx="32" cy="35.5" rx="2.2" ry="1.6" fill="#e8587a"/>
+      <rect x="29.3" y="38" width="2.6" height="5" fill="#fff" stroke="#5a5a6a" stroke-width="0.8"/>
+      <rect x="32.1" y="38" width="2.6" height="5" fill="#fff" stroke="#5a5a6a" stroke-width="0.8"/>
+      <path d="M46 56 L54 36 L57 38 Z" fill="#f07a1a" stroke="#8a3a0a" stroke-width="1.2"/>
+      <path d="M55 36 L52 29 M56 36 L58 29 M55.5 36 L55 28" stroke="#5aa832" stroke-width="2" stroke-linecap="round"/>
     </svg>`,
   },
 ];

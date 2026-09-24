@@ -17,6 +17,8 @@ const RIGS = {
   roublard:  { hip: 0.38, armX: 0.28, arm: [0.36, 0.72], head: 0.95, weaponX: 0.44, shoulderY: 0.72 },
   ecaflip:   { hip: 0.38, armX: 0.28, arm: [0.35, 0.7], head: 0.95, weaponX: 0.44, shoulderY: 0.72 },
   pandawa:   { hip: 0.38, armX: 0.3, arm: [0.38, 0.82], head: 1.0, weaponX: 0.44, shoulderY: 0.8 },
+  eniripsa:  { hip: 0.34, armX: 0.26, arm: [0.4, 0.8], head: 0.93, weaponX: 0.4, shoulderY: 0.76 },
+  wabbit:    { hip: 0.26, armX: 0.2, arm: [0.32, 0.62], head: 0.66, weaponX: 0.36, shoulderY: 0.58 },
   xelor:     { hip: 0, armX: 0.28, arm: [0.5, 0.86], head: 0.94, weaponX: 0.44, shoulderY: 0.86 },
   chafer:    { hip: 0.45, armX: 0.2, arm: [0.5, 1.02], head: 1.04, weaponX: 0.44, shoulderY: 1.0 },
   craqueleur:{ hip: 0.25, armX: 0.42, arm: [0.15, 0.8], head: 0.88, weaponX: 9, shoulderY: 0.72 },
@@ -25,7 +27,7 @@ const RIGS = {
   tofu:      { hip: 0.26, legOnly: true },
 };
 // Variantes "royales" : meme squelette (le modele est simplement agrandi).
-const ALIAS = { chaferRoyal: 'chafer', bouftouRoyal: 'bouftou', tofuRoyal: 'tofu' };
+const ALIAS = { chaferRoyal: 'chafer', bouftouRoyal: 'bouftou', tofuRoyal: 'tofu', waWabbit: 'wabbit' };
 
 export function rigModel(body, classId) {
   const key = ALIAS[classId] || classId;

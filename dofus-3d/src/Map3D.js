@@ -170,6 +170,8 @@ export const MAP_BOOSTS = {
   foret: {
     bouftou: { bonusPm: 1 },
     bouftouRoyal: { bonusPm: 1 },
+    wabbit: { bonusPm: 1 },
+    waWabbit: { bonusPm: 1 },
   },
   cascade: {
     crapaud: { damageMult: 0.3 },
