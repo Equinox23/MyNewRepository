@@ -53,17 +53,17 @@ const BUILDERS = {
 // Cadrage par classe pour bien tenir dans la vignette (les modeles
 // n ont pas tous la meme taille).
 const FRAME = {
-  iop: { y: 0.95, dist: 2.7, height: 1.15 },
-  pandawa: { y: 1.0, dist: 2.9, height: 1.25 },
-  eniripsa: { y: 0.95, dist: 2.7, height: 1.15 },
+  iop: { y: 0.95, dist: 2.4, height: 1.15 },
+  pandawa: { y: 1.0, dist: 2.5, height: 1.25 },
+  eniripsa: { y: 0.95, dist: 2.4, height: 1.15 },
   bouftouInvoc: { y: 0.5, dist: 1.9, height: 0.75 },
   wabbit: { y: 0.75, dist: 2.4, height: 1.0 },
   waWabbit: { y: 1.05, dist: 3.3, height: 1.4 },
   bombeRoublard: { y: 0.35, dist: 1.6, height: 0.6 },
-  osamodas: { y: 0.95, dist: 2.7, height: 1.15 },
-  roublard: { y: 0.90, dist: 2.5, height: 1.10 },
-  xelor: { y: 1.05, dist: 3.0, height: 1.30 },
-  ecaflip: { y: 0.95, dist: 2.7, height: 1.15 },
+  osamodas: { y: 0.95, dist: 2.4, height: 1.15 },
+  roublard: { y: 0.90, dist: 2.35, height: 1.10 },
+  xelor: { y: 1.05, dist: 2.8, height: 1.30 },
+  ecaflip: { y: 0.95, dist: 2.4, height: 1.15 },
   bouftou: { y: 0.55, dist: 2.1, height: 0.8 },
   bouftouRoyal: { y: 0.75, dist: 2.6, height: 1.0 },
   craqueleur: { y: 0.55, dist: 2.0, height: 0.8 },
@@ -108,14 +108,31 @@ function ensureShared(size) {
   return _shared;
 }
 
+// Cadrage buste (tete + epaules) pour les icones de l ecran de selection.
+const BUST = {
+  iop: { y: 1.22, dist: 1.4, height: 0.3 },
+  osamodas: { y: 1.22, dist: 1.35, height: 0.3 },
+  roublard: { y: 1.22, dist: 1.32, height: 0.3 },
+  xelor: { y: 1.38, dist: 1.7, height: 0.3 },
+  ecaflip: { y: 1.28, dist: 1.45, height: 0.3 },
+  pandawa: { y: 1.22, dist: 1.4, height: 0.3 },
+  eniripsa: { y: 1.2, dist: 1.35, height: 0.3 },
+};
+
+// Portrait en buste d un heros (repli sur le plan en pied sinon).
+export function getPortrait(classId, size = 128) {
+  return getAvatar(classId, size, BUST[classId]);
+}
+
 // Rend une snapshot 3D du modele en data URL PNG. Memoise par classId.
-export function getAvatar(classId, size = 64) {
-  if (CACHE[classId]) return CACHE[classId];
+export function getAvatar(classId, size = 64, frameOverride = null) {
+  const key = frameOverride ? classId + ':bust' : classId;
+  if (CACHE[key]) return CACHE[key];
   const builder = BUILDERS[classId];
   if (!builder) return null;
 
   const { renderer, scene, camera } = ensureShared(size);
-  const frame = FRAME[classId] || { y: 0.7, dist: 2.4, height: 0.9 };
+  const frame = frameOverride || FRAME[classId] || { y: 0.7, dist: 2.4, height: 0.9 };
 
   const model = builder();
   toonify(model, { width: 0.02, minRadius: 0.06 });
@@ -142,6 +159,6 @@ export function getAvatar(classId, size = 64) {
     }
   });
 
-  CACHE[classId] = dataUrl;
+  CACHE[key] = dataUrl;
   return dataUrl;
 }

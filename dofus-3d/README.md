@@ -105,6 +105,14 @@ node dofus-3d/tools/build-sw.mjs
   sont rattachees a des pivots (hanches, epaules, cou) -> marche jambe
   apres jambe, bras qui balancent, coup d arme arme puis abattu, bras
   leves au lancement d un sort, recul a l impact.
+- **Heros sculptes** (`src/models/humanoid.js`) : les 7 classes partagent
+  une base anatomique (bassin, torse en V par lathe, cuisses/genoux/tibias,
+  bras a coude articule, mains, bottes, crane a machoire) sur laquelle
+  chaque classe ajoute sa silhouette : plastron et spalieres de l Iop,
+  manteau a pans du Roublard, robe evasee et chapeau du Xelor, tete feline
+  de l Ecaflip, kimono du Pandawa, jupe corolle et ailes de l Eniripsa,
+  cornes et queue de l Osamodas. L ecran de selection et le Grimoire
+  affichent des portraits en buste rendus depuis ces modeles 3D.
 - **Effets propres a chaque sort** (`VFX.signature`) : roue de la fortune,
   piece de Pile ou Face, cadran d horloge du Xelor, vague du Pandawa,
   tonneau qui roule (Karcham), souffle de feu, plumes, griffures,

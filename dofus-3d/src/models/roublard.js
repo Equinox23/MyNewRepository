@@ -1,190 +1,114 @@
 import * as THREE from 'three';
-import { addEyes } from './kit.js';
+import { M, buildHumanoid, lathe, taper, bentCone, roundBox, cloth, strand, place, faceMouth, brows, hairCap } from './humanoid.js';
 
-// Roublard : assassin-artificier, style chibi -- grosse tete sous une
-// capuche profonde, masque de metal couvrant le bas du visage, yeux
-// rouges brillants, deux dagues croisees dans le dos, bombe a la ceinture.
+// Roublard facon Dofus : artificier malicieux. Long manteau de cuir sombre
+// a pans fendus et col releve, bandeau rouge noue dont les pans volent,
+// meches noires en pointe, foulard sur le bas du visage, bandouliere
+// chargee de bombes, pistolet a la main droite, bombe a la main gauche.
 export function buildRoublard() {
-  const group = new THREE.Group();
+  const skin = M(0xf0c8a0, { r: 0.8 });
+  const coat = M(0x2a2a36, { r: 0.8 });
+  const coatLt = M(0x3c3c4c, { r: 0.8 });
+  const leather = M(0x4a2c16, { r: 0.85 });
+  const red = M(0xc8322a, { r: 0.7 });
+  const redDk = M(0x8a1a14, { r: 0.75 });
+  const gold = M(0xe8c14a, { r: 0.35, m: 0.6 });
+  const steel = M(0x9aa4b0, { r: 0.35, m: 0.75 });
+  const hair = M(0x1a1822, { r: 0.7 });
+  const bomb = M(0x22222a, { r: 0.5, m: 0.2 });
+  const dark = M(0x100a0a, { r: 0.5 });
 
-  const M = (c, o = {}) => new THREE.MeshStandardMaterial({
-    color: c, roughness: o.r !== undefined ? o.r : 0.7, metalness: o.m || 0,
+  const H = buildHumanoid({
+    skin, top: coat, bottom: M(0x3a2a22, { r: 0.85 }), boots: leather, gloves: leather,
+    sleeve: coat, forearm: coatLt, build: 0.96, headR: 0.3, bootCuff: redDk, toe: 0.14,
+    eyes: { iris: 0xd8322a, lid: 0xf0c8a0, angry: true },
   });
-  const cloakMat   = M(0x141a2c, { r: 0.85 });
-  const cloakDkMat = M(0x090c16, { r: 0.9 });
-  const leatherMat = M(0x241712, { r: 0.9 });
-  const plateMat   = M(0x32466a, { r: 0.45, m: 0.55 });
-  const plateLtMat = M(0x52719c, { r: 0.4, m: 0.6 });
-  const skinMat    = M(0xeed3af, { r: 0.8 });
-  const goldMat    = M(0xc59a36, { r: 0.4, m: 0.6 });
-  const bladeMat   = M(0xccd2d8, { r: 0.2, m: 0.9 });
-  const bladeDkMat = M(0x6e757f, { r: 0.4, m: 0.8 });
-  const accentMat  = M(0xc0392b, { r: 0.6 });
-  const accentDkMat = M(0x6d1f17, { r: 0.7 });
-  const bombMat    = M(0x18191b, { r: 0.5, m: 0.4 });
-  const eyeMat     = new THREE.MeshStandardMaterial({ color: 0xff5544, emissive: 0xff2218, emissiveIntensity: 1.1, roughness: 0.4 });
-  const sparkMat   = new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xff8a00, emissiveIntensity: 0.9, roughness: 0.3 });
+  const { group, head, headR: hr } = H;
 
-  // ============ JAMBES courtes + bottes pointues ============
-  for (const dx of [-0.14, 0.14]) {
-    const boot = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 12), leatherMat);
-    boot.scale.set(1, 0.7, 1.35);
-    boot.position.set(dx, 0.11, 0.05);
-    boot.castShadow = true;
-    group.add(boot);
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.10, 0.22, 10), cloakDkMat);
-    leg.position.set(dx, 0.30, 0);
-    group.add(leg);
+  // ---- Manteau : pans longs fendus + col releve ----
+  for (const sx of [-1, 1]) {
+    const tail = cloth(0.2, 0.36, coat, { curve: 0.05, flare: 0.06, spread: 0.3, wave: 0.02 });
+    tail.position.set(sx * 0.08, 0.44, -0.1);
+    tail.rotation.set(0.1, sx * 0.35, 0);
+    group.add(tail);
+    const front = cloth(0.13, 0.22, coatLt, { curve: -0.02, flare: -0.03, spread: 0.2, wave: 0.01 });
+    front.position.set(sx * 0.1, 0.44, 0.12);
+    front.rotation.set(-0.15, sx * -0.2, 0);
+    group.add(front);
   }
-
-  // ============ TORSE : cuir noir + plastron bleu nuit ============
-  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.28, 18, 16), cloakMat);
-  torso.scale.set(1.1, 1.0, 0.9);
-  torso.position.y = 0.60;
-  torso.castShadow = true;
-  group.add(torso);
-  const chest = new THREE.Mesh(new THREE.SphereGeometry(0.23, 14, 12), plateMat);
-  chest.scale.set(1.05, 0.78, 0.55);
-  chest.position.set(0, 0.66, 0.16);
-  group.add(chest);
-  // Liseré bleu clair en V.
-  for (const side of [-1, 1]) {
-    const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.24, 0.025), plateLtMat);
-    stripe.position.set(side * 0.07, 0.68, 0.27);
-    stripe.rotation.z = side * 0.55;
-    group.add(stripe);
-  }
-  // Ceinture + bombe + fiole.
-  const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.295, 0.295, 0.10, 16), leatherMat);
-  belt.position.y = 0.44;
+  const collar = lathe([[0.1, 0], [0.14, 0.06], [0.16, 0.13]], coatLt, 18, 0.9);
+  collar.position.y = 0.8;
+  group.add(collar);
+  // Ceinture + bandouliere de bombes.
+  const belt = lathe([[0.15, 0], [0.155, 0.035], [0.15, 0.07]], leather, 20, 0.82);
+  belt.position.y = 0.43;
   group.add(belt);
-  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.09, 0.05), goldMat);
-  buckle.position.set(0, 0.44, 0.29);
-  group.add(buckle);
-  const bombBall = new THREE.Mesh(new THREE.SphereGeometry(0.10, 14, 10), bombMat);
-  bombBall.position.set(0.25, 0.44, 0.16);
-  group.add(bombBall);
-  const bombFuse = new THREE.Mesh(new THREE.CylinderGeometry(0.013, 0.013, 0.08, 6), M(0x3a3025, { r: 0.9 }));
-  bombFuse.position.set(0.28, 0.55, 0.18);
-  bombFuse.rotation.z = -0.4;
-  group.add(bombFuse);
-  const bombSpark = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), sparkMat);
-  bombSpark.position.set(0.31, 0.61, 0.19);
-  group.add(bombSpark);
-  const vial = new THREE.Mesh(new THREE.CylinderGeometry(0.032, 0.032, 0.11, 10),
-    new THREE.MeshStandardMaterial({ color: 0x6ee07a, roughness: 0.25, transparent: true, opacity: 0.78 }));
-  vial.position.set(-0.25, 0.45, 0.15);
-  group.add(vial);
-
-  // ============ EPAULIERES souples + bras ============
-  for (const side of [-1, 1]) {
-    const pauldron = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.6), leatherMat);
-    pauldron.position.set(side * 0.30, 0.82, 0);
-    pauldron.castShadow = true;
-    group.add(pauldron);
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.022, 8, 16), accentDkMat);
-    ring.rotation.x = Math.PI / 2;
-    ring.position.set(side * 0.30, 0.79, 0);
-    group.add(ring);
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.075, 0.30, 10), cloakDkMat);
-    arm.position.set(side * 0.33, 0.62, 0.02);
-    arm.rotation.z = side * 0.12;
-    arm.castShadow = true;
-    group.add(arm);
-    const bracer = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.082, 0.10, 10), plateMat);
-    bracer.position.set(side * 0.35, 0.50, 0.02);
-    group.add(bracer);
-    const fist = new THREE.Mesh(new THREE.SphereGeometry(0.095, 12, 10), leatherMat);
-    fist.position.set(side * 0.36, 0.42, 0.03);
-    group.add(fist);
+  group.add(place(roundBox(0.07, 0.06, 0.03, 0.01, gold), 0, 0.465, 0.13));
+  const sash = roundBox(0.05, 0.5, 0.03, 0.012, leather);
+  place(sash, 0, 0.63, 0.12, 0.12, 0, 0.72);
+  group.add(sash);
+  for (let k = 0; k < 3; k++) {
+    const b = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 10), bomb);
+    b.position.set(-0.13 + k * 0.1, 0.52 + k * 0.1, 0.16);
+    group.add(b);
+    const fuse = bentCone(0.008, 0.04, 0.01, 0, gold, 4, 2);
+    fuse.position.set(-0.13 + k * 0.1, 0.565 + k * 0.1, 0.16);
+    group.add(fuse);
   }
 
-  // ============ CAPE longue dans le dos ============
-  const capeMat = new THREE.MeshStandardMaterial({ color: 0x141a2c, roughness: 0.88, side: THREE.DoubleSide });
-  const cape = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.92, 4, 4), capeMat);
-  const pos = cape.geometry.attributes.position;
-  for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i);
-    pos.setZ(i, pos.getZ(i) + Math.pow((y + 0.46) * -0.55, 2) * 0.18);
-  }
-  cape.geometry.computeVertexNormals();
-  cape.position.set(0, 0.56, -0.24);
-  cape.castShadow = true;
-  group.add(cape);
+  // ---- Foulard sur le bas du visage ----
+  const scarf = new THREE.Mesh(new THREE.SphereGeometry(hr * 1.02, 20, 10, 0, Math.PI * 2, Math.PI * 0.64, Math.PI * 0.26), red);
+  scarf.position.y = hr * 0.88;
+  scarf.scale.set(1, 1, 1.12);
+  head.add(scarf);
+  const knotTail = cloth(0.1, 0.22, red, { curve: 0.02, flare: 0.05, spread: 0.2 });
+  knotTail.position.set(0, hr * 0.45, -hr * 0.95);
+  knotTail.rotation.x = 0.5;
+  head.add(knotTail);
 
-  // ============ TETE (enorme) sous capuche ============
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.37, 22, 18), skinMat);
-  head.position.y = 1.10;
-  head.castShadow = true;
-  group.add(head);
-
-  // Capuche profonde + pointe.
-  // Capuche ouverte devant (le visage reste visible) + visiere au-dessus.
-  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.43, 22, 18, Math.PI / 2 + 0.8, Math.PI * 2 - 1.6, 0, Math.PI * 0.62), cloakMat);
-  hood.position.set(0, 1.12, -0.02);
-  const hoodFront = new THREE.Mesh(new THREE.SphereGeometry(0.43, 16, 8, Math.PI / 2 - 0.8, 1.6, 0, Math.PI * 0.3), cloakMat);
-  hoodFront.position.set(0, 1.12, -0.02);
-  group.add(hoodFront);
-  hood.castShadow = true;
-  group.add(hood);
-  const hoodTip = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.30, 14), cloakMat);
-  hoodTip.position.set(0, 1.40, -0.16);
-  hoodTip.rotation.x = -0.6;
-  group.add(hoodTip);
-  // Masque metallique (bas du visage).
-  const mask = new THREE.Mesh(new THREE.SphereGeometry(0.30, 16, 12, 0, Math.PI, 0, Math.PI), plateMat);
-  mask.scale.set(1, 0.6, 0.6);
-  mask.position.set(0, 1.00, 0.05);
-  mask.rotation.y = Math.PI;
-  group.add(mask);
-  const maskRim = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.014, 6, 20, Math.PI), accentMat);
-  maskRim.rotation.x = Math.PI / 2;
-  maskRim.position.set(0, 0.92, 0.05);
-  group.add(maskRim);
-  // Fentes du masque.
-  for (const dx of [-0.10, 0, 0.10]) {
-    const slit = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.10, 0.02), plateLtMat);
-    slit.position.set(dx, 0.99, 0.30);
-    group.add(slit);
+  // ---- Cheveux noirs en pointes + bandeau rouge ----
+  hairCap(head, hr, hair, { backTheta: 0.72 });
+  const spikes = [[-0.14, 0.12, -0.5], [0, 0.18, -0.25], [0.14, 0.12, 0.2], [0.2, 0.02, 0.6], [-0.2, 0.02, -0.7]];
+  spikes.forEach(([x, bz, rz], i) => {
+    const s = bentCone(0.07, 0.2, 0, -bz, hair, 6, 4);
+    s.position.set(x, hr * 1.7, -0.02 - i * 0.02);
+    s.rotation.set(-0.5, 0, rz);
+    head.add(s);
+  });
+  brows(head, hr, hair, { y: 1.2, angle: 0.4 });
+  const band = new THREE.Mesh(new THREE.TorusGeometry(hr * 1.06, 0.03, 8, 30), red);
+  band.rotation.x = Math.PI / 2 + 0.08;
+  band.position.set(0, hr * 1.36, 0);
+  head.add(band);
+  for (const sx of [-1, 1]) {
+    const t = strand([[sx * 0.03, hr * 1.36, -hr * 1.04], [sx * 0.08, hr * 1.25, -hr * 1.3], [sx * 0.16, hr * 1.15, -hr * 1.55]], 0.03, 0.012, redDk, 12);
+    head.add(t);
   }
 
-  // Regard malicieux : grands yeux a iris rouge, paupieres plissees.
-  addEyes(group, { x: 0, y: 1.14, z: 0.335, size: 0.095, spacing: 0.26, turn: 0.3, iris: 0xd8322a, lid: 0x1c1c26, angry: true });
-  // Sourcils narquois.
-  for (const dx of [-0.13, 0.13]) {
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.035, 0.05), new THREE.MeshStandardMaterial({ color: 0x1a1010 }));
-    brow.position.set(dx, 1.25, 0.35);
-    brow.rotation.z = dx > 0 ? 0.25 : -0.4;
-    group.add(brow);
-  }
+  // ---- Pistolet (main droite) ----
+  const gun = new THREE.Group();
+  gun.add(place(roundBox(0.05, 0.12, 0.06, 0.015, leather), 0, 0, 0));
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.26, 10), steel);
+  barrel.rotation.x = Math.PI / 2;
+  barrel.position.set(0, 0.03, 0.13);
+  gun.add(barrel);
+  const muzzle = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.01, 6, 12), gold);
+  muzzle.position.set(0, 0.03, 0.26);
+  gun.add(muzzle);
+  gun.position.set(0, -0.1, 0.03);
+  gun.rotation.x = -1.2;
+  H.handR.add(gun);
 
-  // ============ DEUX DAGUES croisees dans le dos ============
-  const makeDagger = () => {
-    const d = new THREE.Group();
-    const db = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.42, 8), bladeMat);
-    db.position.y = 0.21;
-    d.add(db);
-    const fuller = new THREE.Mesh(new THREE.BoxGeometry(0.014, 0.34, 0.016), bladeDkMat);
-    fuller.position.y = 0.21;
-    d.add(fuller);
-    const guard = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.025, 0.045), goldMat);
-    d.add(guard);
-    const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.11, 8), leatherMat);
-    handle.position.y = -0.07;
-    d.add(handle);
-    const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), accentDkMat);
-    pommel.position.y = -0.13;
-    d.add(pommel);
-    return d;
-  };
-  const dL = makeDagger();
-  dL.position.set(-0.18, 0.66, -0.20);
-  dL.rotation.set(Math.PI / 6, 0, -0.75);
-  group.add(dL);
-  const dR = makeDagger();
-  dR.position.set(0.18, 0.66, -0.20);
-  dR.rotation.set(Math.PI / 6, 0, 0.75);
-  group.add(dR);
+  // ---- Bombe (main gauche) ----
+  const b2 = new THREE.Mesh(new THREE.SphereGeometry(0.075, 14, 12), bomb);
+  b2.position.set(0, -0.14, 0.03);
+  H.handL.add(b2);
+  const f2 = bentCone(0.012, 0.07, 0.02, 0, gold, 4, 3);
+  f2.position.set(0, -0.07, 0.03);
+  H.handL.add(f2);
+  const spark = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 5), new THREE.MeshBasicMaterial({ color: 0xffd040 }));
+  spark.position.set(0.02, 0.0, 0.03);
+  H.handL.add(spark);
 
   return group;
 }

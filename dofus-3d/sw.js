@@ -2,7 +2,7 @@
 // Met tout le jeu en cache a la premiere visite : ensuite il se lance
 // meme sans connexion. A chaque nouvelle version (empreinte VERSION),
 // le nouveau cache remplace l ancien.
-const VERSION = '080e217a9f';
+const VERSION = '42d85fc5d9';
 const CACHE = 'dofus3d-' + VERSION;
 const FILES = [
   "./",
@@ -47,6 +47,7 @@ const FILES = [
   "./src/models/ecaflip.js",
   "./src/models/eniripsa.js",
   "./src/models/foliage.js",
+  "./src/models/humanoid.js",
   "./src/models/iop.js",
   "./src/models/kit.js",
   "./src/models/osamodas.js",
@@ -63,6 +64,7 @@ const FILES = [
   "./vendor/fonts/LuckiestGuy-latin-8b6e91.woff2",
   "./vendor/fonts/LuckiestGuy-latin-ext-6e0134.woff2",
   "./vendor/fonts/fonts.css",
+  "./vendor/three/addons/geometries/RoundedBoxGeometry.js",
   "./vendor/three/addons/utils/BufferGeometryUtils.js",
   "./vendor/three/three.module.js",
   "./icons/icon-192.png",

@@ -356,7 +356,7 @@ html, body { height: 100%; }
   border-radius: 10px; box-shadow: inset 0 0 0 1px #7d6a4c;
 }
 #menu-root .gr-tab.active { box-shadow: inset 0 0 0 2px var(--d-gold), 0 0 12px rgba(255, 207, 90, 0.5); }
-#menu-root .gr-tab-icon svg { width: 100%; height: 100%; }
+#menu-root .gr-tab-icon svg, #menu-root .gr-tab-icon img { width: 100%; height: 100%; object-fit: contain; }
 #menu-root .gr-tab-lv {
   position: absolute; bottom: -6px; left: 50%; transform: translateX(-50%);
   background: #1a120a; border: 1px solid var(--d-edge-light); border-radius: 8px;

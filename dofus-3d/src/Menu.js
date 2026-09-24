@@ -5,7 +5,7 @@ import { DEFS } from './Fighter.js';
 import { SPELLS, spellEffectLines } from './Spells.js';
 import { getHero, heroSpells, upgradeSpell, resetSpellPoints, heroStats, xpToNext, scaledSpell, summonBonus, UPGRADE_COST, MAX_LEVEL } from './Leveling.js';
 import { spellIconFrame } from './SpellIcons.js';
-import { getAvatar } from './Avatars.js';
+import { getAvatar, getPortrait } from './Avatars.js';
 
 // Etoile SVG : 'gold' | 'silver' | 'empty'.
 function starSvg(type, size = 26) {
@@ -14,6 +14,27 @@ function starSvg(type, size = 26) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
     <polygon points="32 5,40 24,61 26,45 40,50 60,32 49,14 60,19 40,3 26,24 24"
       fill="${fill}" stroke="${stroke}" stroke-width="4" stroke-linejoin="round"/></svg>`;
+}
+
+// Icone d une classe : portrait 3D du modele (repli sur le SVG).
+function classIcon(o) {
+  let url = null;
+  try { url = getPortrait(o.id, 128); } catch (_) {}
+  return url ? `<img class="hero-portrait" src="${url}" alt="${o.name}">` : o.icon;
+}
+
+// Pre-calcule les portraits pendant que l ecran d accueil est affiche,
+// un par tranche d inactivite, pour que l ecran de selection s ouvre net.
+function warmPortraits() {
+  const ids = CLASS_OPTIONS.map(o => o.id);
+  const idle = window.requestIdleCallback || (cb => setTimeout(cb, 60));
+  const next = () => {
+    const id = ids.shift();
+    if (!id) return;
+    try { getPortrait(id, 128); } catch (_) {}
+    idle(next);
+  };
+  idle(next);
 }
 
 const CLASS_OPTIONS = [
@@ -557,6 +578,7 @@ const MAP_OPTIONS = [
 
 export class Menu {
   constructor(onStart, audio) {
+    warmPortraits();
     this.onStart = onStart;
     this.audio = audio || null;
     this.mode = null;        // 'solo' | 'multi'
@@ -688,6 +710,11 @@ export class Menu {
         float: left;
       }
       #menu-root .menu-option .icon svg { width: 100%; height: 100%; }
+      #menu-root .menu-option .icon .hero-portrait {
+        width: 100%; height: 100%; object-fit: contain; border-radius: 50%;
+        background: radial-gradient(circle at 50% 40%, #4a5470 0%, #232838 75%);
+        box-shadow: inset 0 0 0 2px rgba(241,196,15,0.45);
+      }
       #menu-root .menu-option .opt-name {
         font-size: 16px; font-weight: bold; color: #f1c40f;
         padding-right: 30px;
@@ -1038,7 +1065,7 @@ export class Menu {
     const tabs = CLASS_OPTIONS.map(o => {
       const h = getHero(o.id);
       return `<button class="gr-tab ${o.id === cls ? 'active' : ''}" data-cls="${o.id}" title="${o.name}">
-        <div class="gr-tab-icon">${o.icon}</div><div class="gr-tab-lv">${h.level}</div>${h.points > 0 ? '<div class="gr-tab-dot"></div>' : ''}</button>`;
+        <div class="gr-tab-icon">${classIcon(o)}</div><div class="gr-tab-lv">${h.level}</div>${h.points > 0 ? '<div class="gr-tab-dot"></div>' : ''}</button>`;
     }).join('');
     const spells = heroSpells(cls, def.spellIds).map(e => {
       const sp = e.spell;
@@ -1203,7 +1230,7 @@ export class Menu {
       <button class="menu-option ${selected}" data-key="${key}" data-value="${o.id}"
               ${o.available ? '' : 'disabled'}>
         ${badge}
-        <div class="icon">${o.icon}</div>
+        <div class="icon">${key === 'class' ? classIcon(o) : o.icon}</div>
         <div class="opt-name">${o.name}</div>
         <div class="opt-desc">${o.desc}</div>
         ${o.available ? '' : `<div class="opt-soon">${o.lockedLabel || 'bientot'}</div>`}
