@@ -30,6 +30,11 @@ export const COMBATS = {
     enemyComposition: ['tofu', 'tofu', 'tofu', 'tofuRoyal'],
     homeMap: 'falaise',
   },
+  wabbit: {
+    name: 'Terrier des Wabbits',
+    enemyComposition: ['wabbit', 'wabbit', 'wabbit', 'waWabbit'],
+    homeMap: 'foret',
+  },
   champignon: {
     name: 'Colonie de Champignons',
     enemyComposition: ['champignon', 'champignon', 'champignon', 'champignonRoyal'],
@@ -733,10 +738,13 @@ export class Game {
           caster.character.faceToward(target.c, target.r);
           const radius = (spell.area && spell.area.radius) || 1;
           if (this.vfx) {
+            const carrot = spell.id === 'carotteGeante';
             await this.vfx.projectile(
               { c: caster.c, r: caster.r },
               { c: target.c, r: target.r },
-              { color: 0x9be86a, glow: 1, radius: 0.2, arcHeight: 1.6 },
+              carrot
+                ? { color: 0xf07a1a, radius: 0.28, arcHeight: 2.2, kind: 'carrot' }
+                : { color: 0x9be86a, glow: 1, radius: 0.2, arcHeight: 1.6 },
             );
             this.vfx.shockwave(target.c, target.r, {
               color: 0x7bc24a, radius: radius + 0.8, duration: 0.65,
@@ -760,6 +768,8 @@ export class Game {
           else if (id === 'coupDeBec' || id === 'bourrasque') { projColor = 0xfff2c0; arcHeight = 0.9; kind = 'feather'; }
           else if (id === 'pileOuFace') { projColor = 0xffc830; arcHeight = 1.4; kind = 'coin'; }
           else if (id === 'aiguille') { projColor = 0xffd24a; arcHeight = 0.3; kind = 'needle'; }
+          else if (id === 'lancerCarotte' || id === 'carotteGeante') { projColor = 0xf07a1a; arcHeight = 1.8; kind = 'carrot'; }
+          else if (id === 'motBlessant' || id === 'motDeFrayeur') { projColor = id === 'motBlessant' ? 0xff5a4a : 0xb46ae8; arcHeight = 0.8; kind = 'word'; }
           if (this.vfx) {
             await this.vfx.projectile(
               { c: caster.c, r: caster.r },

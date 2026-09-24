@@ -108,6 +108,29 @@ export const DEFS = {
     spellIds: ['picole', 'tirPandatak', 'karcham', 'vaguePandawa', 'laitDeBambou'],
   },
 
+  eniripsa: {
+    name: 'Eniripsa',
+    role: 'Soigneuse',
+    hp: 90, pa: 8, pm: 4, initiative: 11,
+    spellIds: ['motBlessant', 'motSoignant', 'motDeFrayeur', 'motStimulant', 'motDeReconstitution'],
+  },
+
+  // ---------- WABBITS (lapins de l ile des Wabbits) ----------
+  wabbit: {
+    name: 'Wabbit',
+    role: 'Lapin',
+    hp: 95, pa: 5, pm: 5, initiative: 14,
+    spellIds: ['morsureWabbit', 'lancerCarotte'],
+    ai: 'aggressive',
+  },
+  waWabbit: {
+    name: 'Wa Wabbit',
+    role: 'Roi des Wabbits',
+    hp: 340, pa: 8, pm: 4, initiative: 12,
+    spellIds: ['carotteGeante', 'morsureWabbit', 'soinAnimal'],
+    ai: 'aggressive',
+  },
+
   // ---------- CHAFER (squelettes) ----------
   chafer: {
     name: 'Chafer',

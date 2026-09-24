@@ -53,6 +53,14 @@ cd dofus-3d && python3 -m http.server 8080
 - **Ambiance lumineuse par carte** : soleil dore, clair de lune au
   cimetiere, lumiere verdatre au marais...
 
+## Classes et monstres
+
+- Classes : Iop, Osamodas, Roublard, Xelor, Ecaflip, Pandawa, **Eniripsa**
+  (fee soigneuse : Mot Blessant, Mot Soignant, Mot de Frayeur, Mot
+  Stimulant, Mot de Reconstitution).
+- Combats : Bouftous, Crapauds, Chafers, Tofus, Champignons, **Wabbits**
+  (Terrier des Wabbits : 3 Wabbits + le Wa Wabbit, foret).
+
 ## Combat facon Dofus
 
 - **Phase de placement** : avant le combat, cases de depart bleues (toi)

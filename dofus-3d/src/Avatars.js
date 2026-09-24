@@ -19,6 +19,8 @@ import { buildChampignonRoyal } from './models/champignonRoyal.js';
 import { buildDragounetRouge } from './models/dragounetRouge.js';
 import { buildChatonBlanc } from './models/chatonBlanc.js';
 import { buildPandawa } from './models/pandawa.js';
+import { buildEniripsa } from './models/eniripsa.js';
+import { buildWabbit, buildWaWabbit } from './models/wabbit.js';
 import { buildBombeRoublard } from './models/bombeRoublard.js';
 
 const BUILDERS = {
@@ -33,6 +35,9 @@ const BUILDERS = {
   dragounetRouge: buildDragounetRouge,
   chatonBlanc: buildChatonBlanc,
   pandawa: buildPandawa,
+  eniripsa: buildEniripsa,
+  wabbit: buildWabbit,
+  waWabbit: buildWaWabbit,
   bombeRoublard: buildBombeRoublard,
   crapaud: buildCrapaud,
   crapaudChef: buildCrapaudChef,
@@ -49,6 +54,9 @@ const BUILDERS = {
 const FRAME = {
   iop: { y: 0.95, dist: 2.7, height: 1.15 },
   pandawa: { y: 1.0, dist: 2.9, height: 1.25 },
+  eniripsa: { y: 0.95, dist: 2.7, height: 1.15 },
+  wabbit: { y: 0.75, dist: 2.4, height: 1.0 },
+  waWabbit: { y: 1.05, dist: 3.3, height: 1.4 },
   bombeRoublard: { y: 0.35, dist: 1.6, height: 0.6 },
   osamodas: { y: 0.95, dist: 2.7, height: 1.15 },
   roublard: { y: 0.90, dist: 2.5, height: 1.10 },
