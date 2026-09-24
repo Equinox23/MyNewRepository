@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { toonify } from './Toon.js';
 import { BUILDERS } from './models/index.js';
+import { attachWearables } from './models/wearables.js';
 
 
 // Cadrage par classe pour bien tenir dans la vignette (les modeles
@@ -77,13 +78,14 @@ const BUST = {
 };
 
 // Portrait en buste d un heros (repli sur le plan en pied sinon).
-export function getPortrait(classId, size = 128) {
-  return getAvatar(classId, size, BUST[classId]);
+export function getPortrait(classId, size = 128, items = null) {
+  return getAvatar(classId, size, BUST[classId], items);
 }
 
 // Rend une snapshot 3D du modele en data URL PNG. Memoise par classId.
-export function getAvatar(classId, size = 64, frameOverride = null) {
-  const key = frameOverride ? classId + ':bust' : classId;
+export function getAvatar(classId, size = 64, frameOverride = null, items = null) {
+  const gear = items && items.length ? ':' + items.map(i => i.family + i.slot).sort().join(',') : '';
+  const key = (frameOverride ? classId + ':bust' : classId) + gear + (size > 160 ? ':' + size : '');
   if (CACHE[key]) return CACHE[key];
   const builder = BUILDERS[classId];
   if (!builder) return null;
@@ -92,6 +94,7 @@ export function getAvatar(classId, size = 64, frameOverride = null) {
   const frame = frameOverride || FRAME[classId] || { y: 0.7, dist: 2.4, height: 0.9 };
 
   const model = builder();
+  if (items && items.length) attachWearables(model, items);
   toonify(model, { width: 0.02, minRadius: 0.06 });
   // La camera est a 45 deg (axe +X+Z) : on tourne le modele (qui regarde
   // +Z) vers elle, avec un leger trois-quarts pour garder du volume.

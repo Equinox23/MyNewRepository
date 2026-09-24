@@ -129,8 +129,15 @@ node dofus-3d/tools/build-sw.mjs
   "KO" si la cible tombe. Sur mobile : 1er appui = apercu, 2e = lancer.
 - **Boss** : Craqueleur Legendaire (enracine), Kwakwa (change d element
   chaque tour), Minotoror (charge en ligne). Modeles dans `models/bosses.js`.
-- **Equipement et butin** (`src/Items.js`) : coiffe, cape, amulette, anneau,
-  bottes, 4 raretes, panoplies par famille de monstres ; ecran Inventaire.
+- **Equipement et panoplies** (`src/Items.js`, `src/ItemArt.js`,
+  `models/wearables.js`) : coiffe, cape, amulette, anneau, bottes ; 9
+  panoplies (Bouftou, Wabbit, Crapaud, Tofu, Chafer, Champignon, Craqueleur,
+  Kwakwa, Minotoror) avec leur niveau, leur style 3D visible sur le heros
+  et leur icone. Jets fixes par (panoplie, emplacement, rarete). Bonus a
+  2 / 3 / 4 / 5 objets, independants de la rarete, et un effet unique a 5
+  objets (Toison, Envol, Os durs, Spores, Fureur...). Butin rare : 10%
+  par monstre (legendaire 0,5%). Inventaire trie par panoplie, avec
+  comparatif ligne par ligne (objet et total du heros).
 - **Mode Aventure** (`src/Adventure.js`) : 5 donjons de 3 salles, PV
   conserves entre les salles, boss final et coffre.
 - **Effets propres a chaque sort** (`VFX.signature`) : roue de la fortune,

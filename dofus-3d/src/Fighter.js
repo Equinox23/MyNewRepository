@@ -523,7 +523,14 @@ export class Fighter {
     for (const b of this.buffs) {
       if (b.damageMult) mult += b.damageMult;
     }
+    // Panoplie du Minotoror : fureur sous 50% de PV.
+    if (this.hasSpecial('fureur') && this.hp < this.maxHp * 0.5) mult += 0.2;
     return mult * (this.levelDamageMult || 1);
+  }
+
+  // Effet special de panoplie complete (5 objets).
+  hasSpecial(id) {
+    return !!(this.equip && this.equip.specials && this.equip.specials.includes(id));
   }
 
   isOnCooldown(spellId) {

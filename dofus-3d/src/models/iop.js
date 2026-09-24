@@ -78,6 +78,7 @@ export function buildIop() {
   const cape = cloth(0.36, 0.62, redDk, { curve: 0.1, flare: 0.14, spread: 0.45, wave: 0.04, waves: 3 });
   cape.position.set(0, 0.84, -0.16);
   cape.rotation.x = 0.12;
+  cape.name = 'classCape';
   group.add(cape);
   const clasp = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.022, 6, 18, Math.PI), gold);
   clasp.rotation.set(Math.PI / 2 + 0.2, 0, Math.PI);
