@@ -1900,17 +1900,169 @@ export class Game {
       tofuRoyal: () => this.runTofuRoyal(ai),
       champignon: () => this.runChampignon(ai),
       champignonRoyal: () => this.runChampignonRoyal(ai),
-      craqueleur: () => this.runCraqueleur(ai),
-      dragounet: () => this.runDragounet(ai),
-      chaton: () => this.runChaton(ai),
+      // Invocations : IA "intelligente" (frappe tout ce qui est a portee,
+      // depense tous ses PA, ne quitte pas le contact pour rien).
+      craqueleur: () => this.runSmart(ai),
+      dragounet: () => this.runSmart(ai),
+      chaton: () => this.runSmart(ai),
+      summon: () => this.runSmart(ai),
       boss: () => this.runBoss(ai),
       bossRanged: () => this.runFearful(ai),
     };
     const fn = dispatch[profile] || dispatch.aggressive;
+    // Phase de soutien commune : soins, protections, boosts.
+    await this.aiSupport(ai);
+    if (this.ended) return;
     await fn();
     if (this.ended) return;
     this.busy = false;
     this._advanceTurn();
+  }
+
+  // ===== Soutien : soins, protections, boosts (tous les monstres) =====
+  async aiSupport(ai) {
+    if (!ai.alive) return;
+    if (ai.spells.some(s => s.target === 'ally' && s.effects.some(e => e.type === 'heal' || e.type === 'heal_percent'))) {
+      await this.aiTryHeal(ai);
+      if (this.ended) return;
+    }
+    if (ai.spells.some(s => s.target === 'ally' && s.effects.some(e => e.type === 'buff' && e.shield))) {
+      await this.aiTryShield(ai);
+      if (this.ended) return;
+    }
+    await this.aiSelfBuffs(ai);
+  }
+
+  // Boosts sur soi ou en zone (PA, PM, degats, protection) quand un
+  // ennemi est proche, sans se priver de sa principale attaque.
+  async aiSelfBuffs(ai) {
+    const enemies = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.isBomb && !f.invisible);
+    if (!enemies.length) return;
+    const near = Math.min(...enemies.map(e => this._dist(ai, e)));
+    const attacks = this.aiAttackSpells(ai);
+    const minAttack = attacks.length ? Math.min(...attacks.map(s => s.apCost)) : 0;
+    for (const spell of ai.spells) {
+      if (spell.target !== 'self' || ai.isOnCooldown(spell.id) || ai.pa < spell.apCost) continue;
+      const eff = spell.effects.find(e => e.type === 'buff' && !e.invisible);
+      if (!eff) continue;
+      if (ai.buffs.some(b => b.source === spell.name)) continue;
+      // Protection : seulement quand l ennemi est tout pres.
+      if (eff.shield && near > 3) continue;
+      if (!eff.shield && near > 8) continue;
+      // Garde de quoi attaquer (sauf si le sort rend des PA).
+      if (!eff.bonusPa && ai.pa - spell.apCost < minAttack && near <= 2) continue;
+      ai.pa -= spell.apCost;
+      if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
+      ai.character.popCost(spell.apCost, 'pa');
+      this.hud.update(ai, this.mode, this.selectedSpellId);
+      await this.applySpellEffects(ai, spell, { c: ai.c, r: ai.r });
+      if (this.ended) return;
+      await this.aiPause(260);
+    }
+  }
+
+  // Bond / teleportation pour se rapprocher quand la marche ne suffit pas.
+  async aiTryJump(ai, target, reach) {
+    const spell = ai.spells.find(s => s.target === 'tile' && s.effects.some(e => e.type === 'teleport')
+      && !ai.isOnCooldown(s.id) && ai.pa >= s.apCost);
+    if (!spell || !target) return false;
+    const d0 = this._dist(ai, target);
+    if (d0 - ai.pm <= reach) return false;
+    let best = null, bd = d0;
+    for (let dc = -spell.range.max; dc <= spell.range.max; dc++) {
+      for (let dr = -spell.range.max; dr <= spell.range.max; dr++) {
+        const dd = Math.abs(dc) + Math.abs(dr);
+        if (dd < spell.range.min || dd > spell.range.max) continue;
+        const c = ai.c + dc, r = ai.r + dr;
+        if (!this.map3d.inBounds(c, r) || this.map3d.isBlockedFor(c, r, ai)) continue;
+        if (this.fighters.some(f => f.alive && f.c === c && f.r === r)) continue;
+        const d = Math.abs(c - target.c) + Math.abs(r - target.r);
+        if (d >= 1 && d < bd) { bd = d; best = { c, r }; }
+      }
+    }
+    if (!best) return false;
+    ai.pa -= spell.apCost;
+    if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
+    ai.character.popCost(spell.apCost, 'pa');
+    this.hud.update(ai, this.mode, this.selectedSpellId);
+    await this.applySpellEffects(ai, spell, best);
+    await this.aiPause(250);
+    return true;
+  }
+
+  // ===== IA des invocations (et monstres "intelligents") =====
+  // 1. Frappe en priorite ce qui est deja a portee (achever > blesser).
+  // 2. Sinon avance vers l ennemi le plus proche, jusqu a portee du sort
+  //    le plus utile avec les PA restants.
+  // 3. Recommence tant qu il reste des PA / PM et qu un progres est fait.
+  // Ne quitte pas le contact d un ennemi s il ne peut plus rien faire.
+  async runSmart(ai) {
+    let guard = 0;
+    while (ai.alive && !this.ended && guard++ < 30) {
+      const spells = this.aiAttackSpells(ai);
+      if (!spells.length) return;
+      if (await this.aiStrikeInRange(ai, spells)) {
+        if (this.checkEnd()) return;
+        await this.aiPause(260);
+        continue;
+      }
+      if (ai.pm <= 0) return;
+      const affordable = spells.filter(s => s.apCost <= ai.pa);
+      if (!affordable.length) return;
+      const enemies = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.invisible);
+      if (!enemies.length) return;
+      // Deja au contact d un ennemi : on frappe sur place plutot que de
+      // fuir au travers du tacle vers une autre cible.
+      if (this.tackleInfo(ai) && affordable.some(s => s.range.min <= 1)) {
+        const adj = enemies.filter(e => this._dist(ai, e) === 1);
+        if (adj.length) return;
+      }
+      enemies.sort((a, b) => this._dist(ai, a) - this._dist(ai, b) || a.hp - b.hp);
+      const melee = affordable.filter(s => s.range.max <= 1);
+      const before = { c: ai.c, r: ai.r };
+      // Cible la plus proche ; si le chemin est bouche, on essaie la suivante.
+      for (const target of enemies.slice(0, 4)) {
+        if (melee.length) {
+          await this.aiApproach(ai, target, 1);
+        } else {
+          const line = affordable.some(s => s.lineOnly);
+          const maxR = Math.max(...affordable.map(s => s.range.max));
+          await this.aiPositionAtRange(ai, target, Math.max(2, maxR - 1), maxR, line);
+        }
+        if (this.ended) return;
+        if (ai.c !== before.c || ai.r !== before.r) break;
+      }
+      if (ai.c === before.c && ai.r === before.r) return;
+      await this.aiPause(220);
+    }
+  }
+
+  // Lance le meilleur sort possible sur un ennemi a portee (sans toucher
+  // d allie avec un sort de zone). Renvoie true si un sort est parti.
+  async aiStrikeInRange(ai, spells) {
+    const enemies = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.invisible);
+    let best = null;
+    for (const e of enemies) {
+      for (const s of this.usableSpellsOn(ai, e, spells)) {
+        if (s.area && s.area.type !== 'single') {
+          const cells = this.areaCells(ai, s, { c: e.c, r: e.r });
+          const keys = new Set(cells.map(cl => cl.c + ',' + cl.r));
+          if (this.fighters.some(f => f.alive && f !== ai && f.team === ai.team && keys.has(f.c + ',' + f.r))) continue;
+        }
+        const dmg = maxDamageOf(s);
+        const kill = dmg >= e.hp ? 1 : 0;
+        const score = kill * 1000 + spellScore(s) + (e.isSummon || e.isBomb ? -20 : 0) - e.hp / 50;
+        if (!best || score > best.score) best = { s, e, score };
+      }
+    }
+    if (!best) return false;
+    const { s: spell, e } = best;
+    ai.pa -= spell.apCost;
+    if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
+    ai.character.popCost(spell.apCost, 'pa');
+    this.hud.update(ai, this.mode, this.selectedSpellId);
+    await this.applySpellEffects(ai, spell, { c: e.c, r: e.r });
+    return true;
   }
 
   // Sorts d attaque disponibles d une IA (hors cooldown, ciblant
@@ -2581,6 +2733,8 @@ export class Game {
   }
 
   async aiApproach(ai, target, range) {
+    await this.aiTryJump(ai, target, range);
+    if (this.ended || !ai.alive) return false;
     const occ = this.computeOccupied(ai);
     const blocked = (c, r) => this.map3d.isBlockedFor(c, r, ai);
     // 1. BFS depuis l IA (toutes contraintes : terrain + allies/ennemis).

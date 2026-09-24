@@ -70,7 +70,7 @@ export const DEFS = {
     role: 'Invocation',
     hp: 90, pa: 5, pm: 4, initiative: 9,
     spellIds: ['morsureBouftou'],
-    ai: 'aggressive',
+    ai: 'summon',
   },
   crapaud: {
     name: 'Crapaud',
@@ -300,6 +300,45 @@ Object.assign(TACTICS, {
   mominotor: { tacle: 14, fuite: 4, res: { terre: 20, neutre: 20, air: -15 } },
   gardienLabyrinthe: { tacle: 18, fuite: 2, res: { terre: 30, neutre: 30, feu: 10, air: -15 } },
 });
+
+// Sorts propres a chaque monstre : les sbires n ont qu une attaque, les
+// monstres evolues gagnent des possibilites coherentes avec leur style
+// (bond, boost de PA / PM, soin, protection, retrait de PA / PM...).
+const MONSTER_SPELLS = {
+  bouftou: ['morsureBouftou'],
+  boufton: ['morsureBouftou', 'bondBouftou'],
+  bouftouChef: ['morsureRoyale', 'criDeGuerre'],
+  bouftouRoyal: ['morsureRoyale', 'soinAnimal', 'toisonRoyale'],
+  wabbit: ['morsureWabbit'],
+  wabbitNoir: ['morsureWabbit', 'bondDuWabbit'],
+  wabbitSquelette: ['carotteMaudite', 'morsureWabbit'],
+  waWabbit: ['carotteGeante', 'morsureWabbit', 'soinAnimal', 'terrierWabbit'],
+  crapaud: ['crachat'],
+  crapaudVenimeux: ['crachatEmpoisonne', 'croassement'],
+  crapaudMage: ['bulleDEau', 'soinDeLaMare', 'peauDure'],
+  crapaudChef: ['deluge', 'crachatEmpoisonne', 'peauDure', 'bondAquatique'],
+  tofu: ['coupDeBec'],
+  tofuNoir: ['coupDeBec', 'envolTofu'],
+  tofuMalefique: ['becMaudit', 'bourrasque'],
+  tofuRoyal: ['coupDeBec', 'bourrasque', 'plongeon', 'plumageRoyal'],
+  chafer: ['coupDeLance'],
+  chaferArcher: ['flecheOsseuse', 'flecheClouante'],
+  chaferElite: ['coupDeLanceRoyal', 'piegeSournois', 'bouclierOsseux'],
+  chaferRoyal: ['coupDeLanceRoyal', 'invisibilite', 'piegeSournois', 'ordreDuRoi'],
+  champignon: ['sporeToxique'],
+  champChamp: ['sporeToxique', 'sporeCollante'],
+  champignonMutant: ['nuageDeSpores', 'mycose'],
+  champignonRoyal: ['nuageDeSpores', 'sporeToxique', 'regenerationFongique', 'racinesFongiques'],
+  craqueleurSauvage: ['frappeRocheuse'],
+  craqueleurPlaines: ['frappeRocheuse', 'lancerRocher'],
+  craqueleurAncien: ['poingLegendaire', 'lancerRocher', 'carapace'],
+  kwakFlamme: ['kwakElementaire'],
+  kwakGlace: ['kwakElementaire', 'givre'],
+  kwakVent: ['kwakElementaire', 'rafaleKwak', 'envolTofu'],
+  mominotor: ['coupDeCorne'],
+  gardienLabyrinthe: ['coupDeCorne', 'chargeMinotoror', 'peauDePierre'],
+};
+for (const [id, list] of Object.entries(MONSTER_SPELLS)) if (DEFS[id]) DEFS[id].spellIds = list;
 
 // Niveau FIXE de chaque monstre (sa force depend de son niveau).
 const MONSTER_LEVELS = {

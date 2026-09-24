@@ -29,6 +29,9 @@ export function addEyes(group, opts = {}) {
   const pupil = M(opts.pupil || 0x1a1020, { r: 0.3 });
   const shine = new THREE.MeshBasicMaterial({ color: 0xffffff });
   const irisMat = opts.iris ? M(opts.iris, { r: 0.3 }) : null;
+  // Les yeux gardent leurs couleurs quand une variante recolore le modele.
+  white.name = 'eye'; pupil.name = 'eye';
+  if (irisMat) irisMat.name = 'eye';
   const lidMat = opts.lid ? M(opts.lid) : null;
   const eyes = [];
   for (const side of [-1, 1]) {

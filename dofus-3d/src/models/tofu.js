@@ -12,6 +12,7 @@ export function buildTofu() {
   const legMat  = new THREE.MeshStandardMaterial({ color: 0xd9762a, roughness: 0.7 });
   const eyeWhiteMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5 });
   const eyeMat  = new THREE.MeshStandardMaterial({ color: 0x1a1a22, roughness: 0.4 });
+  eyeWhiteMat.name = 'eye'; eyeMat.name = 'eye';
 
   // -- Pattes fines --
   for (const dx of [-0.10, 0.10]) {
