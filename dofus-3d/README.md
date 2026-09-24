@@ -24,6 +24,25 @@ cd dofus-3d && python3 -m http.server 8080
 
 (Modules ES, donc obligatoirement par HTTP, pas file://)
 
+## Jouer hors ligne / installer l application
+
+Le jeu est une **PWA** : aucune dependance externe (Three.js et les
+polices sont dans `vendor/`), et un service worker (`sw.js`) met tout le
+jeu en cache a la premiere visite.
+
+- **Telephone** : ouvrir le jeu une fois avec internet, puis menu du
+  navigateur -> *Ajouter a l ecran d accueil* (Safari : bouton Partager).
+  L icone Dofus 3D lance ensuite le jeu en plein ecran, meme en mode avion.
+- **PC** (Chrome / Edge) : icone *Installer* dans la barre d adresse.
+- Les mises a jour arrivent automatiquement a la visite suivante en ligne.
+
+**Apres chaque modification du jeu**, regenerer la liste des fichiers en
+cache (sinon les joueurs garderaient l ancienne version) :
+
+```bash
+node dofus-3d/tools/build-sw.mjs
+```
+
 ## Controles
 
 - **Clic ou tap** sur une case = se deplacer (le perso fait son chemin).
@@ -77,7 +96,7 @@ cd dofus-3d && python3 -m http.server 8080
 
 ## Stack technique
 
-- **Three.js 0.160** charge en module ES depuis jsDelivr (import map).
+- **Three.js 0.160** embarque dans `vendor/three/` (import map).
   Aucune dependance npm, aucun build step : juste des fichiers statiques.
 - **Geometrie procedurale** : tout est fait avec des primitives Three.js
   (`BoxGeometry`, `CylinderGeometry`, `SphereGeometry`, `ConeGeometry`,
