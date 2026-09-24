@@ -1,172 +1,143 @@
 import * as THREE from 'three';
-import { addEyes } from './kit.js';
+import { M, buildHumanoid, lathe, taper, bentCone, roundBox, cloth, strand, place, faceMouth, brows } from './humanoid.js';
 
-// Ecaflip : felin joueur et chanceux, style chibi -- grosse tete de
-// chat ronde, grandes oreilles, museau creme, gilet rouge de croupier,
-// queue annelee, une grande carte a jouer en main.
+// Ecaflip facon Dofus : chat joueur et flambeur. Tete feline (museau,
+// joues rebondies, grandes oreilles pointues touffues), pelage roux raye,
+// gilet de croupier bordeaux a boutons dores sur chemise creme, noeud
+// papillon, pantalon court, longue queue annelee en S, carte a jouer
+// geante dans la main droite et piece d or dans la gauche.
 export function buildEcaflip() {
-  const group = new THREE.Group();
+  const fur = M(0xe0873a, { r: 0.9 });
+  const furDk = M(0xa8541e, { r: 0.9 });
+  const cream = M(0xf6e2c0, { r: 0.85 });
+  const vest = M(0x8a1a2a, { r: 0.75 });
+  const vestDk = M(0x5a0e1a, { r: 0.8 });
+  const shirt = M(0xf6f0e0, { r: 0.8 });
+  const pants = M(0x2a2a40, { r: 0.85 });
+  const gold = M(0xf2c030, { r: 0.35, m: 0.6 });
+  const pink = M(0xf08aa0, { r: 0.7 });
+  const nose = M(0x3a1a14, { r: 0.5 });
 
-  const M = (c, o = {}) => new THREE.MeshStandardMaterial({
-    color: c, roughness: o.r !== undefined ? o.r : 0.85, metalness: o.m || 0,
+  const H = buildHumanoid({
+    skin: fur, top: vest, bottom: pants, boots: furDk, gloves: fur, sleeve: shirt, forearm: shirt,
+    build: 0.98, headR: 0.31, noNose: true, headShape: { jaw: 0.1, chin: 0.05, wide: 1.08 },
+    eyes: { iris: 0x3ad17a, slit: true, lid: 0xe0873a, angry: true },
   });
-  const furMat    = M(0xdb8336);
-  const furDkMat  = M(0xa85a22, { r: 0.9 });
-  const creamMat  = M(0xf3ddb0, { r: 0.8 });
-  const vestMat   = M(0xb52d2d, { r: 0.7 });
-  const vestDkMat = M(0x7a1818, { r: 0.75 });
-  const goldMat   = M(0xe8c14a, { r: 0.35, m: 0.6 });
-  const pantsMat  = M(0x2a2e3e, { r: 0.85 });
-  const noseMat   = M(0x2a1a14, { r: 0.6 });
-  const eyeMat    = new THREE.MeshStandardMaterial({ color: 0x3ad17a, emissive: 0x1a6e3a, emissiveIntensity: 0.45, roughness: 0.4 });
-  const blackMat  = M(0x16121a, { r: 0.5 });
+  const { group, head, headR: hr } = H;
 
-  // ============ JAMBES courtes + bottes ============
-  for (const dx of [-0.14, 0.14]) {
-    const boot = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 12), furDkMat);
-    boot.scale.set(1, 0.72, 1.25);
-    boot.position.set(dx, 0.11, 0.03);
-    boot.castShadow = true;
-    group.add(boot);
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.115, 0.20, 10), pantsMat);
-    leg.position.set(dx, 0.30, 0);
-    group.add(leg);
+  // ---- Gilet de croupier : revers + boutons + chemise + noeud papillon ----
+  const shirtFront = roundBox(0.1, 0.26, 0.03, 0.012, shirt);
+  place(shirtFront, 0, 0.66, 0.145, -0.1);
+  group.add(shirtFront);
+  for (const sx of [-1, 1]) {
+    const lapel = roundBox(0.06, 0.24, 0.02, 0.01, vestDk);
+    place(lapel, sx * 0.075, 0.68, 0.15, -0.1, 0, -sx * 0.3);
+    group.add(lapel);
   }
-
-  // ============ TORSE : fourrure + gilet de croupier ============
-  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.29, 18, 16), furMat);
-  torso.scale.set(1.12, 1.0, 0.92);
-  torso.position.y = 0.60;
-  torso.castShadow = true;
-  group.add(torso);
-  // Gilet rouge (demi-coquille avant).
-  const vest = new THREE.Mesh(new THREE.SphereGeometry(0.30, 16, 14, 0, Math.PI, 0, Math.PI), vestMat);
-  vest.scale.set(1.05, 1.0, 0.62);
-  vest.position.set(0, 0.60, 0.04);
-  vest.rotation.y = Math.PI;
-  group.add(vest);
-  // Ventre creme.
-  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 10), creamMat);
-  belly.scale.set(1, 1.25, 0.5);
-  belly.position.set(0, 0.56, 0.20);
-  group.add(belly);
-  // Boutons dores.
-  for (let i = 0; i < 3; i++) {
-    const btn = new THREE.Mesh(new THREE.SphereGeometry(0.028, 8, 6), goldMat);
-    btn.position.set(0.13, 0.72 - i * 0.11, 0.23);
-    group.add(btn);
+  for (let k = 0; k < 3; k++) {
+    const bt = new THREE.Mesh(new THREE.SphereGeometry(0.014, 8, 6), gold);
+    bt.position.set(0, 0.52 + k * 0.07, 0.17 - k * 0.005);
+    group.add(bt);
   }
-  const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.10, 16), vestDkMat);
-  belt.position.y = 0.42;
-  group.add(belt);
-
-  // ============ EPAULES / BRAS / pattes ============
-  for (const side of [-1, 1]) {
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.082, 0.32, 10), furMat);
-    arm.position.set(side * 0.34, 0.58, 0.02);
-    arm.rotation.z = side * 0.13;
-    arm.castShadow = true;
-    group.add(arm);
-    const paw = new THREE.Mesh(new THREE.SphereGeometry(0.10, 12, 10), creamMat);
-    paw.position.set(side * 0.38, 0.40, 0.03);
-    group.add(paw);
+  const bow = new THREE.Group();
+  for (const sx of [-1, 1]) {
+    const w = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.07, 4), vestDk);
+    w.rotation.z = sx * Math.PI / 2;
+    w.position.x = sx * 0.035;
+    bow.add(w);
   }
+  bow.add(new THREE.Mesh(new THREE.SphereGeometry(0.02, 8, 6), gold));
+  bow.position.set(0, 0.82, 0.14);
+  group.add(bow);
+  // Pans du gilet a l arriere.
+  const tails = cloth(0.24, 0.2, vest, { curve: 0.06, flare: 0.04, spread: 0.2, wave: 0.01 });
+  tails.position.set(0, 0.48, -0.12);
+  group.add(tails);
+  // Pelage : touffe sur le torse.
+  const chestFur = bentCone(0.05, 0.08, 0, 0.03, cream, 5, 2);
+  chestFur.position.set(0, 0.8, 0.12);
+  chestFur.rotation.x = 2.8;
+  group.add(chestFur);
 
-  // ============ QUEUE de chat annelee ============
-  const tail = new THREE.Group();
-  for (let i = 0; i < 6; i++) {
-    const seg = new THREE.Mesh(new THREE.SphereGeometry(0.085 - i * 0.008, 10, 8), i % 2 ? furDkMat : furMat);
-    seg.position.set(0, i * 0.14, -0.05 - i * 0.055);
-    tail.add(seg);
+  // ---- Queue annelee en S ----
+  const tailPts = [[0, 0.42, -0.12], [0.05, 0.3, -0.3], [-0.05, 0.45, -0.46], [0.05, 0.7, -0.5], [0.16, 0.82, -0.42]];
+  group.add(strand(tailPts, 0.045, 0.03, fur, 30));
+  const curve = new THREE.CatmullRomCurve3(tailPts.map(p => new THREE.Vector3(...p)));
+  for (let k = 1; k <= 5; k++) {
+    const p = curve.getPointAt(k / 6);
+    const ring = new THREE.Mesh(new THREE.SphereGeometry(0.043, 10, 8), furDk);
+    ring.position.copy(p);
+    ring.scale.set(1, 0.5, 1);
+    group.add(ring);
   }
-  const tailTip = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), creamMat);
-  tailTip.position.set(0, 0.84, -0.34);
-  tail.add(tailTip);
-  tail.position.set(0, 0.42, -0.22);
-  tail.rotation.x = 0.55;
-  group.add(tail);
+  const tipM = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), cream);
+  tipM.position.set(0.16, 0.82, -0.42);
+  group.add(tipM);
 
-  // ============ TETE de chat (enorme, ronde) ============
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.40, 24, 20), furMat);
-  head.position.y = 1.12;
-  head.castShadow = true;
-  group.add(head);
-  // Museau creme.
-  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(0.20, 14, 12), creamMat);
-  muzzle.scale.set(1, 0.68, 0.7);
-  muzzle.position.set(0, 1.02, 0.27);
-  group.add(muzzle);
-  // Truffe + bouche.
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.06, 6), noseMat);
-  nose.rotation.x = Math.PI / 2;
-  nose.position.set(0, 1.07, 0.46);
-  group.add(nose);
-  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.06, 0.018, 8, 14, Math.PI), noseMat);
-  mouth.rotation.set(Math.PI, 0, Math.PI);
-  mouth.position.set(0, 1.0, 0.44);
-  group.add(mouth);
-
-  // ============ OREILLES de chat ============
-  for (const side of [-1, 1]) {
-    const ear = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.32, 6), furMat);
-    ear.position.set(side * 0.25, 1.46, -0.02);
-    ear.rotation.z = side * -0.30;
-    ear.castShadow = true;
-    group.add(ear);
-    const inner = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.18, 6), creamMat);
-    inner.position.set(side * 0.25, 1.44, 0.04);
-    inner.rotation.z = side * -0.30;
-    group.add(inner);
-    const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.10, 5), furDkMat);
-    tuft.position.set(side * 0.25, 1.64, -0.02);
-    tuft.rotation.z = side * -0.30;
-    group.add(tuft);
-  }
-
-  // ============ Yeux felins + sourcils ============
-  // Grands yeux de chat verts a pupille fendue, air espiegle.
-  addEyes(group, { x: 0, y: 1.17, z: 0.35, size: 0.105, spacing: 0.32, turn: 0.3, iris: 0x3ad17a, slit: true, lid: 0xe0873a, angry: true });
-  // Moustaches.
-  for (const side of [-1, 1]) {
-    for (let i = 0; i < 3; i++) {
-      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.26, 4), creamMat);
-      wh.position.set(side * 0.18, 1.03 + i * 0.045, 0.30);
-      wh.rotation.z = Math.PI / 2 + side * (0.08 + i * 0.14);
-      group.add(wh);
+  // ---- Tete feline : museau, truffe, moustaches, rayures ----
+  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(hr * 0.5, 16, 12), cream);
+  muzzle.scale.set(1.25, 0.72, 0.8);
+  muzzle.position.set(0, hr * 0.52, hr * 0.78);
+  head.add(muzzle);
+  for (const sx of [-1, 1]) {
+    const cheek = new THREE.Mesh(new THREE.SphereGeometry(hr * 0.3, 12, 10), cream);
+    cheek.position.set(sx * hr * 0.55, hr * 0.5, hr * 0.62);
+    cheek.scale.set(1.2, 0.8, 0.8);
+    head.add(cheek);
+    for (let k = 0; k < 3; k++) {
+      const wh = new THREE.Mesh(new THREE.CylinderGeometry(0.004, 0.002, 0.15, 4), cream);
+      wh.rotation.z = Math.PI / 2 + sx * (0.1 + k * 0.14);
+      wh.position.set(sx * hr * 0.78, hr * (0.55 - k * 0.07), hr * 0.75);
+      head.add(wh);
     }
   }
+  const tr = new THREE.Mesh(new THREE.SphereGeometry(0.035, 10, 8), nose);
+  tr.scale.set(1.3, 0.8, 0.9);
+  tr.position.set(0, hr * 0.68, hr * 1.12);
+  head.add(tr);
+  faceMouth(head, hr, nose, { width: hr * 0.14, y: 0.42, arc: 0.95 });
+  // Rayures sur le front.
+  for (let k = -1; k <= 1; k++) {
+    const st = roundBox(0.03, 0.11, 0.02, 0.01, furDk);
+    st.position.set(k * 0.07, hr * 1.55, hr * 0.62);
+    st.rotation.x = -0.6;
+    head.add(st);
+  }
+  brows(head, hr, furDk, { y: 1.26, angle: 0.25 });
 
-  // ============ CHAPEAU de croupier (petit bandeau a plume) ============
-  const hatBand = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.05, 8, 24), vestDkMat);
-  hatBand.rotation.x = Math.PI / 2;
-  hatBand.position.y = 1.36;
-  group.add(hatBand);
-  const feather = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.34, 6), goldMat);
-  feather.position.set(0.30, 1.52, -0.04);
-  feather.rotation.z = -0.6;
-  group.add(feather);
+  // ---- Grandes oreilles pointues touffues ----
+  for (const sx of [-1, 1]) {
+    const ear = bentCone(0.12, 0.3, sx * 0.05, -0.04, fur, 4, 4);
+    ear.position.set(sx * hr * 0.62, hr * 1.5, -0.02);
+    ear.rotation.z = -sx * 0.32;
+    ear.scale.set(1, 1, 0.55);
+    head.add(ear);
+    const inner = bentCone(0.07, 0.2, sx * 0.04, 0, pink, 4, 3);
+    inner.position.set(sx * hr * 0.62, hr * 1.52, 0.035);
+    inner.rotation.z = -sx * 0.32;
+    inner.scale.set(1, 1, 0.3);
+    head.add(inner);
+    const tuft = bentCone(0.02, 0.1, sx * 0.03, 0, furDk, 4, 2);
+    tuft.position.set(sx * hr * 0.62 + sx * 0.08, hr * 2.4, -0.03);
+    tuft.rotation.z = -sx * 0.32;
+    head.add(tuft);
+  }
 
-  // ============ GRANDE CARTE a jouer en main droite ============
+  // ---- Carte geante (main droite) ----
   const card = new THREE.Group();
-  const face = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.38, 0.025), M(0xf6f0e0, { r: 0.55 }));
-  card.add(face);
-  // Pique rouge centrale.
-  const pip = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.13, 4), M(0xc0392b, { r: 0.6 }));
-  pip.rotation.x = Math.PI / 2;
-  pip.position.z = 0.02;
+  card.add(roundBox(0.16, 0.24, 0.012, 0.012, shirt));
+  const pip = new THREE.Mesh(new THREE.OctahedronGeometry(0.035), M(0xc8322a, { r: 0.5 }));
+  pip.scale.set(1, 1.3, 0.3);
+  pip.position.z = 0.01;
   card.add(pip);
-  const pipBar = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.07, 0.025), M(0xc0392b, { r: 0.6 }));
-  pipBar.position.set(0, -0.08, 0.02);
-  card.add(pipBar);
-  card.position.set(0.46, 0.46, 0.12);
-  card.rotation.set(0.25, 0.5, 0.4);
-  group.add(card);
-
-  // ============ Piece d or qui levite dans la main gauche ============
-  const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.10, 0.03, 20), goldMat);
-  coin.rotation.set(Math.PI / 2, 0, 0.4);
-  coin.position.set(-0.42, 0.56, 0.10);
-  group.add(coin);
+  card.position.set(0, -0.18, 0.06);
+  card.rotation.set(-0.3, 0.4, 0.3);
+  H.handR.add(card);
+  // ---- Piece d or (main gauche) ----
+  const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.012, 18), gold);
+  coin.rotation.x = Math.PI / 2;
+  coin.position.set(0, -0.2, 0.05);
+  H.handL.add(coin);
 
   return group;
 }

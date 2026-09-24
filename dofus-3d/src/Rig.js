@@ -30,6 +30,12 @@ const RIGS = {
 const ALIAS = { chaferRoyal: 'chafer', bouftouRoyal: 'bouftou', tofuRoyal: 'tofu', waWabbit: 'wabbit', bouftouInvoc: 'bouftou' };
 
 export function rigModel(body, classId) {
+  // Modeles construits sur la base d anatomie (humanoid.js) : pivots
+  // nommes fournis directement.
+  if (body.userData && body.userData.rig) {
+    const r = body.userData.rig;
+    return { scale: 1, quad: false, legL: r.legL, legR: r.legR, armL: r.armL, armR: r.armR, head: r.head };
+  }
   const key = ALIAS[classId] || classId;
   const cfg = RIGS[key];
   if (!cfg) return null;

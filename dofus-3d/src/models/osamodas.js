@@ -1,196 +1,136 @@
 import * as THREE from 'three';
-import { addEyes } from './kit.js';
+import { M, buildHumanoid, lathe, taper, bentCone, roundBox, cloth, strand, place, faceMouth, brows, hairCap } from './humanoid.js';
 
-// Osamodas : invocateur draconique, style chibi -- grosse tete ronde,
-// capuche a cornes, petites ailes membraneuses, queue ecailleuse,
-// baton surmonte d un orbe vert. Palette brun / vert.
+// Osamodas facon Dofus : dresseur a sang de dragon. Tunique verte a col
+// de fourrure et pans decoupes, bracelets de cuir, grandes cornes
+// recourbees vers l arriere, queue ecailleuse qui ondule, meche brune,
+// fouet enroule a la ceinture et baton surmonte d une griffe tenant un
+// orbe vert.
 export function buildOsamodas() {
-  const group = new THREE.Group();
+  const skin = M(0xe9c79a, { r: 0.8 });
+  const tunic = M(0x4f8a36, { r: 0.75 });
+  const tunicDk = M(0x2f5a22, { r: 0.8 });
+  const brown = M(0x6b4a24, { r: 0.85 });
+  const brownDk = M(0x3e2a12, { r: 0.9 });
+  const fur = M(0xd8b884, { r: 0.95 });
+  const horn = M(0xf0e4c8, { r: 0.55 });
+  const scale = M(0x3f7a3a, { r: 0.6 });
+  const gold = M(0xe8c14a, { r: 0.35, m: 0.6 });
+  const hair = M(0x5a3a1c, { r: 0.8 });
+  const dark = M(0x1a1010, { r: 0.5 });
+  const orb = new THREE.MeshStandardMaterial({ color: 0x7be58a, emissive: 0x2f9a48, emissiveIntensity: 1, roughness: 0.3 });
 
-  const M = (c, o = {}) => new THREE.MeshStandardMaterial({
-    color: c, roughness: o.r !== undefined ? o.r : 0.8, metalness: o.m || 0,
+  const H = buildHumanoid({
+    skin, top: tunic, bottom: brown, boots: brownDk, gloves: skin, sleeve: tunic, forearm: brown,
+    build: 1.0, headR: 0.3, bootCuff: fur, ears: true,
+    eyes: { iris: 0x2f9a48 },
   });
-  const robeMat    = M(0x6b4a24);
-  const robeDkMat  = M(0x463015, { r: 0.9 });
-  const furMat     = M(0xcdab78, { r: 0.95 });
-  const tunicMat   = M(0x4f7d36, { r: 0.75 });
-  const tunicDkMat = M(0x355824, { r: 0.8 });
-  const scaleMat   = M(0x3f6e3a, { r: 0.6, m: 0.1 });
-  const scaleDkMat = M(0x2a4d28, { r: 0.65 });
-  const skinMat    = M(0xe9c79a, { r: 0.8 });
-  const skinDkMat  = M(0xc9a576, { r: 0.8 });
-  const goldMat    = M(0xe8c14a, { r: 0.35, m: 0.6 });
-  const hornMat    = M(0xefe6cf, { r: 0.6 });
-  const orbMat     = new THREE.MeshStandardMaterial({ color: 0x7be58a, emissive: 0x2f9a48, emissiveIntensity: 0.9, roughness: 0.35 });
-  const blackMat   = M(0x161018, { r: 0.5 });
-  const whiteMat   = M(0xfdfdfd, { r: 0.4 });
+  const { group, head, headR: hr } = H;
 
-  // ============ JAMBES courtes + bottes ============
-  for (const dx of [-0.14, 0.14]) {
-    const boot = new THREE.Mesh(new THREE.SphereGeometry(0.15, 14, 12), robeDkMat);
-    boot.scale.set(1, 0.72, 1.25);
-    boot.position.set(dx, 0.11, 0.03);
-    boot.castShadow = true;
-    group.add(boot);
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.12, 0.20, 10), robeMat);
-    leg.position.set(dx, 0.30, 0);
-    group.add(leg);
+  // ---- Tunique : pans decoupes en V + col de fourrure ----
+  for (let i = -2; i <= 2; i++) {
+    const flap = roundBox(0.11, 0.2, 0.02, 0.008, i % 2 ? tunicDk : tunic);
+    const a = i * 0.45;
+    flap.position.set(Math.sin(a) * 0.15, 0.36, Math.cos(a) * 0.12);
+    flap.rotation.set(0.18, a, 0);
+    group.add(flap);
   }
-
-  // ============ TORSE : tunique verte + col de fourrure ============
-  const torso = new THREE.Mesh(new THREE.SphereGeometry(0.29, 18, 16), tunicMat);
-  torso.scale.set(1.12, 1.0, 0.92);
-  torso.position.y = 0.60;
-  torso.castShadow = true;
-  group.add(torso);
-  for (const side of [-1, 1]) {
-    const v = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.30, 0.03), goldMat);
-    v.position.set(side * 0.08, 0.66, 0.26);
-    v.rotation.z = side * 0.5;
-    group.add(v);
-  }
-  const belt = new THREE.Mesh(new THREE.CylinderGeometry(0.30, 0.30, 0.11, 16), robeDkMat);
-  belt.position.y = 0.44;
+  const belt = lathe([[0.155, 0], [0.16, 0.035], [0.155, 0.07]], brownDk, 22, 0.82);
+  belt.position.y = 0.43;
   group.add(belt);
-  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.13, 0.11, 0.05), goldMat);
-  buckle.position.set(0, 0.44, 0.29);
-  group.add(buckle);
-  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.08, 10, 22), furMat);
+  group.add(place(roundBox(0.08, 0.07, 0.03, 0.012, gold), 0, 0.465, 0.135));
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.06, 10, 22), fur);
   collar.rotation.x = Math.PI / 2;
+  collar.scale.set(1, 0.85, 1);
   collar.position.y = 0.84;
   group.add(collar);
+  // Lacets croises sur la poitrine.
+  for (const sx of [-1, 1]) {
+    const lace = roundBox(0.018, 0.2, 0.012, 0.006, gold);
+    place(lace, sx * 0.045, 0.66, 0.15, 0, 0, sx * 0.45);
+    group.add(lace);
+  }
+  // Fouet enroule a la hanche.
+  const whip = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.015, 6, 18), brownDk);
+  whip.position.set(-0.17, 0.42, 0.04);
+  whip.rotation.y = Math.PI / 2;
+  group.add(whip);
 
-  // ============ AILES membraneuses dans le dos ============
-  for (const side of [-1, 1]) {
-    const wing = new THREE.Group();
-    for (let i = 0; i < 3; i++) {
-      const bone = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.42, 5), scaleDkMat);
-      bone.position.y = 0.18;
-      bone.rotation.z = -0.4 + i * 0.4;
-      wing.add(bone);
-    }
-    const memb = new THREE.Mesh(
-      new THREE.SphereGeometry(0.30, 12, 8, 0, Math.PI, 0, Math.PI * 0.6),
-      new THREE.MeshStandardMaterial({ color: 0x3f6e3a, roughness: 0.7, side: THREE.DoubleSide, transparent: true, opacity: 0.92 }),
-    );
-    memb.scale.set(1, 0.9, 0.25);
-    memb.position.y = 0.18;
-    wing.add(memb);
-    wing.position.set(side * 0.22, 0.74, -0.24);
-    wing.rotation.y = side * 0.7;
-    wing.rotation.z = side * -0.2;
-    group.add(wing);
+  // ---- Bracelets de cuir a griffes ----
+  for (const arm of [H.armL, H.armR]) {
+    const elbow = arm.children.find(c => c.isGroup);
+    if (!elbow) continue;
+    const br = new THREE.Mesh(new THREE.CylinderGeometry(0.052, 0.048, 0.08, 12), brownDk);
+    br.position.y = -0.1;
+    elbow.add(br);
+    const claw = bentCone(0.014, 0.05, 0, 0.02, horn, 5, 2);
+    claw.position.set(0, -0.08, 0.05);
+    claw.rotation.x = 1.2;
+    elbow.add(claw);
   }
 
-  // ============ BRAS + mains ============
-  for (const side of [-1, 1]) {
-    const arm = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.08, 0.32, 10), tunicDkMat);
-    arm.position.set(side * 0.33, 0.58, 0.02);
-    arm.rotation.z = side * 0.13;
-    arm.castShadow = true;
-    group.add(arm);
-    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), skinMat);
-    hand.position.set(side * 0.37, 0.40, 0.03);
-    group.add(hand);
-  }
-
-  // ============ QUEUE ecailleuse ============
-  const tail = new THREE.Group();
-  for (let i = 0; i < 6; i++) {
-    const seg = new THREE.Mesh(new THREE.SphereGeometry(0.10 - i * 0.012, 10, 8), i % 2 ? scaleDkMat : scaleMat);
-    seg.position.set(0, i * 0.02, -i * 0.13);
-    tail.add(seg);
-  }
-  const tailTip = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.18, 6), scaleDkMat);
-  tailTip.rotation.x = -Math.PI / 2;
-  tailTip.position.set(0, 0.12, -0.86);
-  tail.add(tailTip);
-  tail.position.set(0, 0.34, -0.20);
-  tail.rotation.x = 0.35;
+  // ---- Queue ecailleuse ----
+  const tail = strand([[0, 0.44, -0.12], [0, 0.3, -0.3], [0.08, 0.22, -0.46], [0.2, 0.28, -0.56], [0.26, 0.4, -0.58]], 0.06, 0.012, scale, 28);
   group.add(tail);
+  const tip = bentCone(0.04, 0.12, 0.04, 0, tunicDk, 4, 2);
+  tip.position.set(0.26, 0.4, -0.58);
+  tip.rotation.z = -0.5;
+  group.add(tip);
 
-  // ============ TETE (enorme) ============
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.39, 24, 20), skinMat);
-  head.position.y = 1.14;
-  head.castShadow = true;
-  group.add(head);
-  const jaw = new THREE.Mesh(new THREE.SphereGeometry(0.27, 14, 10), skinDkMat);
-  jaw.scale.set(1, 0.5, 0.82);
-  jaw.position.set(0, 0.99, 0.07);
-  group.add(jaw);
-  // Grands yeux verts bienveillants de dresseur + sourcils arques.
-  addEyes(group, { x: 0, y: 1.13, z: 0.35, size: 0.1, spacing: 0.3, turn: 0.28, iris: 0x2f9a48 });
-  for (const dx of [-0.15, 0.15]) {
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.035, 0.05), robeDkMat);
-    brow.position.set(dx, 1.27, 0.35);
-    brow.rotation.z = dx > 0 ? -0.2 : 0.2;
-    group.add(brow);
-  }
-  // Petites taches d ecailles sur les joues (sang draconique).
-  for (const dx of [-0.25, 0.25]) {
-    for (let i = 0; i < 3; i++) {
-      const sc = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), scaleMat);
-      sc.position.set(dx + (dx > 0 ? i * 0.025 : -i * 0.025), 1.03 + i * 0.03, 0.3 - i * 0.02);
+  // ---- Visage ----
+  brows(head, hr, hair, { y: 1.24, angle: -0.12 });
+  faceMouth(head, hr, dark, { width: hr * 0.16, y: 0.5, arc: 0.85 });
+  for (const sx of [-1, 1]) {
+    for (let k = 0; k < 3; k++) {
+      const sc = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 5), scale);
+      sc.position.set(sx * (hr * 0.75 + k * 0.02), hr * (0.62 + k * 0.08), hr * 0.62 - k * 0.02);
       sc.scale.set(1, 1, 0.5);
-      group.add(sc);
+      head.add(sc);
     }
   }
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), skinDkMat);
-  nose.position.set(0, 1.06, 0.40);
-  group.add(nose);
-  const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.07, 0.02, 8, 14, Math.PI), blackMat);
-  mouth.rotation.set(Math.PI, 0, Math.PI);
-  mouth.position.set(0, 0.99, 0.36);
-  group.add(mouth);
 
-  // ============ CAPUCHE a cornes (draconique) ============
-  const hood = new THREE.Mesh(new THREE.SphereGeometry(0.43, 22, 18, 0, Math.PI * 2, 0, Math.PI * 0.58), robeMat);
-  hood.position.y = 1.18;
-  hood.castShadow = true;
-  group.add(hood);
-  const hoodRim = new THREE.Mesh(new THREE.TorusGeometry(0.40, 0.05, 8, 26), furMat);
-  hoodRim.rotation.x = Math.PI / 2 + 0.25;
-  hoodRim.position.y = 1.30;
-  group.add(hoodRim);
-  // Grandes cornes de dragon recourbees vers l arriere (signature
-  // Osamodas) : chapelet de segments qui s affinent.
-  for (const side of [-1, 1]) {
-    for (let i = 0; i < 7; i++) {
-      const k = i / 6;
-      const seg = new THREE.Mesh(new THREE.SphereGeometry(0.085 * (1 - k * 0.7), 10, 8), hornMat);
-      seg.position.set(side * (0.27 + k * 0.14), 1.44 + Math.sin(k * 2.2) * 0.22, -0.02 - k * 0.3);
-      seg.castShadow = true;
-      group.add(seg);
+  // ---- Cheveux bruns en bataille ----
+  hairCap(head, hr, hair, { backTheta: 0.7 });
+  for (let i = -2; i <= 2; i++) {
+    const m = bentCone(0.05, 0.16, i * 0.02, 0.1, hair, 6, 4);
+    m.position.set(i * 0.07, hr * 1.6, hr * 0.6);
+    m.rotation.set(1.9, 0, i * 0.25);
+    head.add(m);
+  }
+
+  // ---- Grandes cornes de dragon recourbees vers l arriere ----
+  for (const sx of [-1, 1]) {
+    const h1 = strand([
+      [sx * hr * 0.6, hr * 1.5, 0], [sx * hr * 0.85, hr * 1.95, -0.06],
+      [sx * hr * 1.0, hr * 2.15, -0.22], [sx * hr * 0.95, hr * 2.1, -0.4],
+    ], 0.055, 0.008, horn, 22);
+    head.add(h1);
+    for (let k = 0; k < 3; k++) {
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.05 - k * 0.008, 0.008, 5, 12), brown);
+      ring.position.set(sx * hr * (0.66 + k * 0.08), hr * (1.62 + k * 0.14), -0.01 - k * 0.04);
+      ring.rotation.set(Math.PI / 2 - 0.4, 0, sx * 0.4);
+      head.add(ring);
     }
   }
-  // Ailerons draconiques sur les cotes de la tete.
-  for (const side of [-1, 1]) {
-    const fin = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.24, 4), scaleMat);
-    fin.position.set(side * 0.36, 1.16, -0.02);
-    fin.rotation.z = side * 1.4;
-    group.add(fin);
-  }
 
-  // ============ BATON a orbe ============
+  // ---- Baton a griffe et orbe (main droite) ----
   const staff = new THREE.Group();
-  const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.035, 1.30, 8), robeDkMat);
-  staff.add(rod);
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2;
-    const claw = new THREE.Mesh(new THREE.ConeGeometry(0.04, 0.20, 5), goldMat);
-    claw.position.set(Math.cos(a) * 0.11, 0.66, Math.sin(a) * 0.11);
-    claw.rotation.set(Math.cos(a) * 0.7, 0, -Math.sin(a) * 0.7);
-    staff.add(claw);
+  staff.add(place(taper(0.022, 0.026, 1.25, brown), 0, 0.95, 0));
+  const orbM = new THREE.Mesh(new THREE.SphereGeometry(0.08, 16, 12), orb);
+  orbM.position.y = 1.02;
+  staff.add(orbM);
+  const halo = new THREE.Mesh(new THREE.SphereGeometry(0.13, 12, 10), new THREE.MeshBasicMaterial({ color: 0x7be58a, transparent: true, opacity: 0.25 }));
+  halo.position.y = 1.02;
+  staff.add(halo);
+  for (let k = 0; k < 3; k++) {
+    const a = (k / 3) * Math.PI * 2;
+    const c = bentCone(0.018, 0.16, -Math.cos(a) * 0.06, -Math.sin(a) * 0.06, horn, 5, 4);
+    c.position.set(Math.cos(a) * 0.06, 0.93, Math.sin(a) * 0.06);
+    staff.add(c);
   }
-  const orb = new THREE.Mesh(new THREE.SphereGeometry(0.13, 16, 14), orbMat);
-  orb.position.y = 0.70;
-  staff.add(orb);
-  const orbGlint = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), whiteMat);
-  orbGlint.position.set(-0.05, 0.76, 0.06);
-  staff.add(orbGlint);
-  staff.position.set(0.42, 0.66, 0.10);
-  staff.rotation.z = 0.10;
-  group.add(staff);
+  staff.position.set(0, -0.1, 0.02);
+  staff.rotation.set(0.25, 0, -0.08);
+  H.handR.add(staff);
 
   return group;
 }
