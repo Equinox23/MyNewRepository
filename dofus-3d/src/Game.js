@@ -4,7 +4,7 @@ import { TurnManager } from './TurnManager.js';
 import { bfs, pathTo, hasLOS } from './Path.js';
 import { SPELLS } from './Spells.js';
 import { spellElementColor } from './SpellIcons.js';
-import { getHero, addXp, monsterXp } from './Leveling.js';
+import { getHero, addXp, monsterXp, bombBonus, heroStats } from './Leveling.js';
 import { MAP_BOOSTS } from './Map3D.js';
 import { recordWin, recordTier } from './Progress.js';
 
@@ -1109,7 +1109,15 @@ export class Game {
       case 'placeBomb': {
         // Pose une bombe sur la case visee.
         const bomb = new Fighter('bombeRoublard', caster.team, target.c, target.r);
+        // Bombe evolutive : niveau du sort (PV, degats, resistance) et
+        // niveau du Roublard (+7% PV, +6% degats par niveau).
+        const bb = bombBonus(effect.bombLevel || 1);
+        const hs = heroStats(bomb.def, caster.level || 1);
+        bomb.maxHp = bomb.hp = Math.round(hs.hp * bb.hp);
+        bomb.bombDamageMult = bb.damage * (caster.levelDamageMult || 1);
+        if (bb.shield) bomb.buffs.push({ permanent: true, duration: 9999, shield: bb.shield });
         bomb.character = new Character3D(this.scene3d.scene, 'bombeRoublard', caster.team, target.c, target.r);
+        bomb.character.hpBar.setHp(bomb.hp, bomb.maxHp);
         bomb.bombOwner = caster;
         bomb.bombAge = 0;
         bomb.character.setBombFuse(bomb.def.fuseMax);
@@ -1130,7 +1138,7 @@ export class Game {
           requestAnimationFrame(tick);
         });
         caster.character.flashGlow(0xc0392b, 600);
-        this.hud.log && this.hud.log(`${caster.name} pose une bombe (50 PV)`, 'summon');
+        this.hud.log && this.hud.log(`${caster.name} pose une bombe (${bomb.maxHp} PV)`, 'summon');
         return;
       }
       case 'moveBomb': {
@@ -1192,6 +1200,7 @@ export class Game {
           return;
         }
         caster.character.flashGlow(0xff5a1f, 500);
+        if (effect.bonus) bomb._detonateBonus = effect.bonus;
         await this.explodeBomb(bomb);
         return;
       }
@@ -1276,7 +1285,8 @@ export class Game {
     }
     const baseDmg = bomb.def.bombDamage || 50;
     const growth = bomb.def.bombDamageGrowth || 0;
-    const dmg = Math.round(baseDmg * (1 + growth * bomb.bombAge));
+    const dmg = Math.round(baseDmg * (1 + growth * bomb.bombAge)
+      * (bomb.bombDamageMult || 1) * (1 + (bomb._detonateBonus || 0)));
     const radiusVfx = (area.type === 'circle') ? ((area.radius || 2) + 0.6) : 2.4;
 
     // VFX : grosse onde de choc dimensionnee au rayon + flash central.
