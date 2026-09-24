@@ -1076,7 +1076,7 @@ export class Game {
         this.audio && this.audio.sfx('summon');
         await new Promise(r => setTimeout(r, 200));
         const summon = new Fighter(effect.creatureId, caster.team, target.c, target.r,
-          { kind: caster.team === 'player' ? 'summon' : 'monster', level: caster.level || 1 });
+          { kind: caster.team === 'player' ? 'summon' : 'monster', level: caster.level || 1, summonLevel: effect.summonLevel || 1 });
         summon.character = new Character3D(this.scene3d.scene, effect.creatureId, caster.team, target.c, target.r);
         const closestEnemy = this.fighters
           .filter(f => f.alive && f.team !== caster.team)

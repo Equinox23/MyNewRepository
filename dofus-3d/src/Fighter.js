@@ -1,5 +1,5 @@
 import { SPELLS } from './Spells.js';
-import { heroStats, monsterStats, scaledSpell, UNLOCK_LEVELS } from './Leveling.js';
+import { heroStats, monsterStats, scaledSpell, summonBonus, UNLOCK_LEVELS } from './Leveling.js';
 
 // Definitions des classes / creatures.
 // `ai` decrit le caractere autonome (cf Game.runAI).
@@ -226,6 +226,7 @@ export class Fighter {
     this.level = opts.level || 1;
     this.levelDamageMult = 1;
     this._spells = null;
+    this.summonLevel = opts.summonLevel || 1;
     if (opts.kind) this.applyLevel(opts.kind, opts.spellLevels || {});
   }
 
@@ -234,7 +235,16 @@ export class Fighter {
     const L = this.level;
     let st;
     if (kind === 'hero') st = heroStats(def, L);
-    else if (kind === 'summon') st = { ...heroStats(def, L), pa: def.pa, pm: def.pm };
+    else if (kind === 'summon') {
+      // Invocation : suit le niveau du heros (PV, degats) et le niveau du
+      // sort d invocation (bonus PV / degats, PA / PM, puissance des sorts).
+      const hs = heroStats(def, L);
+      const sb = summonBonus(this.summonLevel);
+      st = { hp: Math.round(hs.hp * sb.mult), pa: def.pa + sb.pa, pm: def.pm + sb.pm, damage: hs.damage * sb.mult };
+      if (sb.level > 1) {
+        this._spells = def.spellIds.map(id => SPELLS[id]).filter(Boolean).map(sp => scaledSpell(sp, sb.level));
+      }
+    }
     else st = monsterStats(def, L);
     this.maxHp = this.hp = st.hp;
     this.maxPa = this.pa = st.pa;

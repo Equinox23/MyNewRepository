@@ -3,7 +3,7 @@
 import { getStar, getBestTier, MAX_TIER, tierToLevel } from './Progress.js';
 import { DEFS } from './Fighter.js';
 import { SPELLS, spellEffectLines } from './Spells.js';
-import { getHero, heroSpells, upgradeSpell, resetSpellPoints, heroStats, xpToNext, scaledSpell, MAX_LEVEL } from './Leveling.js';
+import { getHero, heroSpells, upgradeSpell, resetSpellPoints, heroStats, xpToNext, scaledSpell, summonBonus, UPGRADE_COST, MAX_LEVEL } from './Leveling.js';
 import { spellIconFrame } from './SpellIcons.js';
 import { getAvatar } from './Avatars.js';
 
@@ -1052,11 +1052,30 @@ export class Menu {
       }
       const lvShown = Math.max(1, e.level);
       const cur = scaledSpell(sp, lvShown);
-      const lines = spellEffectLines(cur).join(' - ');
-      const next = e.unlocked && e.level < 3 ? spellEffectLines(scaledSpell(sp, e.level + 1)).join(' - ') : '';
       const pips = [1, 2, 3].map(n => `<i class="${n <= e.level ? 'on' : ''}"></i>`).join('');
-      const range = cur.range ? (cur.range.max === 0 ? 'Soi-meme' : `Portee ${cur.range.min}-${cur.range.max}`) : '';
-      const cd = cur.cooldown ? ` - Recharge ${cur.cooldown}` : '';
+      const metaOf = (x) => {
+        const r = x.range ? (x.range.max === 0 ? 'Soi-meme' : `Portee ${x.range.min}-${x.range.max}`) : '';
+        return `${x.apCost} PA - ${r}${x.cooldown ? ` - Recharge ${x.cooldown}` : ''}`;
+      };
+      // Previsualisation des 3 paliers du sort (actuel en surbrillance).
+      const tiers = [1, 2, 3].map(n => {
+        const x = scaledSpell(sp, n);
+        let extra = '';
+        if (summon && DEFS[summon.creatureId]) {
+          const cd = DEFS[summon.creatureId];
+          const hs = heroStats(cd, hero.level);
+          const sb = summonBonus(n);
+          extra = `<div class="gr-tier-sum">${DEFS[summon.creatureId].name} : ${Math.round(hs.hp * sb.mult)} PV - ${cd.pa + sb.pa} PA - ${cd.pm + sb.pm} PM - degats +${Math.round((hs.damage * sb.mult - 1) * 100)}%</div>`;
+        }
+        const costTxt = n === 1 ? 'de base' : `${UPGRADE_COST[n - 1]} pt${UPGRADE_COST[n - 1] > 1 ? 's' : ''}`;
+        const state = !e.unlocked ? 'future' : n < e.level ? 'past' : n === e.level ? 'current' : 'future';
+        return `<div class="gr-tier ${state}">
+          <div class="gr-tier-h">Niv. ${n}${state === 'current' ? ' <b>actuel</b>' : ''}<span>${costTxt}</span></div>
+          <div class="gr-tier-meta">${metaOf(x)}</div>
+          <div class="gr-tier-lines">${spellEffectLines(x).join('<br>')}</div>
+          ${extra}
+        </div>`;
+      }).join('');
       let action;
       if (!e.unlocked) action = `<div class="gr-lock">Debloque au niveau ${e.unlockAt}</div>`;
       else if (e.level >= 3) action = `<div class="gr-max">Niveau max</div>`;
@@ -1065,10 +1084,9 @@ export class Menu {
         <div class="gr-icon">${icon}</div>
         <div class="gr-body">
           <div class="gr-name">${sp.name} <span class="gr-pips">${pips}</span></div>
-          <div class="gr-meta">${cur.apCost} PA - ${range}${cd}</div>
+          <div class="gr-meta">${metaOf(cur)}</div>
           <div class="gr-desc">${sp.desc || ''}</div>
-          <div class="gr-lines">${lines}</div>
-          ${next ? `<div class="gr-next">Niveau ${e.level + 1} : ${next}</div>` : ''}
+          <div class="gr-tiers">${tiers}</div>
         </div>
         <div class="gr-action">${action}</div>
       </div>`;
