@@ -225,3 +225,28 @@ body.in-menu #rot-recenter { display: none !important; }
 }
 .spell.painted .key { top: 3px !important; left: 3px !important; }
 .spell.painted .cost { bottom: 3px !important; right: 3px !important; }
+
+/* ---- Phase de placement ---- */
+#placement-ready {
+  position: fixed; left: 50%; bottom: 108px; transform: translateX(-50%);
+  display: none; flex-direction: column; align-items: center; gap: 2px;
+  padding: 10px 46px 8px;
+  background: linear-gradient(180deg, #ffc24a 0%, #e8841a 55%, #b95d0c 100%);
+  border: 2px solid #5a2e04; border-radius: 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 220, 0.6), 0 6px 16px rgba(0, 0, 0, 0.5);
+  color: #fff8e0; cursor: pointer; z-index: 20;
+  font-family: var(--d-font-title);
+  animation: readyPulse 1.4s ease-in-out infinite;
+}
+#placement-ready .pr-title { font-size: 24px; font-weight: 700; letter-spacing: 3px; text-shadow: 0 2px 0 #5a2e04; }
+#placement-ready .pr-sub { font-size: 11px; opacity: 0.9; text-shadow: 0 1px 0 #5a2e04; }
+@keyframes readyPulse {
+  0%, 100% { box-shadow: inset 0 1px 0 rgba(255,255,220,0.6), 0 6px 16px rgba(0,0,0,0.5); }
+  50% { box-shadow: inset 0 1px 0 rgba(255,255,220,0.6), 0 0 22px rgba(255,194,74,0.9); }
+}
+body.placement #hud-spells { opacity: 0.45; pointer-events: none; }
+body.in-menu #placement-ready { display: none !important; }
+@media (pointer: coarse), (max-width: 768px) {
+  #placement-ready { bottom: 96px; padding: 8px 30px 6px; }
+  #placement-ready .pr-sub { display: none; }
+}

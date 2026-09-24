@@ -122,8 +122,118 @@ export class Game {
     this.turn = new TurnManager(this.fighters);
     this.refreshHpBars();
     this.hud.clearLog && this.hud.clearLog();
-    this.hud.log && this.hud.log('Le combat commence !', 'info');
     this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
+    this.startPlacement();
+  }
+
+  // ---------- PHASE DE PLACEMENT (facon Dofus) ----------
+  // Avant le combat, chaque camp dispose de cases de depart : bleues pour
+  // le joueur, rouges pour l adversaire. Le joueur clique une case bleue
+  // pour y placer le heros selectionne (clic sur un heros = le
+  // selectionner), puis valide avec "Pret" (ou Espace).
+  startPlacement() {
+    this.phase = 'placement';
+    this.busy = false;
+    const pick = (anchors, count) => {
+      const cells = [];
+      const seen = new Set();
+      for (let radius = 0; radius <= 3 && cells.length < count; radius++) {
+        for (const a of anchors) {
+          for (let dc = -radius; dc <= radius; dc++) {
+            for (let dr = -radius; dr <= radius; dr++) {
+              if (Math.abs(dc) + Math.abs(dr) !== radius) continue;
+              const c = a.c + dc, r = a.r + dr;
+              const key = c + ',' + r;
+              if (seen.has(key) || !this.map3d.inBounds(c, r)) continue;
+              const t = this.map3d.getTileType(c, r);
+              if (t !== 0 && t !== 3) continue;
+              seen.add(key);
+              if (cells.length < count) cells.push({ c, r });
+            }
+          }
+        }
+      }
+      return cells;
+    };
+    const players = this.fighters.filter(f => f.team === 'player');
+    const enemies = this.fighters.filter(f => f.team !== 'player');
+    this.placementCells = pick(PLAYER_SPAWNS.slice(0, Math.max(1, players.length)), Math.max(6, players.length * 4));
+    // Les heros deja poses font partie des cases de depart.
+    for (const f of players) {
+      if (!this.placementCells.some(p => p.c === f.c && p.r === f.r)) this.placementCells.push({ c: f.c, r: f.r });
+    }
+    this.enemyPlacementCells = pick(ENEMY_SPAWNS.slice(0, Math.max(1, Math.min(ENEMY_SPAWNS.length, enemies.length))), Math.max(6, enemies.length + 3));
+    for (const f of enemies) {
+      if (!this.enemyPlacementCells.some(p => p.c === f.c && p.r === f.r)) this.enemyPlacementCells.push({ c: f.c, r: f.r });
+    }
+    this.placementHero = players[0] || null;
+    this._refreshPlacement();
+    this.hud.log && this.hud.log('Phase de placement : choisis ta case de depart', 'info');
+    this.hud.flash('Place ton heros sur une case bleue, puis clique PRET', 2200);
+    this.hud.setPlacement && this.hud.setPlacement(true, () => this.finishPlacement());
+    const cur = this.turn.current();
+    this.hud.update(cur, 'move', null);
+  }
+
+  _refreshPlacement() {
+    this.rangeOverlay.clear();
+    this.rangeOverlay.paint(this.placementCells, 0x2f7de0, 0.7);
+    this.rangeOverlay.paint(this.enemyPlacementCells, 0xd8322a, 0.7);
+    for (const f of this.fighters) {
+      f.character.setActive(f === this.placementHero);
+    }
+  }
+
+  onPlacementTap(c, r) {
+    const hero = this.fighters.find(f => f.alive && f.team === 'player' && f.c === c && f.r === r);
+    if (hero) {
+      this.placementHero = hero;
+      this.audio && this.audio.sfx('uiSelect');
+      this._refreshPlacement();
+      return;
+    }
+    const cell = this.placementCells.find(p => p.c === c && p.r === r);
+    const mover = this.placementHero;
+    if (!cell || !mover) {
+      this.hud.flash('Choisis une case bleue', 800);
+      this.audio && this.audio.sfx('uiError');
+      return;
+    }
+    const other = this.fighters.find(f => f.alive && f !== mover && f.c === c && f.r === r);
+    if (other && other.team !== 'player') return;
+    if (other) {
+      // Echange de place entre deux heros.
+      other.c = mover.c; other.r = mover.r;
+      other.character.setTile(other.c, other.r);
+    }
+    mover.c = c; mover.r = r;
+    mover.character.setTile(c, r);
+    this.vfx && this.vfx.portal(c, r, { color: 0x4ab0ff, duration: 0.45 });
+    this.audio && this.audio.sfx('step');
+    // Tout le monde se retourne vers l adversaire le plus proche.
+    for (const f of this.fighters) {
+      let best = null, bd = 1e9;
+      for (const o of this.fighters) {
+        if (o.team === f.team || !o.alive) continue;
+        const d = Math.abs(o.c - f.c) + Math.abs(o.r - f.r);
+        if (d < bd) { bd = d; best = o; }
+      }
+      if (best) f.character.faceToward(best.c, best.r);
+    }
+    this._refreshPlacement();
+  }
+
+  finishPlacement() {
+    if (this.phase !== 'placement') return;
+    this.phase = 'combat';
+    this.placementCells = [];
+    this.enemyPlacementCells = [];
+    for (const f of this.fighters) f.character.setActive(false);
+    this.rangeOverlay.clear();
+    this.hud.setPlacement && this.hud.setPlacement(false);
+    this.hud.log && this.hud.log('Le combat commence !', 'info');
+    this.hud.flash('Le combat commence !', 1200);
+    this.audio && this.audio.sfx('turnPlayer');
     this.startTurn();
   }
 
@@ -186,6 +296,8 @@ export class Game {
   // Abandonne le combat en cours et nettoie la scene. Declenche par le
   // bouton "retour au menu" du HUD (avec confirmation).
   abandon() {
+    if (this.phase === 'placement') this.hud.setPlacement && this.hud.setPlacement(false);
+    this.phase = null;
     this.ended = true;
     this.busy = true;
     this.cleanup();
@@ -268,6 +380,7 @@ export class Game {
   }
 
   endTurn() {
+    if (this.phase === 'placement') { this.finishPlacement(); return; }
     if (this.busy || this.ended) return;
     this._advanceTurn();
   }
@@ -283,7 +396,7 @@ export class Game {
   }
 
   setMode(mode) {
-    if (this.busy) return;
+    if (this.busy || this.phase === 'placement') return;
     const cur = this.turn.current();
     if (cur.team !== 'player' || cur.def.ai) return;
     this.mode = mode;
@@ -294,35 +407,26 @@ export class Game {
   }
 
   selectSpellSlot(slot) {
-    if (this.busy) return;
+    if (this.busy || this.phase === 'placement') return;
     const cur = this.turn.current();
     if (cur.team !== 'player' || cur.def.ai) return;
     const spell = cur.spells[slot];
     if (!spell) return;
-    if (cur.isOnCooldown(spell.id)) {
-      this.hud.flash(`${spell.name} en recharge (${cur.spellCooldowns[spell.id]} tours)`, 900);
-      this.audio && this.audio.sfx('uiError');
-      return;
-    }
-    if (spell.apCost > cur.pa) {
-      this.hud.flash('Pas assez de PA pour ' + spell.name, 900);
-      this.audio && this.audio.sfx('uiError');
-      return;
-    }
-    if (this.isSummonBlocked(cur, spell)) {
-      this.hud.flash('Cette creature est deja invoquee', 900);
-      this.audio && this.audio.sfx('uiError');
-      return;
-    }
-    if (spell.maxCastsPerTurn
-        && (cur._castCounts && cur._castCounts[spell.id] || 0) >= spell.maxCastsPerTurn) {
-      this.hud.flash(`${spell.name} : deja lance ${spell.maxCastsPerTurn} fois ce tour`, 900);
+    const blockReason = this.castBlockReason(cur, spell);
+    if (blockReason) {
+      this.hud.flash(blockReason, 900);
       this.audio && this.audio.sfx('uiError');
       return;
     }
     this.audio && this.audio.sfx('uiSelect');
     this._pendingCast = null;
     if (spell.target === 'self') {
+      // Un sort sur soi part immediatement : on abandonne la selection
+      // du sort precedent (sinon sa portee resterait affichee et il
+      // pourrait etre lance ensuite sans assez de PA).
+      this.selectedSpellId = null;
+      this.mode = 'move';
+      this.rangeOverlay.clear();
       this.busy = true;
       this.castSelf(cur, spell).finally(() => {
         this.busy = false;
@@ -337,6 +441,19 @@ export class Game {
     this.mode = 'spell';
     this.refreshRangeOverlay();
     this.hud.update(cur, this.mode, this.selectedSpellId);
+  }
+
+  // Raison pour laquelle un sort ne peut pas etre lance maintenant (PA,
+  // recharge, invocation deja presente, limite par tour), ou null.
+  castBlockReason(cur, spell) {
+    if (cur.isOnCooldown(spell.id)) return `${spell.name} en recharge (${cur.spellCooldowns[spell.id]} tours)`;
+    if (spell.apCost > cur.pa) return 'Pas assez de PA pour ' + spell.name;
+    if (this.isSummonBlocked(cur, spell)) return 'Cette creature est deja invoquee';
+    if (spell.maxCastsPerTurn
+        && (cur._castCounts && cur._castCounts[spell.id] || 0) >= spell.maxCastsPerTurn) {
+      return `${spell.name} : deja lance ${spell.maxCastsPerTurn} fois ce tour`;
+    }
+    return null;
   }
 
   async castSelf(caster, spell) {
@@ -354,6 +471,7 @@ export class Game {
 
   async onTileTap(c, r, pointerType = 'mouse') {
     if (this.busy || this.ended) return;
+    if (this.phase === 'placement') { this.onPlacementTap(c, r); return; }
     const cur = this.turn.current();
     if (cur.team !== 'player' || cur.def.ai) return;
     const isTouch = pointerType && pointerType !== 'mouse';
@@ -402,6 +520,15 @@ export class Game {
     const cur = this.turn.current();
     const spell = SPELLS[this.selectedSpellId];
     if (!spell) return;
+    // Revalide au moment du lancer : les PA ont pu baisser depuis la
+    // selection du sort.
+    const blockReason = this.castBlockReason(cur, spell);
+    if (blockReason) {
+      this.hud.flash(blockReason, 900);
+      this.audio && this.audio.sfx('uiError');
+      this.setMode('move');
+      return;
+    }
     const reason = this.validateSpellTarget(cur, spell, c, r);
     if (reason) {
       this.hud.flash(reason, 900);
@@ -541,6 +668,8 @@ export class Game {
     }
     caster.character.castPose && caster.character.castPose();
     if (this.vfx && this.vfx.castGlyph) {
+      // Effet signature propre au sort (roue, horloge, vague, plumes...).
+      this.vfx.signature && this.vfx.signature(spell.id, { c: caster.c, r: caster.r }, target);
       await this.vfx.castGlyph(caster.c, caster.r, { color: spellElementColor(spell) });
     }
     for (const effect of spell.effects) {
@@ -626,6 +755,11 @@ export class Game {
           if (id === 'crachat') { projColor = 0x5ad0ff; arcHeight = 1.3; kind = 'spit'; }
           else if (id === 'crachatEmpoisonne') { projColor = 0xb471dd; arcHeight = 1.3; kind = 'spit'; }
           else if (id === 'lancerRocher') { projColor = 0x7c6655; glow = 0.4; arcHeight = 1.8; kind = 'rock'; }
+          else if (id === 'karcham') { projColor = 0xd89a4a; arcHeight = 0.2; kind = 'barrel'; }
+          else if (id === 'dragoflamme') { projColor = 0xff7a2a; arcHeight = 0.5; kind = 'fire'; }
+          else if (id === 'coupDeBec' || id === 'bourrasque') { projColor = 0xfff2c0; arcHeight = 0.9; kind = 'feather'; }
+          else if (id === 'pileOuFace') { projColor = 0xffc830; arcHeight = 1.4; kind = 'coin'; }
+          else if (id === 'aiguille') { projColor = 0xffd24a; arcHeight = 0.3; kind = 'needle'; }
           if (this.vfx) {
             await this.vfx.projectile(
               { c: caster.c, r: caster.r },
@@ -1242,6 +1376,7 @@ export class Game {
   }
 
   refreshRangeOverlay() {
+    if (this.phase === 'placement') { this._refreshPlacement(); return; }
     this.rangeOverlay.clear();
     if (!this.turn || this.busy) return;
     const cur = this.turn.current();

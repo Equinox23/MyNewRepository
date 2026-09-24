@@ -1436,6 +1436,25 @@ export class Hud {
     });
   }
 
+  // Phase de placement : gros bouton "PRET" au-dessus de la barre de sorts.
+  setPlacement(active, onReady) {
+    if (!this.readyBtnEl) {
+      const btn = document.createElement('button');
+      btn.id = 'placement-ready';
+      btn.innerHTML = '<span class="pr-title">PRET</span><span class="pr-sub">Espace pour lancer le combat</span>';
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.audio && this.audio.sfx && this.audio.sfx('uiClick');
+        this._onReady && this._onReady();
+      });
+      document.body.appendChild(btn);
+      this.readyBtnEl = btn;
+    }
+    this._onReady = active ? onReady : null;
+    this.readyBtnEl.style.display = active ? 'flex' : 'none';
+    document.body.classList.toggle('placement', !!active);
+  }
+
   flash(text, durationMs = 1400) {
     this.flashEl.textContent = text;
     this.flashEl.classList.add('show');
