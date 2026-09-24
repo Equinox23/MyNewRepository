@@ -131,6 +131,7 @@ export function buildXelor() {
   const pompon = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), gold);
   pompon.position.set(0.22, 0.83, -0.18);
   hat.add(pompon);
+  hat.name = 'classHat';
   hat.position.y = hr * 1.55;
   hat.rotation.x = -0.1;
   hat.scale.setScalar(0.82);

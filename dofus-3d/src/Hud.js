@@ -1381,7 +1381,7 @@ export class Hud {
         if (b.fuite) parts.push(`+${b.fuite} fuite`);
         if (b.tacle) parts.push(`+${b.tacle} tacle`);
         if (parts.length === 0) continue;
-        const tag = b.permanent ? '(carte)' : `(${Math.max(0, b.duration - 1)}t)`;
+        const tag = b.permanent ? (b.setBonus ? '(panoplie)' : '(carte)') : `(${Math.max(0, b.duration - 1)}t)`;
         lines.push(`<span class="buff">${parts.join(', ')} ${tag}</span>`);
       }
       this.buffsEl.innerHTML = lines.join('  ');
@@ -1756,7 +1756,7 @@ export class Hud {
         if (b.invisible) bits.push('Invisible');
         if (b.dot) bits.push(`Poison ${b.dot.min}-${b.dot.max}`);
         if (!bits.length) continue;
-        const tag = b.permanent ? '(carte)' : `(${Math.max(0, b.duration - 1)}t)`;
+        const tag = b.permanent ? (b.setBonus ? '(panoplie)' : '(carte)') : `(${Math.max(0, b.duration - 1)}t)`;
         parts.push(bits.join(', ') + ' ' + tag);
       }
       if (parts.length) buffsHtml = `<div class="fi-buffs">${parts.join(' / ')}</div>`;

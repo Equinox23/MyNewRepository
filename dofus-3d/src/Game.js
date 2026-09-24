@@ -9,7 +9,7 @@ import { getHero, addXp, monsterXp, bombBonus, heroStats } from './Leveling.js';
 import { MAP_BOOSTS } from './Map3D.js';
 import { recordWin, recordTier } from './Progress.js';
 import { damageElementOf, elementHex, ELEMENT_LABEL } from './Elements.js';
-import { equipmentStats, rollLoot, addItems } from './Items.js';
+import { equipmentStats, equippedList, rollLoot, addItems, FAMILIES } from './Items.js';
 
 // `homeMap` : la carte "maison" du monstre. Le vaincre dessus rapporte
 // une etoile d or, ailleurs une etoile d argent.
@@ -153,6 +153,12 @@ export class Game {
       const carried = config.adventure && config.adventure.hp && config.adventure.hp[cls];
       if (team === 'player' && carried !== undefined) f.hp = Math.max(1, Math.min(f.maxHp, Math.round(carried * f.maxHp)));
       f.character = new Character3D(this.scene3d.scene, cls, team, pos.c, pos.r);
+      if (team === 'player') {
+        f.character.wearEquipment(equippedList(cls));
+        // Effets de panoplie permanents.
+        if (f.hasSpecial('osDurs')) f.buffs.push({ permanent: true, duration: 9999, reflect: 0.1, setBonus: true });
+        if (f.hasSpecial('pierre')) f.buffs.push({ permanent: true, duration: 9999, stabilized: true, shield: 0.1, setBonus: true });
+      }
       if (f.def.elementCycle) {
         f.currentElement = f.def.elementCycle[0];
         f.character.setElementTint(elementHex(f.currentElement));
@@ -426,6 +432,19 @@ export class Game {
       this.hud.flash(`${cur.def.name} : element ${ELEMENT_LABEL[cur.currentElement]}`, 1300);
     }
     cur._turnStart = { c: cur.c, r: cur.r };
+    // Panoplies : Toison (Bouftou) et Fureur (Minotoror).
+    if (cur.hasSpecial('toison') && cur.hp < cur.maxHp) {
+      const healed = cur.heal(Math.round(cur.maxHp * 0.04));
+      if (healed > 0) {
+        cur.character.popHeal(healed);
+        cur.character.hpBar.setHp(cur.hp, cur.maxHp);
+        this.hud.log && this.hud.log(`Toison : ${cur.name} regagne ${healed} PV`, 'heal');
+      }
+    }
+    if (cur.hasSpecial('fureur') && cur.hp < cur.maxHp * 0.5) {
+      cur.pa += 1;
+      cur.character.popText('FUREUR +1 PA', '#ff7a3a', { fontSize: 18, yStart: 1.7, yRise: 0.6, scaleX: 1.5, scaleY: 0.42 });
+    }
     for (const f of this.fighters) f.character.setActive(f === cur);
     // Synchronise le rendu fantomatique : l invisibilite expire au
     // debut du tour de son porteur (decrement des buffs).
@@ -612,6 +631,7 @@ export class Game {
   }
 
   _tackleLoss(f) {
+    if (f.hasSpecial('envol')) return null;
     const info = this.tackleInfo(f);
     if (!info || info.esquive >= 1) return null;
     const pm = Math.floor(f.pm * (1 - info.esquive));
@@ -1034,6 +1054,7 @@ export class Game {
           tf.character.hpBar.setHp(tf.hp, tf.maxHp);
           if (this.vfx) this.vfx.impact(cell.c, cell.r, { color: elementHex(hit.el), big: actual >= 40 || hit.crit });
           totalDealt += actual;
+          if (tf.alive && actual > 0) this._onHitSpecials(caster, tf, hit);
           const resTxt = hit.res ? ` (res. ${ELEMENT_LABEL[hit.el]} ${hit.res > 0 ? '+' : ''}${hit.res}%)` : '';
           this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} subit ${actual} degats${hit.crit ? ' CRITIQUES' : ''}${resTxt}`, 'attack');
           if (!tf.alive) dying.push(tf);
@@ -1724,6 +1745,26 @@ export class Game {
     if (a && a.type === 'cross') return this.crossCells(target.c, target.r, a.size);
     if (a && a.type === 'circle') return this.circleCells(target.c, target.r, a.radius);
     return [{ c: target.c, r: target.r }];
+  }
+
+  // Effets de panoplie declenches a chaque coup porte.
+  _onHitSpecials(caster, tf, hit) {
+    if (!caster.equip || !caster.equip.specials) return;
+    if (caster.hasSpecial('bave') && Math.random() < 0.25) {
+      tf.pm = Math.max(0, tf.pm - 1);
+      tf.buffs.push({ bonusPm: -1, duration: 2, source: 'Bave collante' });
+      tf.character.popText('-1 PM', '#74e69b', { fontSize: 20, dx: -0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42 });
+      this.hud.log && this.hud.log(`Bave collante : ${tf.name} perd 1 PM`, 'buff');
+    }
+    if (caster.hasSpecial('spores') && Math.random() < 0.3) {
+      tf.buffs.push({ duration: 3, dot: { min: 4, max: 6, element: 'neutre' }, source: 'Spores' });
+      tf.character.popText('SPORES', '#c39bd3', { fontSize: 16, yStart: 1.55, yRise: 0.6, scaleX: 1.1, scaleY: 0.4 });
+      this.hud.log && this.hud.log(`Spores : ${tf.name} est empoisonne`, 'buff');
+    }
+    if (hit.crit && caster.hasSpecial('lapin')) {
+      caster.pm += 1;
+      caster.character.popText('+1 PM', '#74e69b', { fontSize: 20, dx: -0.45, yStart: 1.5, scaleX: 1.1, scaleY: 0.42 });
+    }
   }
 
   // Jet de degats d un effet sur une cible : bonus du lanceur, coup

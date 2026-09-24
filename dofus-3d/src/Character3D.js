@@ -3,6 +3,7 @@ import { HpBar3D } from './HpBar3D.js';
 import { toonify } from './Toon.js';
 import { BUILDERS } from './models/index.js';
 import { rigModel, poseRig } from './Rig.js';
+import { attachWearables, detachWearables } from './models/wearables.js';
 
 
 const WHITE = new THREE.Color(0xffffff);
@@ -105,6 +106,21 @@ export class Character3D {
     this.hpBar = new HpBar3D(team);
     this.hpBar.sprite.position.y = HP_BAR_Y[classId] || 1.4;
     this.group.add(this.hpBar.sprite);
+  }
+
+  // Equipement visible (coiffe, cape, amulette, anneau, bottes).
+  wearEquipment(items) {
+    detachWearables(this.body);
+    const added = attachWearables(this.body, items || []);
+    for (const w of added) toonify(w, { width: 0.016, minRadius: 0.04 });
+    // Les nouvelles pieces flashent aussi a l impact.
+    this._materials = [];
+    this.body.traverse(o => {
+      if (o.isMesh && !o.userData.isOutline && o.material && o.material.emissive && !this._materials.includes(o.material)) {
+        this._materials.push(o.material);
+      }
+    });
+    this._baseEmissive = this._materials.map(m => m.emissive.clone());
   }
 
   // Recolore les pieces "elementaires" du modele (Kwakwa).

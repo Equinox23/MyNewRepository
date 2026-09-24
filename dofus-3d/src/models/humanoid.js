@@ -301,6 +301,8 @@ export function buildHumanoid(cfg) {
   group.add(head);
 
   group.userData.rig = { legL: legs[-1], legR: legs[1], armL: arms[-1], armR: arms[1], head };
+  // Points d attache de l equipement (coiffe, cape, amulette, anneau, bottes).
+  group.userData.anchors = { head, hr, b, hipY, shoulderY, legL: legs[-1], legR: legs[1], handR: hands[1], body: group };
   return {
     group, torso, head, headR: hr, headTop: 0.88 + hr * 1.9,
     handL: hands[-1], handR: hands[1], armL: arms[-1], armR: arms[1], legL: legs[-1], legR: legs[1],

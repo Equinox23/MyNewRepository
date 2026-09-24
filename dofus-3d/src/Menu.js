@@ -7,7 +7,8 @@ import { getHero, heroSpells, upgradeSpell, resetSpellPoints, heroStats, xpToNex
 import { spellIconFrame } from './SpellIcons.js';
 import { getAvatar, getPortrait } from './Avatars.js';
 import { DUNGEONS, dungeonClears, dungeonUnlocked } from './Adventure.js';
-import { getInventory, equippedItems, equip, unequip, discard, equipmentStats, wornBy, itemIcon, SLOTS, SLOT_LABEL, RARITY, statLines, STAT_LABEL, itemScore } from './Items.js';
+import { getInventory, equippedItems, equippedList, equip, unequip, discard, wornBy, itemIcon, SLOTS, SLOT_LABEL, RARITY, statLines, flatTotals, setBonus, setCounts, statsDiff, withSwap, FAMILIES, FAMILY_ORDER } from './Items.js';
+import { setEmblem } from './ItemArt.js';
 
 // Icone d un monstre / boss : portrait 3D (repli : pastille vide).
 function monsterIcon(id) {
@@ -28,7 +29,7 @@ function starSvg(type, size = 26) {
 // Icone d une classe : portrait 3D du modele (repli sur le SVG).
 function classIcon(o) {
   let url = null;
-  try { url = getPortrait(o.id, 128); } catch (_) {}
+  try { url = getPortrait(o.id, 128, equippedList(o.id)); } catch (_) {}
   return url ? `<img class="hero-portrait" src="${url}" alt="${o.name}">` : o.icon;
 }
 
@@ -40,7 +41,7 @@ function warmPortraits() {
   const next = () => {
     const id = ids.shift();
     if (!id) return;
-    try { getPortrait(id, 128); } catch (_) {}
+    try { getPortrait(id, 128, equippedList(id)); } catch (_) {}
     idle(next);
   };
   idle(next);
@@ -1140,58 +1141,100 @@ export class Menu {
     const hero = getHero(cls);
     const inv = getInventory();
     const eq = equippedItems(cls, inv);
-    const tot = equipmentStats(cls);
-    this.subEl.innerHTML = 'Inventaire : equipe tes heros avec le butin des combats';
+    const worn = Object.values(eq);
+    const totals = flatTotals(worn);
+    const counts = setCounts(worn);
+    const heroName = DEFS[cls].name;
+    this.subEl.innerHTML = 'Inventaire : equipe tes heros et complete tes panoplies';
     this.stepsEl.innerHTML = '';
     const tabs = CLASS_OPTIONS.map(o => `<button class="gr-tab ${o.id === cls ? 'active' : ''}" data-cls="${o.id}" title="${o.name}">
       <div class="gr-tab-icon">${classIcon(o)}</div><div class="gr-tab-lv">${getHero(o.id).level}</div></button>`).join('');
+    // Apercu 3D du heros avec son equipement.
+    let preview = '';
+    try { preview = getAvatar(cls, 160, null, worn) || ''; } catch (_) {}
     const slots = SLOTS.map(sl => {
       const it = eq[sl];
-      return `<button class="inv-slot ${it ? 'filled' : ''}" data-slot="${sl}" ${it ? `data-item="${it.id}"` : ''}>
-        ${it ? itemIcon(it, 54) : `<div class="inv-empty">${SLOT_LABEL[sl]}</div>`}
-        <div class="inv-slot-lbl">${it ? it.name : SLOT_LABEL[sl]}</div></button>`;
+      return `<button class="inv-slot ${it ? 'filled' : ''} ${this.invSelected && it && it.id === this.invSelected ? 'sel' : ''}" data-slot="${sl}" ${it ? `data-item="${it.id}"` : ''}>
+        ${it ? itemIcon(it, 50) : `<div class="inv-empty">${SLOT_LABEL[sl]}</div>`}</button>`;
     }).join('');
-    const totLines = [];
-    for (const k of ['hp', 'pa', 'pm', 'dmg', 'crit', 'tacle', 'fuite', 'init']) if (tot[k]) totLines.push(`+${tot[k]} ${STAT_LABEL[k]}`);
-    for (const [e, v] of Object.entries(tot.res)) if (v) totLines.push(`+${v} ${STAT_LABEL['res.' + e]}`);
-    const bag = inv.items.slice().sort((a, b) => (a.slot.localeCompare(b.slot)) || (itemScore(b) - itemScore(a)));
-    const bagHtml = bag.length ? bag.map(it => {
-      const w = wornBy(it.id, inv);
-      const tooHigh = hero.level < it.req;
-      return `<button class="inv-item ${this.invSelected === it.id ? 'sel' : ''} ${tooHigh ? 'locked' : ''}" data-item="${it.id}" title="${it.name}">
-        ${itemIcon(it, 50)}${w ? `<div class="inv-worn">${DEFS[w] ? DEFS[w].name : w}</div>` : ''}</button>`;
-    }).join('') : '<div class="inv-none">Ton sac est vide : bats des monstres pour obtenir du butin !</div>';
+    const totLines = statsDiff({}, totals.flat).map(r => `<div>+${r.to} ${r.label}</div>`).join('') || 'Aucun';
+    const setLines = totals.sets.map(st => `<div class="inv-setact">${setEmblem(st.family, 16)} ${FAMILIES[st.family].set} (${st.count}/5)${st.bonus.special ? ` <b>${st.bonus.special.name}</b>` : ''}</div>`).join('');
+
+    // Detail + comparatif de l objet selectionne.
     const sel = this.invSelected && inv.items.find(i => i.id === this.invSelected);
-    let detail = '<div class="inv-hint">Clique un objet pour voir ses statistiques.</div>';
+    let detail = '<div class="inv-hint">Clique un objet pour voir ses statistiques et le comparer a ton equipement.</div>';
     if (sel) {
       const R = RARITY[sel.rarity];
       const w = wornBy(sel.id, inv);
       const cur = eq[sel.slot];
       const onMe = w === cls;
+      let cmp = '';
+      if (!onMe) {
+        const rows = statsDiff(cur ? cur.stats : {}, sel.stats);
+        const after = flatTotals(withSwap(cls, sel, inv));
+        const tot = statsDiff(totals.flat, after.flat).filter(r => r.diff !== 0);
+        const row = (r) => `<tr><td>${r.label}</td><td>${r.from || '-'}</td><td>${r.to || '-'}</td><td class="${r.diff > 0 ? 'up' : r.diff < 0 ? 'down' : ''}">${r.diff > 0 ? '+' : ''}${r.diff || '='}</td></tr>`;
+        const specGain = after.specials.filter(x => !totals.specials.includes(x));
+        const specLoss = totals.specials.filter(x => !after.specials.includes(x));
+        const specName = (id) => { const f = Object.values(FAMILIES).find(ff => ff.special.id === id); return f ? f.special.name : id; };
+        cmp = `<div class="inv-cmp">
+          <div class="inv-tt">${cur ? `Comparaison avec ${cur.name} (${RARITY[cur.rarity].label})` : 'Emplacement vide'}</div>
+          <table class="cmp-t"><tr><th>Objet</th><th>Equipe</th><th>Nouveau</th><th>Ecart</th></tr>${rows.map(row).join('')}</table>
+          <div class="inv-tt" style="margin-top:6px">Total du heros (panoplies comprises)</div>
+          ${tot.length ? `<table class="cmp-t"><tr><th>Stat</th><th>Avant</th><th>Apres</th><th>Ecart</th></tr>${tot.map(row).join('')}</table>` : '<div class="inv-hint">Aucun changement</div>'}
+          ${specGain.map(x => `<div class="cmp-spec up">+ Effet ${specName(x)}</div>`).join('')}${specLoss.map(x => `<div class="cmp-spec down">- Effet ${specName(x)}</div>`).join('')}
+        </div>`;
+      }
       detail = `<div class="inv-detail">
         <div class="inv-dh">${itemIcon(sel, 60)}<div>
           <div class="inv-dname" style="color:${R.color}">${sel.name}</div>
-          <div class="inv-dmeta">${R.label} - ${SLOT_LABEL[sel.slot]} - niv. ${sel.level} (requis ${sel.req})${w ? ` - porte par ${DEFS[w] ? DEFS[w].name : w}` : ''}</div>
+          <div class="inv-dmeta">${R.label} - ${SLOT_LABEL[sel.slot]} - niveau ${sel.req} requis - ${FAMILIES[sel.family].set}${w ? ` - porte par ${DEFS[w] ? DEFS[w].name : w}` : ''}</div>
         </div></div>
         <div class="inv-dstats">${statLines(sel.stats).map(l => `<div>${l}</div>`).join('')}</div>
-        ${cur && !onMe ? `<div class="inv-dcmp">Remplace : ${cur.name} (${statLines(cur.stats).join(', ')})</div>` : ''}
+        ${cmp}
         <div class="inv-dbtns">
-          ${onMe ? `<button class="menu-navbtn" id="inv-unequip">Retirer</button>` : `<button class="menu-navbtn primary" id="inv-equip" ${hero.level < sel.req ? 'disabled' : ''}>Equiper sur ${DEFS[cls].name}</button>`}
+          ${onMe ? `<button class="menu-navbtn" id="inv-unequip">Retirer</button>` : `<button class="menu-navbtn primary" id="inv-equip" ${hero.level < sel.req ? 'disabled' : ''}>${hero.level < sel.req ? `Niveau ${sel.req} requis` : `Equiper sur ${heroName}`}</button>`}
           <button class="menu-navbtn" id="inv-discard">Jeter</button>
         </div></div>`;
     }
+
+    // Sac trie par panoplie, avec les bonus de chaque panoplie.
+    const groups = FAMILY_ORDER.map(fam => {
+      const items = inv.items.filter(i => i.family === fam)
+        .sort((a, b) => (SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot)) || (RARITY[b.rarity].rank - RARITY[a.rarity].rank));
+      if (!items.length) return '';
+      const F = FAMILIES[fam];
+      const n = counts[fam] || 0;
+      const tiers = [2, 3, 4, 5].map(k => {
+        const bnz = setBonus(fam, k);
+        const txt = statLines(bnz.stats).join(', ') + (bnz.special ? ` + <b>${bnz.special.name}</b> : ${bnz.special.desc}` : '');
+        return `<div class="set-tier ${n >= k ? 'on' : ''}"><span>${k} obj.</span> ${txt}</div>`;
+      }).join('');
+      const open = this.invOpenSet === fam;
+      return `<div class="inv-set">
+        <button class="inv-set-h" data-set="${fam}">${setEmblem(fam, 24)}<b>${F.set}</b><span class="inv-set-lv">niv. ${F.level}</span>
+          <span class="inv-set-n ${n ? 'on' : ''}">${n}/5 sur ${heroName}</span><span class="inv-set-more">${open ? 'masquer les bonus' : 'voir les bonus'}</span></button>
+        ${open ? `<div class="set-tiers">${tiers}</div>` : ''}
+        <div class="inv-bag">${items.map(it => {
+          const ww = wornBy(it.id, inv);
+          return `<button class="inv-item ${this.invSelected === it.id ? 'sel' : ''} ${hero.level < it.req ? 'locked' : ''}" data-item="${it.id}" title="${it.name} (${RARITY[it.rarity].label})">
+            ${itemIcon(it, 48)}${ww ? `<div class="inv-worn">${DEFS[ww] ? DEFS[ww].name : ww}</div>` : ''}</button>`;
+        }).join('')}</div>
+      </div>`;
+    }).join('') || '<div class="inv-none">Ton sac est vide : bats des monstres pour obtenir du butin !</div>';
+
     this.stageEl.innerHTML = `
       <div class="gr-tabs">${tabs}</div>
       <div class="inv-wrap">
         <div class="inv-left">
-          <div class="inv-hero">${classIcon(CLASS_OPTIONS.find(o => o.id === cls))}<div><b>${DEFS[cls].name}</b><span>Niveau ${hero.level}</span></div></div>
+          <div class="inv-hero">${preview ? `<img class="inv-preview" src="${preview}" alt="">` : ''}<div><b>${heroName}</b><span>Niveau ${hero.level}</span></div></div>
           <div class="inv-slots">${slots}</div>
-          <div class="inv-total"><div class="inv-tt">Bonus d equipement</div>${totLines.length ? totLines.join('<br>') : 'Aucun'}</div>
+          <div class="inv-total"><div class="inv-tt">Bonus d equipement</div>${totLines}${setLines ? `<div class="inv-tt" style="margin-top:6px">Panoplies actives</div>${setLines}` : ''}</div>
         </div>
         <div class="inv-right">
-          <div class="inv-tt">Sac (${inv.items.length} objets)</div>
-          <div class="inv-bag">${bagHtml}</div>
           ${detail}
+          <div class="inv-tt" style="margin-top:8px">Sac (${inv.items.length} objets) - trie par panoplie</div>
+          ${groups}
         </div>
       </div>`;
     this.stageEl.querySelectorAll('.gr-tab').forEach(b => b.addEventListener('click', () => {
@@ -1202,6 +1245,11 @@ export class Menu {
     this.stageEl.querySelectorAll('.inv-item, .inv-slot.filled').forEach(b => b.addEventListener('click', () => {
       this.audio && this.audio.sfx('uiSelect');
       this.invSelected = b.dataset.item;
+      this.renderInventory();
+    }));
+    this.stageEl.querySelectorAll('.inv-set-h').forEach(b => b.addEventListener('click', () => {
+      this.audio && this.audio.sfx('uiClick');
+      this.invOpenSet = this.invOpenSet === b.dataset.set ? null : b.dataset.set;
       this.renderInventory();
     }));
     const eqBtn = this.stageEl.querySelector('#inv-equip');
