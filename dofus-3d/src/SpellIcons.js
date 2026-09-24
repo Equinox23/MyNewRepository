@@ -43,6 +43,11 @@ export const SPELL_ELEMENT = {
   kwakElementaire: 'air', plumesTranchantes: 'air', souffleKwakwa: 'air',
   chargeMinotoror: 'terre', coupDeCorne: 'terre', fureurMinotoror: 'boost', piegeSournois: 'terre',
   criDeGuerre: 'boost', bulleDEau: 'eau', flecheOsseuse: 'neutre',
+  bondBouftou: 'air', toisonRoyale: 'boost', bondDuWabbit: 'air', carotteMaudite: 'terre', terrierWabbit: 'boost',
+  croassement: 'eau', soinDeLaMare: 'soin', deluge: 'eau', bondAquatique: 'air', envolTofu: 'boost',
+  becMaudit: 'air', plongeon: 'air', plumageRoyal: 'boost', flecheClouante: 'neutre', bouclierOsseux: 'boost',
+  ordreDuRoi: 'boost', sporeCollante: 'neutre', mycose: 'neutre', regenerationFongique: 'soin', racinesFongiques: 'terre',
+  carapace: 'boost', givre: 'eau', rafaleKwak: 'air', peauDePierre: 'boost',
 };
 
 export function spellElement(spell) {

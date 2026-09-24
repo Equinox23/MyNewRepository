@@ -17,24 +17,24 @@ import { buildKwakwa, buildMinotoror } from './bosses.js';
 // ===========================================================================
 
 export const VARIANTS = {
-  boufton: { base: 'bouftou', build: buildBouftou, scale: 0.8, tint: 0x3a3438, amount: 0.72 },
+  boufton: { base: 'bouftou', build: buildBouftou, scale: 0.8, tint: 0x0c0a0e, amount: 0.94, acc: 'mohawk', accColor: 0xd8322a },
   bouftouChef: { base: 'bouftou', build: buildBouftou, scale: 1.12, tint: 0xd8c8a8, amount: 0.2, acc: 'warHelmet' },
-  wabbitNoir: { base: 'wabbit', build: buildWabbit, scale: 1, tint: 0x2a2630, amount: 0.7 },
+  wabbitNoir: { base: 'wabbit', build: buildWabbit, scale: 1, tint: 0x0e0c10, amount: 0.9, acc: 'bandana', accColor: 0xd8322a },
   wabbitSquelette: { base: 'wabbit', build: buildWabbit, scale: 1.05, tint: 0xd8d0b8, amount: 0.55, acc: 'boneEyes' },
-  crapaudVenimeux: { base: 'crapaud', build: buildCrapaud, scale: 1, tint: 0x9a4ad0, amount: 0.55 },
+  crapaudVenimeux: { base: 'crapaud', build: buildCrapaud, scale: 1, tint: 0x9a4ad0, amount: 0.55, acc: 'horns' },
   crapaudMage: { base: 'crapaud', build: buildCrapaud, scale: 1.1, tint: 0x3a6ad8, amount: 0.4, acc: 'mageHat' },
-  tofuNoir: { base: 'tofu', build: buildTofu, scale: 1, tint: 0x2a2630, amount: 0.7 },
+  tofuNoir: { base: 'tofu', build: buildTofu, scale: 1, tint: 0x0c0a0e, amount: 0.95, acc: 'mohawk', accColor: 0x9a4ad0 },
   tofuMalefique: { base: 'tofu', build: buildTofu, scale: 1.2, tint: 0x8a2ad0, amount: 0.55, acc: 'horns' },
   chaferArcher: { base: 'chafer', build: buildChafer, scale: 0.95, tint: 0x6a8a4a, amount: 0.25, acc: 'quiver' },
   chaferElite: { base: 'chafer', build: buildChafer, scale: 1.1, tint: 0xa82a2a, amount: 0.3, acc: 'crest' },
-  champChamp: { base: 'champignon', build: buildChampignon, scale: 0.85, tint: 0x3a8ad8, amount: 0.55 },
+  champChamp: { base: 'champignon', build: buildChampignon, scale: 0.85, tint: 0x3a8ad8, amount: 0.55, acc: 'mohawk', accColor: 0x6ad83a },
   champignonMutant: { base: 'champignon', build: buildChampignon, scale: 1.18, tint: 0x6ad83a, amount: 0.5, acc: 'horns' },
-  craqueleurPlaines: { base: 'craqueleur', build: buildCraqueleur, scale: 1.05, tint: 0x6a9a4a, amount: 0.3 },
+  craqueleurPlaines: { base: 'craqueleur', build: buildCraqueleur, scale: 1.05, tint: 0x6a9a4a, amount: 0.3, acc: 'moss' },
   craqueleurAncien: { base: 'craqueleur', build: buildCraqueleur, scale: 1.28, tint: 0x3a3440, amount: 0.45, acc: 'crystals' },
   kwakFlamme: { base: 'kwakwa', build: buildKwakwa, scale: 0.7, element: 0xff7a2a },
   kwakGlace: { base: 'kwakwa', build: buildKwakwa, scale: 0.72, element: 0x4ab0ff },
   kwakVent: { base: 'kwakwa', build: buildKwakwa, scale: 0.7, element: 0x8ae04a },
-  mominotor: { base: 'minotoror', build: buildMinotoror, scale: 0.8, tint: 0xc89a6a, amount: 0.35 },
+  mominotor: { base: 'minotoror', build: buildMinotoror, scale: 0.8, tint: 0xc89a6a, amount: 0.35, acc: 'mohawk', accColor: 0x2a5ad8 },
   gardienLabyrinthe: { base: 'minotoror', build: buildMinotoror, scale: 0.95, tint: 0x6a6a78, amount: 0.55, acc: 'crest' },
 };
 
@@ -42,6 +42,7 @@ function tintModel(root, hex, amount) {
   const c = new THREE.Color(hex);
   root.traverse(o => {
     if (!o.isMesh || !o.material || o.material.isMeshBasicMaterial || !o.material.color) return;
+    if (o.material.name === 'eye') return;
     o.material = o.material.clone();
     o.material.color.lerp(c, amount);
   });
@@ -61,7 +62,7 @@ function elementTint(root, hex) {
 }
 
 // Accessoire pose au sommet du modele (repere du modele de base).
-function accessory(kind, top, depth) {
+function accessory(kind, top, depth, color = 0xd8322a) {
   const g = new THREE.Group();
   switch (kind) {
     case 'warHelmet': {
@@ -135,6 +136,45 @@ function accessory(kind, top, depth) {
       }
       break;
     }
+    case 'mohawk': {
+      const m = M(color, { r: 0.6 });
+      for (let i = 0; i < 5; i++) {
+        const sp = bentCone(0.045, 0.2 - Math.abs(i - 2) * 0.03, 0, -0.05, m, 6, 3);
+        sp.position.set(0, 0.02, 0.1 - i * 0.06);
+        sp.rotation.x = -0.25 - i * 0.12;
+        g.add(sp);
+      }
+      break;
+    }
+    case 'bandana': {
+      const m = M(color, { r: 0.7 });
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.035, 8, 24), m);
+      band.rotation.x = Math.PI / 2 + 0.15;
+      band.scale.set(1, 1.1, 1);
+      band.position.y = -0.1;
+      g.add(band);
+      for (const sx of [-1, 1]) {
+        const tail = bentCone(0.035, 0.16, sx * 0.05, -0.06, m, 5, 3);
+        tail.position.set(sx * 0.04, -0.12, -0.21);
+        tail.rotation.x = -2.2;
+        g.add(tail);
+      }
+      break;
+    }
+    case 'moss': {
+      const m = M(0x5a9a32, { r: 0.9 });
+      const f = M(0xf2d060, { r: 0.7 });
+      for (const [x, z, r] of [[-0.18, -0.1, 0.12], [0.1, -0.2, 0.14], [0.22, 0.05, 0.1]]) {
+        const b = new THREE.Mesh(new THREE.SphereGeometry(r, 10, 8), m);
+        b.scale.y = 0.5;
+        b.position.set(x, 0.0, z);
+        g.add(b);
+        const fl = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 5), f);
+        fl.position.set(x, r * 0.45, z);
+        g.add(fl);
+      }
+      break;
+    }
     case 'crystals': {
       const cr = new THREE.MeshStandardMaterial({ color: 0xc46aff, emissive: 0x6a2aa8, emissiveIntensity: 0.8, roughness: 0.2 });
       for (const [x, z, h] of [[-0.15, -0.1, 0.22], [0.05, -0.2, 0.3], [0.2, -0.05, 0.2]]) {
@@ -158,7 +198,7 @@ export function buildVariant(id) {
   if (v.acc) {
     inner.updateMatrixWorld(true);
     const box = new THREE.Box3().setFromObject(inner);
-    const acc = accessory(v.acc, box.max.y - 0.04, box.max.z);
+    const acc = accessory(v.acc, box.max.y - 0.04, box.max.z, v.accColor);
     // Minotoror : l accessoire suit la tete.
     const rig = inner.userData.rig;
     if (rig && rig.head) {

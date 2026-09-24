@@ -99,6 +99,13 @@ node dofus-3d/tools/build-sw.mjs
   des monstres (palier 1 = 3 sbires ... palier 10 = plusieurs royaux).
   Les variantes (Boufton Noir, Chef de Guerre, Tofu Malefique, Kwaks...)
   sont dans `models/variants.js`.
+  Chaque monstre a ses propres sorts : les sbires une seule attaque, les
+  monstres evolues des bonds, boosts de PA / PM, soins, protections,
+  retraits de PA / PM, racines... (`Fighter.js` : MONSTER_SPELLS). Toutes
+  les IA passent par une phase de soutien (soins, boucliers, boosts) et
+  utilisent leurs bonds pour se rapprocher ; les invocations de
+  l Osamodas frappent d abord ce qui est a portee et ne fuient pas le
+  contact inutilement (`Game.runSmart`).
 
 ## Combat facon Dofus
 
