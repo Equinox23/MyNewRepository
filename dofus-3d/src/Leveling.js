@@ -203,6 +203,10 @@ export function scaledSpell(spell, level = 1, extraMult = 1) {
         break;
       case 'buff':
         if (e.damageMult) x.damageMult = +(e.damageMult * (1 + (lv - 1) * 0.25)).toFixed(2);
+        if (e.damageMultRoll) x.damageMultRoll = e.damageMultRoll.map(v => +(v * (1 + (lv - 1) * 0.25)).toFixed(2));
+        if (e.crit) x.crit = +(e.crit + (lv - 1) * 0.05).toFixed(2);
+        if (e.fuite) x.fuite = e.fuite + (lv - 1) * 3;
+        if (e.tacle) x.tacle = e.tacle + (lv - 1) * 3;
         if (e.shield) x.shield = Math.min(0.75, +(e.shield + (lv - 1) * 0.08).toFixed(2));
         if (lv >= 3 && e.bonusPa) x.bonusPa = e.bonusPa + 1;
         if (lv >= 3 && e.bonusPm) x.bonusPm = e.bonusPm + 1;
@@ -220,6 +224,19 @@ export function scaledSpell(spell, level = 1, extraMult = 1) {
         break;
       case 'gainPa':
         if (lv >= 3) x.amount = e.amount + 1;
+        break;
+      case 'glyph':
+        if (e.onTurn) {
+          x.onTurn = { ...e.onTurn };
+          if (e.onTurn.damage) x.onTurn.damage = { min: mul(e.onTurn.damage.min), max: mul(e.onTurn.damage.max) };
+          if (lv >= 3 && e.duration) x.duration = e.duration + 1;
+        }
+        break;
+      case 'trap':
+        x.trigger = { ...e.trigger, damage: { min: mul(e.trigger.damage.min), max: mul(e.trigger.damage.max) } };
+        break;
+      case 'state':
+        if (lv >= 3 && e.duration) x.duration = e.duration + 1;
         break;
       case 'summon':
         // La creature invoquee profite du niveau du sort (cf. summonBonus).

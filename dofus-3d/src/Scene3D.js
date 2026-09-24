@@ -219,6 +219,14 @@ export class Scene3D {
     return hit ? point : null;
   }
 
+  // Projette un point monde en coordonnees ecran (pixels CSS).
+  worldToScreen(v) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.camera.updateMatrixWorld();
+    const p = v.clone().project(this.camera);
+    return { x: rect.left + (p.x + 1) / 2 * rect.width, y: rect.top + (1 - p.y) / 2 * rect.height };
+  }
+
   // Tremblement de camera (gros impacts de sorts).
   shake(intensity = 0.12, duration = 0.25) {
     this._shake = { i: intensity, d: duration, t0: performance.now() };

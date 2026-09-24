@@ -1,56 +1,9 @@
 import * as THREE from 'three';
-import { buildIop } from './models/iop.js';
-import { buildBouftou } from './models/bouftou.js';
-import { buildBouftouRoyal } from './models/bouftouRoyal.js';
-import { buildOsamodas } from './models/osamodas.js';
-import { buildCraqueleur } from './models/craqueleur.js';
-import { buildCrapaud } from './models/crapaud.js';
-import { buildCrapaudChef } from './models/crapaudChef.js';
-import { buildRoublard } from './models/roublard.js';
-import { buildBombeRoublard } from './models/bombeRoublard.js';
-import { buildDragounetRouge } from './models/dragounetRouge.js';
-import { buildChatonBlanc } from './models/chatonBlanc.js';
-import { buildPandawa } from './models/pandawa.js';
-import { buildEniripsa } from './models/eniripsa.js';
-import { buildWabbit, buildWaWabbit } from './models/wabbit.js';
-import { buildXelor } from './models/xelor.js';
-import { buildEcaflip } from './models/ecaflip.js';
-import { buildChafer } from './models/chafer.js';
-import { buildChaferRoyal } from './models/chaferRoyal.js';
-import { buildTofu } from './models/tofu.js';
-import { buildTofuRoyal } from './models/tofuRoyal.js';
-import { buildChampignon } from './models/champignon.js';
-import { buildChampignonRoyal } from './models/champignonRoyal.js';
 import { HpBar3D } from './HpBar3D.js';
 import { toonify } from './Toon.js';
+import { BUILDERS } from './models/index.js';
 import { rigModel, poseRig } from './Rig.js';
 
-const BUILDERS = {
-  iop: buildIop,
-  osamodas: buildOsamodas,
-  roublard: buildRoublard,
-  xelor: buildXelor,
-  ecaflip: buildEcaflip,
-  bouftou: buildBouftou,
-  bouftouRoyal: buildBouftouRoyal,
-  craqueleur: buildCraqueleur,
-  crapaud: buildCrapaud,
-  crapaudChef: buildCrapaudChef,
-  bombeRoublard: buildBombeRoublard,
-  dragounetRouge: buildDragounetRouge,
-  chatonBlanc: buildChatonBlanc,
-  pandawa: buildPandawa,
-  eniripsa: buildEniripsa,
-  bouftouInvoc: () => { const g = new THREE.Group(); const b = buildBouftou(); b.scale.setScalar(0.85); g.add(b); return g; },
-  wabbit: buildWabbit,
-  waWabbit: buildWaWabbit,
-  chafer: buildChafer,
-  chaferRoyal: buildChaferRoyal,
-  tofu: buildTofu,
-  tofuRoyal: buildTofuRoyal,
-  champignon: buildChampignon,
-  champignonRoyal: buildChampignonRoyal,
-};
 
 const WHITE = new THREE.Color(0xffffff);
 
@@ -79,6 +32,10 @@ const HP_BAR_Y = {
   tofuRoyal: 1.55,
   champignon: 1.45,
   champignonRoyal: 2.15,
+  craqueleurSauvage: 1.6,
+  craqueleurLegendaire: 2.2,
+  kwakwa: 1.75,
+  minotoror: 2.45,
 };
 
 export class Character3D {
@@ -92,7 +49,7 @@ export class Character3D {
     this.idleOffset = Math.random() * Math.PI * 2;
     this.busy = false;
 
-    const builder = BUILDERS[classId] || buildIop;
+    const builder = BUILDERS[classId] || BUILDERS.iop;
     // `group` = racine (position / orientation / cercles / barre de vie),
     // `body` = le modele seul, anime (respiration, sauts, recul...).
     this.group = new THREE.Group();
@@ -148,6 +105,21 @@ export class Character3D {
     this.hpBar = new HpBar3D(team);
     this.hpBar.sprite.position.y = HP_BAR_Y[classId] || 1.4;
     this.group.add(this.hpBar.sprite);
+  }
+
+  // Recolore les pieces "elementaires" du modele (Kwakwa).
+  setElementTint(hex) {
+    const c = new THREE.Color(hex);
+    const lt = c.clone().lerp(WHITE, 0.4);
+    this.body.traverse(o => {
+      if (!o.isMesh || !o.material) return;
+      const m = o.material;
+      if (m.name === 'elementTint') { m.color.copy(c); if (m.emissive) m.emissive.copy(c).multiplyScalar(0.35); }
+      else if (m.name === 'elementTintLt') { m.color.copy(lt); if (m.emissive) m.emissive.copy(c).multiplyScalar(0.2); }
+      else if (m.name === 'elementTintBasic') m.color.copy(c);
+    });
+    // Les emissifs de base servent au flash d impact : on les resynchronise.
+    this._baseEmissive = this._materials.map(m => m.emissive.clone());
   }
 
   setActive(active) {

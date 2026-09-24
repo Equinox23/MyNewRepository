@@ -39,6 +39,9 @@ export const SPELL_ELEMENT = {
   toutOuRien: 'feu', reflexes: 'air', trefle: 'boost',
   souffleAlcoolise: 'feu', gueuleDeBois: 'eau', stabilisation: 'terre',
   motDEnvol: 'air', motDePrevention: 'boost', motInterdit: 'feu',
+  frappeRocheuse: 'terre', poingLegendaire: 'terre', enracinement: 'terre', eboulement: 'terre',
+  kwakElementaire: 'air', plumesTranchantes: 'air', souffleKwakwa: 'air',
+  chargeMinotoror: 'terre', coupDeCorne: 'terre', fureurMinotoror: 'boost', piegeSournois: 'terre',
 };
 
 export function spellElement(spell) {

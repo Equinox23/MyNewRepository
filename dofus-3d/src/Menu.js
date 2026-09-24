@@ -6,6 +6,15 @@ import { SPELLS, spellEffectLines } from './Spells.js';
 import { getHero, heroSpells, upgradeSpell, resetSpellPoints, heroStats, xpToNext, scaledSpell, summonBonus, UPGRADE_COST, MAX_LEVEL } from './Leveling.js';
 import { spellIconFrame } from './SpellIcons.js';
 import { getAvatar, getPortrait } from './Avatars.js';
+import { DUNGEONS, dungeonClears, dungeonUnlocked } from './Adventure.js';
+import { getInventory, equippedItems, equip, unequip, discard, equipmentStats, wornBy, itemIcon, SLOTS, SLOT_LABEL, RARITY, statLines, STAT_LABEL, itemScore } from './Items.js';
+
+// Icone d un monstre / boss : portrait 3D (repli : pastille vide).
+function monsterIcon(id) {
+  let url = null;
+  try { url = getAvatar(id, 128); } catch (_) {}
+  return url ? `<img class="hero-portrait" src="${url}" alt="">` : '';
+}
 
 // Etoile SVG : 'gold' | 'silver' | 'empty'.
 function starSvg(type, size = 26) {
@@ -461,6 +470,24 @@ const COMBAT_OPTIONS = [
       <path d="M55 36 L52 29 M56 36 L58 29 M55.5 36 L55 28" stroke="#5aa832" stroke-width="2" stroke-linecap="round"/>
     </svg>`,
   },
+  {
+    id: 'craqueleurLegendaire', name: 'Craqueleur Legendaire', boss: true,
+    desc: 'BOSS - Golem de cristal : enracine ses cibles. Craint l eau, resiste a la terre.',
+    available: true, homeMap: 'falaise',
+    get icon() { return monsterIcon('craqueleurLegendaire'); },
+  },
+  {
+    id: 'kwakwa', name: 'Kwakwa', boss: true,
+    desc: 'BOSS - Change d element a chaque tour : tres resistant a son element, faible a l oppose.',
+    available: true, homeMap: 'cascade',
+    get icon() { return monsterIcon('kwakwa'); },
+  },
+  {
+    id: 'minotoror', name: 'Minotoror', boss: true,
+    desc: 'BOSS - Charge en ligne droite et tacle tres fort. Evite de rester aligne !',
+    available: true, homeMap: 'cimetiere',
+    get icon() { return monsterIcon('minotoror'); },
+  },
 ];
 
 const MAP_OPTIONS = [
@@ -590,18 +617,26 @@ export class Menu {
       mapId: 'foret',
     };
     this.step = 0; // 0 = classe(s), 1 = combat, 2 = niveau, 3 = carte
-    this.steps = [
-      { key: 'class', title: 'Choisis ton heros', options: CLASS_OPTIONS },
-      { key: 'combatId', title: 'Choisis ton combat', options: COMBAT_OPTIONS },
-      { key: 'tier', title: 'Choisis le niveau des monstres', options: [] },
-      { key: 'mapId', title: 'Choisis ton terrain', options: MAP_OPTIONS },
+    this.normalSteps = [
+      { key: 'class', label: 'Heros', title: 'Choisis ton heros', options: CLASS_OPTIONS },
+      { key: 'combatId', label: 'Combat', title: 'Choisis ton combat', options: COMBAT_OPTIONS },
+      { key: 'tier', label: 'Niveau', title: 'Choisis le niveau des monstres', options: [] },
+      { key: 'mapId', label: 'Terrain', title: 'Choisis ton terrain', options: MAP_OPTIONS },
     ];
+    this.adventureSteps = [
+      { key: 'class', label: 'Heros', title: 'Choisis tes heros', options: CLASS_OPTIONS },
+      { key: 'dungeon', label: 'Donjon', title: 'Choisis ton donjon', options: [] },
+    ];
+    this.steps = this.normalSteps;
+    this.selection.dungeonId = DUNGEONS[0].id;
+    this.invClass = 'iop';
+    this.invSelected = null;
     this.grimoireClass = 'iop';
     this.build();
   }
 
   // Nombre max de heros selectionnables selon le mode.
-  maxHeroes() { return this.mode === 'multi' ? 3 : 1; }
+  maxHeroes() { return this.mode === 'solo' ? 1 : 3; }
 
   build() {
     const css = document.createElement('style');
@@ -755,7 +790,7 @@ export class Menu {
         padding: 10px 0;
       }
       #menu-root .menu-mode {
-        width: 240px;
+        width: 230px;
         background: linear-gradient(180deg, #1f2536 0%, #161a28 100%);
         border: 2px solid #444a66; border-radius: 16px;
         padding: 22px 16px; cursor: pointer; color: #fff;
@@ -773,7 +808,7 @@ export class Menu {
       }
       #menu-root .menu-mode .mm-desc { font-size: 12px; color: #c7c7bd; line-height: 1.35; }
       @media (pointer: coarse), (max-width: 768px) {
-        #menu-root .menu-mode { width: 44%; padding: 14px 8px; }
+        #menu-root .menu-mode { width: 30%; padding: 12px 6px; }
         #menu-root .menu-mode .mm-icon { height: 52px; }
         #menu-root .menu-mode .mm-name { font-size: 15px; }
         #menu-root .menu-mode .mm-desc { display: none; }
@@ -864,6 +899,7 @@ export class Menu {
       <div class="menu-nav">
         <button class="menu-navbtn" id="menu-back">Retour</button>
         <button class="menu-navbtn grimoire" id="menu-grimoire">Grimoire</button>
+        <button class="menu-navbtn grimoire" id="menu-inventory">Inventaire</button>
         <button class="menu-navbtn primary" id="menu-next">Suivant</button>
       </div>
     `;
@@ -875,6 +911,14 @@ export class Menu {
     this.backBtn = root.querySelector('#menu-back');
     this.nextBtn = root.querySelector('#menu-next');
     this.grimoireBtn = root.querySelector('#menu-grimoire');
+    this.inventoryBtn = root.querySelector('#menu-inventory');
+    this.inventoryBtn.addEventListener('click', () => {
+      this.audio && this.audio.sfx('uiClick');
+      this.grimoireReturn = this.view;
+      if (this.selection.classIds[0]) this.invClass = this.selection.classIds[0];
+      this.view = 'inventory';
+      this.render();
+    });
     this.grimoireBtn.addEventListener('click', () => {
       this.audio && this.audio.sfx('uiClick');
       this.grimoireReturn = this.view;
@@ -904,7 +948,11 @@ export class Menu {
   render() {
     if (this.view === 'home') this.renderHome();
     else if (this.view === 'grimoire') this.renderGrimoire();
+    else if (this.view === 'inventory') this.renderInventory();
     else this.renderStage();
+    if (this.inventoryBtn) {
+      this.inventoryBtn.style.display = (this.view === 'home' || (this.view === 'steps' && this.step === 0)) ? '' : 'none';
+    }
   }
 
   // Ecran d accueil : choix Solo / Multi.
@@ -919,6 +967,11 @@ export class Menu {
       <path d="M62 56 Q62 40 76 40 Q90 40 90 56 Z" fill="#6678c4"/>
       <circle cx="48" cy="18" r="12" fill="#f1c40f"/>
       <path d="M30 58 Q30 36 48 36 Q66 36 66 58 Z" fill="#f1c40f"/></svg>`;
+    const advIcon = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <path d="M8 58 V26 L32 8 L56 26 V58 Z" fill="#6a5a42" stroke="#241208" stroke-width="3"/>
+      <path d="M22 58 V38 Q32 26 42 38 V58 Z" fill="#1a120a" stroke="#241208" stroke-width="3"/>
+      <path d="M26 30 L32 14 L38 30" fill="#f1c40f" stroke="#241208" stroke-width="2"/>
+      <circle cx="16" cy="36" r="3" fill="#ffb02a"/><circle cx="48" cy="36" r="3" fill="#ffb02a"/></svg>`;
     this.subEl.innerHTML = 'Choisis ton mode de jeu';
     this.stepsEl.innerHTML = '';
     this.stageEl.innerHTML = `
@@ -934,12 +987,18 @@ export class Menu {
           <div class="mm-name">Mode Multi</div>
           <div class="mm-desc">Jusqu a 3 heros a controler. Les combats s etoffent en consequence.</div>
         </button>
+        <button class="menu-mode adventure" data-mode="aventure">
+          <div class="mm-icon">${advIcon}</div>
+          <div class="mm-name">Aventure</div>
+          <div class="mm-desc">Donjons : une suite de salles sans soin complet, un boss et son coffre au bout. 1 a 3 heros.</div>
+        </button>
       </div>
     `;
     this.stageEl.querySelectorAll('.menu-mode').forEach(btn => {
       btn.addEventListener('click', () => {
         this.audio && this.audio.sfx('uiSelect');
         this.mode = btn.dataset.mode;
+        this.steps = this.mode === 'aventure' ? this.adventureSteps : this.normalSteps;
         if (this.mode === 'solo' && this.selection.classIds.length > 1) {
           this.selection.classIds = [this.selection.classIds[0]];
         }
@@ -976,7 +1035,7 @@ export class Menu {
       }
       // En passant a l etape "terrain", on propose par defaut la carte
       // maison du monstre choisi (bonus etoile d or).
-      if (this.step === 1) {
+      if (this.step === 1 && this.mode !== 'aventure') {
         const combat = COMBAT_OPTIONS.find(c => c.id === this.selection.combatId);
         if (combat && combat.homeMap) this.selection.mapId = combat.homeMap;
         // Palier propose : le plus haut debloque qui reste adapte au heros.
@@ -984,6 +1043,12 @@ export class Menu {
       }
       this.step++;
       this.renderStage();
+    } else if (this.mode === 'aventure') {
+      this.hideOptionTooltip();
+      this.onStart && this.onStart({
+        playerClasses: this.selection.classIds.slice(),
+        adventure: { dungeonId: this.selection.dungeonId },
+      });
     } else {
       this.hideOptionTooltip();
       this.onStart && this.onStart({
@@ -997,7 +1062,7 @@ export class Menu {
   }
 
   goBack() {
-    if (this.view === 'grimoire') {
+    if (this.view === 'grimoire' || this.view === 'inventory') {
       this.view = this.grimoireReturn || 'home';
       this.render();
       return;
@@ -1050,6 +1115,117 @@ export class Menu {
       });
     }
     return opts;
+  }
+
+  // ---------- Donjons (mode Aventure) ----------
+  dungeonOptions() {
+    const lv = this.heroLevelForTiers();
+    return DUNGEONS.map((d, i) => {
+      const unlocked = dungeonUnlocked(i);
+      const diff = d.level - lv;
+      const label = diff <= -4 ? 'Facile' : diff <= 1 ? 'Adapte' : diff <= 4 ? 'Difficile' : 'Tres dur';
+      return {
+        id: d.id, name: d.name,
+        desc: `Monstres niv. ${d.level} (${label}) - ${d.rooms.length} salles - boss : ${DEFS[d.boss].name}. ${d.desc}`,
+        available: unlocked, lockedLabel: 'termine le donjon precedent',
+        clears: dungeonClears(d.id),
+        get icon() { return monsterIcon(d.boss); },
+      };
+    });
+  }
+
+  // ---------- Inventaire : equipement des heros ----------
+  renderInventory() {
+    const cls = this.invClass;
+    const hero = getHero(cls);
+    const inv = getInventory();
+    const eq = equippedItems(cls, inv);
+    const tot = equipmentStats(cls);
+    this.subEl.innerHTML = 'Inventaire : equipe tes heros avec le butin des combats';
+    this.stepsEl.innerHTML = '';
+    const tabs = CLASS_OPTIONS.map(o => `<button class="gr-tab ${o.id === cls ? 'active' : ''}" data-cls="${o.id}" title="${o.name}">
+      <div class="gr-tab-icon">${classIcon(o)}</div><div class="gr-tab-lv">${getHero(o.id).level}</div></button>`).join('');
+    const slots = SLOTS.map(sl => {
+      const it = eq[sl];
+      return `<button class="inv-slot ${it ? 'filled' : ''}" data-slot="${sl}" ${it ? `data-item="${it.id}"` : ''}>
+        ${it ? itemIcon(it, 54) : `<div class="inv-empty">${SLOT_LABEL[sl]}</div>`}
+        <div class="inv-slot-lbl">${it ? it.name : SLOT_LABEL[sl]}</div></button>`;
+    }).join('');
+    const totLines = [];
+    for (const k of ['hp', 'pa', 'pm', 'dmg', 'crit', 'tacle', 'fuite', 'init']) if (tot[k]) totLines.push(`+${tot[k]} ${STAT_LABEL[k]}`);
+    for (const [e, v] of Object.entries(tot.res)) if (v) totLines.push(`+${v} ${STAT_LABEL['res.' + e]}`);
+    const bag = inv.items.slice().sort((a, b) => (a.slot.localeCompare(b.slot)) || (itemScore(b) - itemScore(a)));
+    const bagHtml = bag.length ? bag.map(it => {
+      const w = wornBy(it.id, inv);
+      const tooHigh = hero.level < it.req;
+      return `<button class="inv-item ${this.invSelected === it.id ? 'sel' : ''} ${tooHigh ? 'locked' : ''}" data-item="${it.id}" title="${it.name}">
+        ${itemIcon(it, 50)}${w ? `<div class="inv-worn">${DEFS[w] ? DEFS[w].name : w}</div>` : ''}</button>`;
+    }).join('') : '<div class="inv-none">Ton sac est vide : bats des monstres pour obtenir du butin !</div>';
+    const sel = this.invSelected && inv.items.find(i => i.id === this.invSelected);
+    let detail = '<div class="inv-hint">Clique un objet pour voir ses statistiques.</div>';
+    if (sel) {
+      const R = RARITY[sel.rarity];
+      const w = wornBy(sel.id, inv);
+      const cur = eq[sel.slot];
+      const onMe = w === cls;
+      detail = `<div class="inv-detail">
+        <div class="inv-dh">${itemIcon(sel, 60)}<div>
+          <div class="inv-dname" style="color:${R.color}">${sel.name}</div>
+          <div class="inv-dmeta">${R.label} - ${SLOT_LABEL[sel.slot]} - niv. ${sel.level} (requis ${sel.req})${w ? ` - porte par ${DEFS[w] ? DEFS[w].name : w}` : ''}</div>
+        </div></div>
+        <div class="inv-dstats">${statLines(sel.stats).map(l => `<div>${l}</div>`).join('')}</div>
+        ${cur && !onMe ? `<div class="inv-dcmp">Remplace : ${cur.name} (${statLines(cur.stats).join(', ')})</div>` : ''}
+        <div class="inv-dbtns">
+          ${onMe ? `<button class="menu-navbtn" id="inv-unequip">Retirer</button>` : `<button class="menu-navbtn primary" id="inv-equip" ${hero.level < sel.req ? 'disabled' : ''}>Equiper sur ${DEFS[cls].name}</button>`}
+          <button class="menu-navbtn" id="inv-discard">Jeter</button>
+        </div></div>`;
+    }
+    this.stageEl.innerHTML = `
+      <div class="gr-tabs">${tabs}</div>
+      <div class="inv-wrap">
+        <div class="inv-left">
+          <div class="inv-hero">${classIcon(CLASS_OPTIONS.find(o => o.id === cls))}<div><b>${DEFS[cls].name}</b><span>Niveau ${hero.level}</span></div></div>
+          <div class="inv-slots">${slots}</div>
+          <div class="inv-total"><div class="inv-tt">Bonus d equipement</div>${totLines.length ? totLines.join('<br>') : 'Aucun'}</div>
+        </div>
+        <div class="inv-right">
+          <div class="inv-tt">Sac (${inv.items.length} objets)</div>
+          <div class="inv-bag">${bagHtml}</div>
+          ${detail}
+        </div>
+      </div>`;
+    this.stageEl.querySelectorAll('.gr-tab').forEach(b => b.addEventListener('click', () => {
+      this.audio && this.audio.sfx('uiSelect');
+      this.invClass = b.dataset.cls;
+      this.renderInventory();
+    }));
+    this.stageEl.querySelectorAll('.inv-item, .inv-slot.filled').forEach(b => b.addEventListener('click', () => {
+      this.audio && this.audio.sfx('uiSelect');
+      this.invSelected = b.dataset.item;
+      this.renderInventory();
+    }));
+    const eqBtn = this.stageEl.querySelector('#inv-equip');
+    if (eqBtn) eqBtn.addEventListener('click', () => {
+      const err = equip(cls, sel.id, hero.level);
+      this.audio && this.audio.sfx(err ? 'uiError' : 'cast_boost');
+      this.renderInventory();
+    });
+    const unBtn = this.stageEl.querySelector('#inv-unequip');
+    if (unBtn) unBtn.addEventListener('click', () => {
+      unequip(cls, sel.slot);
+      this.audio && this.audio.sfx('uiClick');
+      this.renderInventory();
+    });
+    const dBtn = this.stageEl.querySelector('#inv-discard');
+    if (dBtn) dBtn.addEventListener('click', () => {
+      discard(sel.id);
+      this.invSelected = null;
+      this.audio && this.audio.sfx('uiClick');
+      this.renderInventory();
+    });
+    this.backBtn.style.visibility = 'visible';
+    this.nextBtn.style.display = 'none';
+    this.grimoireBtn.style.display = 'none';
   }
 
   // ---------- Grimoire : progression d un heros et de ses sorts ----------
@@ -1162,6 +1338,7 @@ export class Menu {
     const prog = this.globalProgress();
 
     if (step.key === 'tier') step.options = this.tierOptions();
+    if (step.key === 'dungeon') step.options = this.dungeonOptions();
     this.subEl.innerHTML = `Selection guidee &mdash; etape ${this.step + 1} sur ${this.steps.length}
       <span class="menu-prog">${starSvg('gold', 16)}${prog.gold}
         &nbsp;${starSvg('silver', 16)}${prog.silver}
@@ -1169,14 +1346,13 @@ export class Menu {
 
     this.stepsEl.innerHTML = this.steps.map((s, i) => {
       const cls = i === this.step ? 'active' : (i < this.step ? 'done' : '');
-      const labels = ['Heros', 'Combat', 'Niveau', 'Terrain'];
       return `<div class="menu-stepitem ${cls}">
-        <div class="menu-dot">${i < this.step ? '&#10003;' : (i + 1)}</div>${labels[i]}</div>`;
+        <div class="menu-dot">${i < this.step ? '&#10003;' : (i + 1)}</div>${s.label}</div>`;
     }).join('');
 
     let title = step.title;
     if (step.key === 'class') {
-      title = this.mode === 'multi'
+      title = this.mode !== 'solo'
         ? `Choisis tes heros (${this.selection.classIds.length}/3)`
         : 'Choisis ton heros';
     }
@@ -1192,7 +1368,7 @@ export class Menu {
     this.backBtn.style.visibility = 'visible';
     this.nextBtn.style.display = '';
     const last = this.step === this.steps.length - 1;
-    this.nextBtn.textContent = last ? 'COMBATTRE' : 'Suivant';
+    this.nextBtn.textContent = last ? (this.mode === 'aventure' ? 'ENTRER' : 'COMBATTRE') : 'Suivant';
     this.nextBtn.classList.toggle('fight', last);
     this.nextBtn.classList.toggle('primary', !last);
     this.grimoireBtn.style.display = this.step === 0 ? '' : 'none';
@@ -1206,10 +1382,13 @@ export class Menu {
       if (idx >= 0) {
         selected = 'selected';
         // En multi, un pastille numerotee indique l ordre de selection.
-        if (this.mode === 'multi') badge = `<div class="opt-num">${idx + 1}</div>`;
+        if (this.mode !== 'solo') badge = `<div class="opt-num">${idx + 1}</div>`;
       }
       const hero = getHero(o.id);
       badge += `<div class="opt-lv">Niv. ${hero.level}${hero.points > 0 ? ` <span class="opt-pts">+${hero.points}</span>` : ''}</div>`;
+    } else if (key === 'dungeon') {
+      if (o.id === this.selection.dungeonId) selected = 'selected';
+      if (o.clears) badge = `<div class="opt-startag" style="color:#9ad85a">TERMINE x${o.clears}</div>`;
     } else if (key === 'tier') {
       if (o.id === 't' + this.selection.tier) selected = 'selected';
       if (o.recommended) badge = '<div class="opt-startag" style="color:#9ad85a">CONSEILLE</div>';
@@ -1240,7 +1419,7 @@ export class Menu {
 
   // Ajoute / retire un heros de la selection (mode multi : 1 a 3).
   _toggleClass(id) {
-    if (this.mode === 'solo') {
+    if (this.maxHeroes() === 1) {
       this.selection.classIds = [id];
       this.audio && this.audio.sfx('uiSelect');
       return;
@@ -1277,6 +1456,9 @@ export class Menu {
         } else if (key === 'tier') {
           this.audio && this.audio.sfx('uiSelect');
           this.selection.tier = parseInt(value.slice(1), 10);
+        } else if (key === 'dungeon') {
+          this.audio && this.audio.sfx('uiSelect');
+          this.selection.dungeonId = value;
         } else {
           this.audio && this.audio.sfx('uiSelect');
           this.selection[key] = value;

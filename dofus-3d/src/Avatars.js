@@ -1,54 +1,7 @@
 import * as THREE from 'three';
 import { toonify } from './Toon.js';
-import { buildIop } from './models/iop.js';
-import { buildOsamodas } from './models/osamodas.js';
-import { buildBouftou } from './models/bouftou.js';
-import { buildBouftouRoyal } from './models/bouftouRoyal.js';
-import { buildCraqueleur } from './models/craqueleur.js';
-import { buildCrapaud } from './models/crapaud.js';
-import { buildCrapaudChef } from './models/crapaudChef.js';
-import { buildRoublard } from './models/roublard.js';
-import { buildXelor } from './models/xelor.js';
-import { buildEcaflip } from './models/ecaflip.js';
-import { buildChafer } from './models/chafer.js';
-import { buildChaferRoyal } from './models/chaferRoyal.js';
-import { buildTofu } from './models/tofu.js';
-import { buildTofuRoyal } from './models/tofuRoyal.js';
-import { buildChampignon } from './models/champignon.js';
-import { buildChampignonRoyal } from './models/champignonRoyal.js';
-import { buildDragounetRouge } from './models/dragounetRouge.js';
-import { buildChatonBlanc } from './models/chatonBlanc.js';
-import { buildPandawa } from './models/pandawa.js';
-import { buildEniripsa } from './models/eniripsa.js';
-import { buildWabbit, buildWaWabbit } from './models/wabbit.js';
-import { buildBombeRoublard } from './models/bombeRoublard.js';
+import { BUILDERS } from './models/index.js';
 
-const BUILDERS = {
-  iop: buildIop,
-  osamodas: buildOsamodas,
-  roublard: buildRoublard,
-  xelor: buildXelor,
-  ecaflip: buildEcaflip,
-  bouftou: buildBouftou,
-  bouftouRoyal: buildBouftouRoyal,
-  craqueleur: buildCraqueleur,
-  dragounetRouge: buildDragounetRouge,
-  chatonBlanc: buildChatonBlanc,
-  pandawa: buildPandawa,
-  eniripsa: buildEniripsa,
-  bouftouInvoc: () => { const g = new THREE.Group(); const b = buildBouftou(); b.scale.setScalar(0.85); g.add(b); return g; },
-  wabbit: buildWabbit,
-  waWabbit: buildWaWabbit,
-  bombeRoublard: buildBombeRoublard,
-  crapaud: buildCrapaud,
-  crapaudChef: buildCrapaudChef,
-  chafer: buildChafer,
-  chaferRoyal: buildChaferRoyal,
-  tofu: buildTofu,
-  tofuRoyal: buildTofuRoyal,
-  champignon: buildChampignon,
-  champignonRoyal: buildChampignonRoyal,
-};
 
 // Cadrage par classe pour bien tenir dans la vignette (les modeles
 // n ont pas tous la meme taille).
@@ -77,6 +30,10 @@ const FRAME = {
   tofuRoyal: { y: 0.65, dist: 2.6, height: 0.95 },
   champignon: { y: 0.72, dist: 2.7, height: 1.1 },
   champignonRoyal: { y: 1.05, dist: 3.6, height: 1.4 },
+  craqueleurSauvage: { y: 0.6, dist: 2.3, height: 0.9 },
+  craqueleurLegendaire: { y: 0.85, dist: 3.1, height: 1.2 },
+  kwakwa: { y: 0.85, dist: 2.9, height: 1.2 },
+  minotoror: { y: 1.1, dist: 3.4, height: 1.45 },
 };
 
 // Cache : classId -> dataURL.
