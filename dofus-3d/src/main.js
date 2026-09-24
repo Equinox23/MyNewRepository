@@ -75,6 +75,8 @@ const menu = new Menu(selection => {
     playerClasses: selection.playerClasses,
     combatId: selection.combatId,
     mapId: selection.mapId,
+    monsterLevel: selection.monsterLevel,
+    tier: selection.tier,
   });
   audio.music('combat');
 }, audio);

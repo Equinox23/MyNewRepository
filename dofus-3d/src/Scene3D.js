@@ -20,7 +20,14 @@ export class Scene3D {
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    // Le canvas occupe tout l ecran en CSS (y compris en mode plein ecran /
+    // application installee, ou innerHeight peut etre faux au demarrage) :
+    // la taille du rendu suit la taille reelle du canvas.
+    const cv = this.renderer.domElement;
+    cv.style.position = 'fixed';
+    cv.style.left = '0'; cv.style.top = '0';
+    cv.style.width = '100%'; cv.style.height = '100%';
+    this.renderer.setSize(window.innerWidth, window.innerHeight, false);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -74,6 +81,12 @@ export class Scene3D {
     this._groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
 
     window.addEventListener('resize', () => this.onResize());
+    window.addEventListener('orientationchange', () => setTimeout(() => this.onResize(), 250));
+    if (window.visualViewport) window.visualViewport.addEventListener('resize', () => this.onResize());
+    // Sur iOS (application installee), la taille definitive n est connue
+    // qu apres le premier affichage.
+    setTimeout(() => this.onResize(), 50);
+    setTimeout(() => this.onResize(), 600);
   }
 
   updateCamera() {
@@ -87,7 +100,8 @@ export class Scene3D {
     this.camera.lookAt(this.target);
     // Demi-hauteur du cadre : equivalente a une perspective de 34 deg a
     // `distance`, pour garder les memes reperes de zoom qu avant.
-    const aspect = window.innerWidth / window.innerHeight;
+    const { w: vw, h: vh } = this.viewportSize();
+    const aspect = vw / vh;
     let halfH = this.distance * Math.tan(THREE.MathUtils.degToRad(17));
     // En portrait (mobile), on elargit pour que le plateau tienne en largeur.
     if (aspect < 1) halfH /= Math.max(0.55, aspect);
@@ -98,10 +112,18 @@ export class Scene3D {
     this.camera.updateProjectionMatrix();
   }
 
+  // Taille effective d affichage (celle du canvas plein ecran).
+  viewportSize() {
+    const cv = this.renderer && this.renderer.domElement;
+    const rect = cv && cv.isConnected ? cv.getBoundingClientRect() : null;
+    const w = Math.round((rect && rect.width) || window.innerWidth);
+    const h = Math.round((rect && rect.height) || window.innerHeight);
+    return { w: Math.max(1, w), h: Math.max(1, h) };
+  }
+
   onResize() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
-    this.renderer.setSize(w, h);
+    const { w, h } = this.viewportSize();
+    this.renderer.setSize(w, h, false);
     this.updateCamera();
   }
 

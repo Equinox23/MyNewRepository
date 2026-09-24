@@ -32,6 +32,13 @@ export const SPELL_ELEMENT = {
   coupDeBec: 'air', bourrasque: 'air', sporeToxique: 'poison', nuageDeSpores: 'poison',
   motBlessant: 'feu', motSoignant: 'soin', motDeFrayeur: 'air', motStimulant: 'boost', motDeReconstitution: 'soin',
   morsureWabbit: 'terre', lancerCarotte: 'terre', carotteGeante: 'terre',
+  intimidation: 'terre', epeeDuJugement: 'air', colereDeIop: 'terre',
+  fouetOsamodas: 'terre', invocationBouftou: 'invoc', criDeLaBete: 'boost',
+  kaboom: 'feu', tromblon: 'feu', fourberie: 'air',
+  rembobinage: 'air', frappeDuXelor: 'eau', sablier: 'eau',
+  toutOuRien: 'feu', reflexes: 'air', trefle: 'boost',
+  souffleAlcoolise: 'feu', gueuleDeBois: 'eau', stabilisation: 'terre',
+  motDEnvol: 'air', motDePrevention: 'boost', motInterdit: 'feu',
 };
 
 export function spellElement(spell) {
@@ -414,6 +421,43 @@ ART.bunnyBite = (p) => `
     <circle cx="24" cy="24" r="3.5" fill="#241208"/><circle cx="40" cy="24" r="3.5" fill="#241208"/>
     <circle cx="25" cy="23" r="1.2" fill="#fff"/><circle cx="41" cy="23" r="1.2" fill="#fff"/>`;
 
+ART.whip = (p) => `
+    <rect x="8" y="42" width="8" height="18" rx="3" fill="url(#${p}wood)" ${O} transform="rotate(-30 12 51)"/>
+    <path d="M16 44 Q30 20 46 26 Q58 30 54 12" fill="none" stroke="#241208" stroke-width="6" stroke-linecap="round"/>
+    <path d="M16 44 Q30 20 46 26 Q58 30 54 12" fill="none" stroke="#c88a4a" stroke-width="3.2" stroke-linecap="round"/>
+    <path d="M54 12 l4 -6 M54 12 l6 -1" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/>
+    <g fill="#fff"><path d="M50 4 l1.5 3.5 3.5 1.5 -3.5 1.5 -1.5 3.5 -1.5 -3.5 -3.5 -1.5 3.5 -1.5z"/></g>`;
+ART.clover = (p) => `
+    <g fill="url(#${p}leaf)" ${O}>
+      <path d="M32 30 C20 30 16 14 26 12 C30 11 32 16 32 20 C32 16 34 11 38 12 C48 14 44 30 32 30 Z"/>
+      <path d="M32 30 C32 42 16 46 14 36 C13 32 18 30 22 30 C18 30 13 28 14 24 C16 14 32 18 32 30 Z"/>
+      <path d="M32 30 C32 42 48 46 50 36 C51 32 46 30 42 30 C46 30 51 28 50 24 C48 14 32 18 32 30 Z"/>
+    </g>
+    <path d="M32 32 Q34 46 42 56" fill="none" stroke="#2a6a1a" stroke-width="3.4" stroke-linecap="round"/>
+    <path d="M24 18 Q27 16 29 18" stroke="#fff" stroke-width="2" fill="none" opacity="0.8"/>
+    <g fill="#fff"><path d="M52 8 l1.5 4 4 1.5 -4 1.5 -1.5 4 -1.5 -4 -4 -1.5 4 -1.5z"/></g>`;
+ART.pistol = (p) => `
+    <path d="M10 26 L42 22 L44 32 L28 34 L24 50 L14 50 L16 34 L10 34 Z" fill="url(#${p}wood)" ${O}/>
+    <rect x="30" y="20" width="24" height="9" rx="2" fill="url(#${p}steel)" ${O}/>
+    <circle cx="56" cy="24" r="7" fill="url(#${p}fire)"/>
+    <path d="M56 14 l1.5 5 5 1.5 -5 1.5 -1.5 5 -1.5 -5 -5 -1.5 5 -1.5z" fill="#fff"/>
+    <path d="M18 34 L22 40" stroke="#241208" stroke-width="2"/>`;
+ART.rewind = (p) => `
+    <circle cx="32" cy="32" r="22" fill="none" stroke="#fff" stroke-width="4" stroke-dasharray="6 5" opacity="0.8"/>
+    <path d="M30 18 L12 32 L30 46 Z" fill="url(#${p}gold)" ${O}/>
+    <path d="M50 18 L32 32 L50 46 Z" fill="url(#${p}gold)" ${O}/>`;
+ART.forbidden = (p) => `
+    <path d="M10 14 Q10 8 16 8 L48 8 Q54 8 54 14 L54 36 Q54 42 48 42 L28 42 L16 54 L18 42 L16 42 Q10 42 10 36 Z" fill="url(#${p}bomb)" ${O}/>
+    <path d="M22 16 L42 34 M42 16 L22 34" stroke="#ff4a3a" stroke-width="5" stroke-linecap="round"/>
+    <path d="M22 16 L42 34 M42 16 L22 34" stroke="#ffd0a0" stroke-width="1.6" stroke-linecap="round"/>`;
+ART.roar = (p) => `
+    <path d="M18 20 Q32 8 46 20 L46 40 Q32 52 18 40 Z" fill="url(#${p}wood)" ${O}/>
+    <path d="M22 32 Q32 44 42 32 Q32 38 22 32 Z" fill="#6a1a0a" ${O} stroke-width="1.6"/>
+    <path d="M25 33 L27 37 L29 34 L31 38 L33 34 L35 38 L37 34 L39 37 L40 33" fill="#fff" stroke="none"/>
+    <circle cx="26" cy="24" r="3" fill="#fff"/><circle cx="38" cy="24" r="3" fill="#fff"/>
+    <circle cx="26" cy="24" r="1.4" fill="#241208"/><circle cx="38" cy="24" r="1.4" fill="#241208"/>
+    <g fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"><path d="M50 22 Q56 30 50 38"/><path d="M55 16 Q64 30 55 44"/><path d="M14 22 Q8 30 14 38"/><path d="M9 16 Q0 30 9 44"/></g>`;
+
 // Sort -> illustration.
 const SPELL_ART = {
   pression: (p) => ART.sword(p),
@@ -469,6 +513,26 @@ const SPELL_ART = {
   morsureWabbit: (p) => ART.bunnyBite(p),
   lancerCarotte: (p) => ART.carrot(p, false),
   carotteGeante: (p) => ART.carrot(p, true),
+  intimidation: (p) => ART.fist(p),
+  epeeDuJugement: (p) => ART.holySword(p),
+  colereDeIop: (p) => ART.explosion(p),
+  fouetOsamodas: (p) => ART.whip(p),
+  criDeLaBete: (p) => ART.roar(p),
+  kaboom: (p) => ART.pistol(p),
+  tromblon: (p) => ART.flame(p),
+  fourberie: (p) => ART.haste(p),
+  rembobinage: (p) => ART.rewind(p),
+  frappeDuXelor: (p) => ART.clockHand(p),
+  sablier: (p) => ART.hourglass(p),
+  toutOuRien: (p) => ART.coin(p),
+  reflexes: (p) => ART.shield(p),
+  trefle: (p) => ART.clover(p),
+  souffleAlcoolise: (p) => ART.flame(p),
+  gueuleDeBois: (p) => ART.gourd(p),
+  stabilisation: (p) => ART.stoneShield(p),
+  motDEnvol: (p) => ART.jump(p),
+  motDePrevention: (p) => ART.shield(p),
+  motInterdit: (p) => ART.forbidden(p),
 };
 
 // Renvoie l icone peinte d un sort (null si aucune illustration dediee,

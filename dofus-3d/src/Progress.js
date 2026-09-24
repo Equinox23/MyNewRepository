@@ -51,3 +51,30 @@ export function countStars(classIds, combatIds) {
   }
   return { gold, silver, done: gold + silver, total: classIds.length * combatIds.length };
 }
+
+// ---------------------------------------------------------------------------
+// Paliers de monstres : pour chaque combat, meilleur palier vaincu.
+// Palier t => monstres de niveau 2t-1 (1, 3, 5, ... 19). Battre le
+// palier t debloque le palier t+1.
+// ---------------------------------------------------------------------------
+const TIER_KEY = 'dofus3d.tiers';
+export const MAX_TIER = 10;
+export const tierToLevel = (t) => 2 * t - 1;
+
+function loadTiers() {
+  try { return JSON.parse(localStorage.getItem(TIER_KEY) || '{}') || {}; } catch (_) { return {}; }
+}
+
+export function getBestTier(combatId) {
+  return loadTiers()[combatId] || 0;
+}
+
+export function recordTier(combatId, tier) {
+  const t = loadTiers();
+  if ((t[combatId] || 0) < tier) {
+    t[combatId] = tier;
+    try { localStorage.setItem(TIER_KEY, JSON.stringify(t)); } catch (_) {}
+    return true;
+  }
+  return false;
+}

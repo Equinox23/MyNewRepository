@@ -674,6 +674,29 @@ export class VFX {
       case 'carotteGeante':
         at(delay, () => this.burst(V(tc, 0.3), { tex: 'leaf', color: [0x5aa832, 0x9ad85a], count: 12, speed: [1.2, 2.2], upward: 1.4, gravity: -3, life: 0.8, size: [0.18, 0.28], normalBlend: true }));
         break;
+      case 'colereDeIop':
+        at(delay, () => {
+          this.impact(tc.c, tc.r, { color: 0xff5a1f, big: true });
+          this.burst(V(tc, 0.3), { tex: 'glow', color: [0xff4a10, 0xffb040, 0xffe27a], count: 30, speed: [2, 4], upward: 1.2, gravity: -2, life: 0.7, size: [0.3, 0.6], grow: 0.6 });
+          this.shake(0.22, 0.4);
+        });
+        break;
+      case 'criDeLaBete':
+        for (let i = 0; i < 3; i++) at(i * 140, () => this._ground(caster.c, caster.r, 'ring', 0xffd040, { from: 0.4, to: 6, duration: 0.6, opacity: 0.9, fadeIn: 0.05, fadePow: 1 }));
+        break;
+      case 'trefle':
+        at(delay, () => this.burst(V(tc, 1), { tex: 'leaf', color: [0x3a9a2a, 0x8ae04a], count: 14, speed: [0.6, 1.4], upward: 1.4, gravity: -0.5, life: 0.9, size: [0.18, 0.28], normalBlend: true }));
+        break;
+      case 'fourberie':
+      case 'reflexes':
+        this.burst(V(caster, 0.6), { tex: 'spark', color: [0xe2ffb0, 0xffffff], count: 14, speed: [2, 3.5], upward: 0.2, gravity: 0, life: 0.35, size: [0.4, 0.6] });
+        break;
+      case 'rembobinage':
+        this._clockDial(caster, { color: 0x8ae04a, reverse: true });
+        break;
+      case 'motDEnvol':
+        this.burst(V(caster, 0.4), { tex: 'feather', color: [0xffffff, 0xffd0e8], count: 12, speed: [0.8, 1.6], upward: 1.2, gravity: -0.6, life: 0.9, size: [0.2, 0.3], normalBlend: true, drag: 2 });
+        break;
       case 'pression':
         at(delay, () => this._pop(V(tc, 0.9), 'slash', 0xffe08a, { from: 1.2, to: 2.4, duration: 0.3, rotation: 0.8 }));
         break;

@@ -1,4 +1,5 @@
 import { SPELLS } from './Spells.js';
+import { heroStats, monsterStats, scaledSpell, UNLOCK_LEVELS } from './Leveling.js';
 
 // Definitions des classes / creatures.
 // `ai` decrit le caractere autonome (cf Game.runAI).
@@ -8,19 +9,19 @@ export const DEFS = {
     name: 'Iop',
     role: 'Guerrier',
     hp: 100, pa: 8, pm: 4, initiative: 12,
-    spellIds: ['pression', 'bond', 'epeeDivine', 'concentration', 'precipitation'],
+    spellIds: ['pression', 'bond', 'concentration', 'intimidation', 'epeeDivine', 'precipitation', 'epeeDuJugement', 'colereDeIop'],
   },
   osamodas: {
     name: 'Osamodas',
     role: 'Invocateur',
     hp: 100, pa: 8, pm: 4, initiative: 11,
-    spellIds: ['invocationCraqueleur', 'invocationDragounet', 'piqureMotivante', 'protectionCraqueleur', 'soinInvocation'],
+    spellIds: ['invocationCraqueleur', 'fouetOsamodas', 'soinInvocation', 'piqureMotivante', 'invocationDragounet', 'protectionCraqueleur', 'invocationBouftou', 'criDeLaBete'],
   },
   roublard: {
     name: 'Roublard',
     role: 'Artificier',
     hp: 100, pa: 8, pm: 4, initiative: 13,
-    spellIds: ['poserBombe', 'entourloupe', 'detonationManuelle', 'bouclierBombe', 'pulsar'],
+    spellIds: ['poserBombe', 'detonationManuelle', 'kaboom', 'entourloupe', 'pulsar', 'bouclierBombe', 'tromblon', 'fourberie'],
   },
   bombeRoublard: {
     name: 'Bombe',
@@ -64,6 +65,13 @@ export const DEFS = {
     spellIds: ['dragoflamme', 'dragosoin'],
     ai: 'dragounet',
   },
+  bouftouInvoc: {
+    name: 'Bouftou apprivoise',
+    role: 'Invocation',
+    hp: 90, pa: 5, pm: 4, initiative: 9,
+    spellIds: ['morsureBouftou'],
+    ai: 'aggressive',
+  },
   crapaud: {
     name: 'Crapaud',
     role: 'Crachat',
@@ -86,13 +94,13 @@ export const DEFS = {
     name: 'Xelor',
     role: 'Maitre du temps',
     hp: 100, pa: 8, pm: 4, initiative: 10,
-    spellIds: ['horloge', 'ralentissement', 'devouement', 'aiguille', 'momification'],
+    spellIds: ['aiguille', 'horloge', 'frappeDuXelor', 'ralentissement', 'rembobinage', 'devouement', 'sablier', 'momification'],
   },
   ecaflip: {
     name: 'Ecaflip',
     role: 'Joueur',
     hp: 100, pa: 8, pm: 4, initiative: 12,
-    spellIds: ['griffeFeline', 'pileOuFace', 'roueChance', 'bondDuFelin', 'invocationChaton'],
+    spellIds: ['griffeFeline', 'pileOuFace', 'bondDuFelin', 'reflexes', 'roueChance', 'invocationChaton', 'trefle', 'toutOuRien'],
   },
   chatonBlanc: {
     name: 'Chaton Blanc',
@@ -105,14 +113,14 @@ export const DEFS = {
     name: 'Pandawa',
     role: 'Bambouseur',
     hp: 110, pa: 8, pm: 4, initiative: 10,
-    spellIds: ['picole', 'tirPandatak', 'karcham', 'vaguePandawa', 'laitDeBambou'],
+    spellIds: ['tirPandatak', 'karcham', 'laitDeBambou', 'picole', 'gueuleDeBois', 'vaguePandawa', 'stabilisation', 'souffleAlcoolise'],
   },
 
   eniripsa: {
     name: 'Eniripsa',
     role: 'Soigneuse',
     hp: 90, pa: 8, pm: 4, initiative: 11,
-    spellIds: ['motBlessant', 'motSoignant', 'motDeFrayeur', 'motStimulant', 'motDeReconstitution'],
+    spellIds: ['motBlessant', 'motSoignant', 'motDEnvol', 'motDeFrayeur', 'motStimulant', 'motDePrevention', 'motInterdit', 'motDeReconstitution'],
   },
 
   // ---------- WABBITS (lapins de l ile des Wabbits) ----------
@@ -183,7 +191,8 @@ export const DEFS = {
 };
 
 export class Fighter {
-  constructor(classId, team, c, r) {
+  // opts : { level, spellLevels (heros), kind: 'hero' | 'monster' | 'summon' }
+  constructor(classId, team, c, r, opts = {}) {
     const def = DEFS[classId];
     if (!def) throw new Error('Unknown classId ' + classId);
     this.classId = classId;
@@ -213,10 +222,43 @@ export class Fighter {
     this.isBomb = !!def.isBomb;
     this.bombAge = 0;
     this.bombOwner = null;  // reference vers le combattant qui l a posee
+    // Niveau (progression) : stats et sorts mis a l echelle.
+    this.level = opts.level || 1;
+    this.levelDamageMult = 1;
+    this._spells = null;
+    if (opts.kind) this.applyLevel(opts.kind, opts.spellLevels || {});
+  }
+
+  applyLevel(kind, spellLevels = {}) {
+    const def = this.def;
+    const L = this.level;
+    let st;
+    if (kind === 'hero') st = heroStats(def, L);
+    else if (kind === 'summon') st = { ...heroStats(def, L), pa: def.pa, pm: def.pm };
+    else st = monsterStats(def, L);
+    this.maxHp = this.hp = st.hp;
+    this.maxPa = this.pa = st.pa;
+    this.maxPm = this.pm = st.pm;
+    this.levelDamageMult = st.damage || 1;
+    if (kind === 'hero') {
+      // Seuls les sorts debloques a ce niveau sont disponibles, chacun a
+      // son niveau de puissance (1 a 3).
+      this._spells = def.spellIds
+        .map((id, i) => ({ id, at: UNLOCK_LEVELS[i] || 1 }))
+        .filter(e => L >= e.at && SPELLS[e.id])
+        .map(e => scaledSpell(SPELLS[e.id], spellLevels[e.id] || 1));
+    }
+    this.levelKind = kind;
   }
 
   get spells() {
+    if (this._spells) return this._spells;
     return this.def.spellIds.map(id => SPELLS[id]).filter(Boolean);
+  }
+
+  // Sort (eventuellement ameliore) de ce combattant par identifiant.
+  spellById(id) {
+    return this.spells.find(s => s.id === id) || SPELLS[id];
   }
 
   // Vrai tant qu un buff d invisibilite est actif : le combattant ne
@@ -331,7 +373,7 @@ export class Fighter {
     for (const b of this.buffs) {
       if (b.damageMult) mult += b.damageMult;
     }
-    return mult;
+    return mult * (this.levelDamageMult || 1);
   }
 
   isOnCooldown(spellId) {

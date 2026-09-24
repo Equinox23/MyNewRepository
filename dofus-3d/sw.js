@@ -2,7 +2,7 @@
 // Met tout le jeu en cache a la premiere visite : ensuite il se lance
 // meme sans connexion. A chaque nouvelle version (empreinte VERSION),
 // le nouveau cache remplace l ancien.
-const VERSION = 'd8069ea518';
+const VERSION = '178d7d13ec';
 const CACHE = 'dofus3d-' + VERSION;
 const FILES = [
   "./",
@@ -16,6 +16,7 @@ const FILES = [
   "./src/GroundPainter.js",
   "./src/HpBar3D.js",
   "./src/Hud.js",
+  "./src/Leveling.js",
   "./src/Map3D.js",
   "./src/Menu.js",
   "./src/Path.js",

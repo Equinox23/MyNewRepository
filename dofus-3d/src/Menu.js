@@ -1,6 +1,11 @@
 // Menu de pre-combat : selection guidee, etape par etape
 // (classe -> combat -> carte), avec etoiles de progression.
-import { getStar } from './Progress.js';
+import { getStar, getBestTier, MAX_TIER, tierToLevel } from './Progress.js';
+import { DEFS } from './Fighter.js';
+import { SPELLS, spellEffectLines } from './Spells.js';
+import { getHero, heroSpells, upgradeSpell, resetSpellPoints, heroStats, xpToNext, scaledSpell, MAX_LEVEL } from './Leveling.js';
+import { spellIconFrame } from './SpellIcons.js';
+import { getAvatar } from './Avatars.js';
 
 // Etoile SVG : 'gold' | 'silver' | 'empty'.
 function starSvg(type, size = 26) {
@@ -559,14 +564,17 @@ export class Menu {
     this.selection = {
       classIds: ['iop'],
       combatId: 'bouftou',
+      tier: 1,
       mapId: 'foret',
     };
-    this.step = 0; // 0 = classe(s), 1 = combat, 2 = carte
+    this.step = 0; // 0 = classe(s), 1 = combat, 2 = niveau, 3 = carte
     this.steps = [
       { key: 'class', title: 'Choisis ton heros', options: CLASS_OPTIONS },
       { key: 'combatId', title: 'Choisis ton combat', options: COMBAT_OPTIONS },
+      { key: 'tier', title: 'Choisis le niveau des monstres', options: [] },
       { key: 'mapId', title: 'Choisis ton terrain', options: MAP_OPTIONS },
     ];
+    this.grimoireClass = 'iop';
     this.build();
   }
 
@@ -828,6 +836,7 @@ export class Menu {
       <div class="menu-stage" id="menu-stage"></div>
       <div class="menu-nav">
         <button class="menu-navbtn" id="menu-back">Retour</button>
+        <button class="menu-navbtn grimoire" id="menu-grimoire">Grimoire</button>
         <button class="menu-navbtn primary" id="menu-next">Suivant</button>
       </div>
     `;
@@ -838,6 +847,14 @@ export class Menu {
     this.stageEl = root.querySelector('#menu-stage');
     this.backBtn = root.querySelector('#menu-back');
     this.nextBtn = root.querySelector('#menu-next');
+    this.grimoireBtn = root.querySelector('#menu-grimoire');
+    this.grimoireBtn.addEventListener('click', () => {
+      this.audio && this.audio.sfx('uiClick');
+      this.grimoireReturn = this.view;
+      if (this.selection.classIds[0]) this.grimoireClass = this.selection.classIds[0];
+      this.view = 'grimoire';
+      this.render();
+    });
 
     const tip = document.createElement('div');
     tip.className = 'menu-tooltip';
@@ -859,6 +876,7 @@ export class Menu {
   // Affiche soit l ecran d accueil (mode), soit la selection guidee.
   render() {
     if (this.view === 'home') this.renderHome();
+    else if (this.view === 'grimoire') this.renderGrimoire();
     else this.renderStage();
   }
 
@@ -905,6 +923,7 @@ export class Menu {
     });
     this.backBtn.style.visibility = 'hidden';
     this.nextBtn.style.display = 'none';
+    this.grimoireBtn.style.display = '';
   }
 
   // Bilan global des etoiles (toutes classes x tous combats).
@@ -922,7 +941,7 @@ export class Menu {
 
   goNext() {
     if (this.view !== 'steps') return;
-    if (this.step < 2) {
+    if (this.step < this.steps.length - 1) {
       // L etape "heros" exige au moins un personnage selectionne.
       if (this.step === 0 && this.selection.classIds.length === 0) {
         this.audio && this.audio.sfx('uiError');
@@ -933,6 +952,8 @@ export class Menu {
       if (this.step === 1) {
         const combat = COMBAT_OPTIONS.find(c => c.id === this.selection.combatId);
         if (combat && combat.homeMap) this.selection.mapId = combat.homeMap;
+        // Palier propose : le plus haut debloque qui reste adapte au heros.
+        this.selection.tier = this.recommendedTier();
       }
       this.step++;
       this.renderStage();
@@ -942,11 +963,18 @@ export class Menu {
         playerClasses: this.selection.classIds.slice(),
         combatId: this.selection.combatId,
         mapId: this.selection.mapId,
+        tier: this.selection.tier,
+        monsterLevel: tierToLevel(this.selection.tier),
       });
     }
   }
 
   goBack() {
+    if (this.view === 'grimoire') {
+      this.view = this.grimoireReturn || 'home';
+      this.render();
+      return;
+    }
     if (this.step > 0) {
       this.step--;
       this.renderStage();
@@ -957,19 +985,146 @@ export class Menu {
     }
   }
 
+  // ---------- Paliers de monstres ----------
+  heroLevelForTiers() {
+    return Math.max(...this.selection.classIds.map(id => getHero(id).level), 1);
+  }
+
+  recommendedTier() {
+    const best = getBestTier(this.selection.combatId);
+    const lv = this.heroLevelForTiers();
+    const byLevel = Math.max(1, Math.min(MAX_TIER, Math.floor((lv + 1) / 2)));
+    return Math.max(1, Math.min(best + 1, byLevel, MAX_TIER));
+  }
+
+  tierOptions() {
+    const best = getBestTier(this.selection.combatId);
+    const rec = this.recommendedTier();
+    const lv = this.heroLevelForTiers();
+    const opts = [];
+    for (let t = 1; t <= MAX_TIER; t++) {
+      const mLv = tierToLevel(t);
+      const diff = mLv - lv;
+      const color = diff <= -4 ? '#8fd0ff' : diff <= 1 ? '#9ad85a' : diff <= 4 ? '#ffcf5a' : '#ff6a5a';
+      const label = diff <= -4 ? 'Facile' : diff <= 1 ? 'Adapte' : diff <= 4 ? 'Difficile' : 'Tres dur';
+      const beaten = t <= best;
+      opts.push({
+        id: 't' + t,
+        name: `Palier ${t}`,
+        desc: `Monstres niveau ${mLv} - ${label}${beaten ? ' - vaincu' : ''}`,
+        available: t <= best + 1,
+        lockedLabel: 'bats le palier precedent',
+        recommended: t === rec,
+        icon: `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+          <path d="M32 4 L56 14 L56 32 Q56 50 32 60 Q8 50 8 32 L8 14 Z" fill="${color}" stroke="#241208" stroke-width="3"/>
+          <text x="32" y="42" font-size="${mLv >= 10 ? 22 : 26}" font-weight="700" text-anchor="middle" fill="#241208" font-family="Fredoka, sans-serif">${mLv}</text>
+          ${beaten ? '<circle cx="50" cy="12" r="9" fill="#6aa533" stroke="#241208" stroke-width="2"/><path d="M45 12 L49 16 L55 8" stroke="#fff" stroke-width="2.6" fill="none"/>' : ''}
+        </svg>`,
+      });
+    }
+    return opts;
+  }
+
+  // ---------- Grimoire : progression d un heros et de ses sorts ----------
+  renderGrimoire() {
+    const cls = this.grimoireClass;
+    const def = DEFS[cls];
+    const hero = getHero(cls);
+    const st = heroStats(def, hero.level);
+    const need = xpToNext(hero.level);
+    const pct = hero.level >= MAX_LEVEL ? 100 : Math.round(hero.xp / need * 100);
+    this.subEl.innerHTML = 'Grimoire : ameliore tes sorts avec tes points';
+    this.stepsEl.innerHTML = '';
+    const tabs = CLASS_OPTIONS.map(o => {
+      const h = getHero(o.id);
+      return `<button class="gr-tab ${o.id === cls ? 'active' : ''}" data-cls="${o.id}" title="${o.name}">
+        <div class="gr-tab-icon">${o.icon}</div><div class="gr-tab-lv">${h.level}</div>${h.points > 0 ? '<div class="gr-tab-dot"></div>' : ''}</button>`;
+    }).join('');
+    const spells = heroSpells(cls, def.spellIds).map(e => {
+      const sp = e.spell;
+      if (!sp) return '';
+      const summon = sp.effects.find(x => x.type === 'summon');
+      let icon = sp.paintedIcon || '';
+      if (summon) {
+        let av = null;
+        try { av = getAvatar(summon.creatureId, 96); } catch (_) {}
+        icon = spellIconFrame(sp) + (av ? `<img class="gr-summon" src="${av}" alt="">` : '');
+      }
+      const lvShown = Math.max(1, e.level);
+      const cur = scaledSpell(sp, lvShown);
+      const lines = spellEffectLines(cur).join(' - ');
+      const next = e.unlocked && e.level < 3 ? spellEffectLines(scaledSpell(sp, e.level + 1)).join(' - ') : '';
+      const pips = [1, 2, 3].map(n => `<i class="${n <= e.level ? 'on' : ''}"></i>`).join('');
+      const range = cur.range ? (cur.range.max === 0 ? 'Soi-meme' : `Portee ${cur.range.min}-${cur.range.max}`) : '';
+      const cd = cur.cooldown ? ` - Recharge ${cur.cooldown}` : '';
+      let action;
+      if (!e.unlocked) action = `<div class="gr-lock">Debloque au niveau ${e.unlockAt}</div>`;
+      else if (e.level >= 3) action = `<div class="gr-max">Niveau max</div>`;
+      else action = `<button class="gr-up" data-spell="${e.id}" ${e.canUpgrade ? '' : 'disabled'}>Ameliorer (${e.cost} pt${e.cost > 1 ? 's' : ''})</button>`;
+      return `<div class="gr-spell ${e.unlocked ? '' : 'locked'}">
+        <div class="gr-icon">${icon}</div>
+        <div class="gr-body">
+          <div class="gr-name">${sp.name} <span class="gr-pips">${pips}</span></div>
+          <div class="gr-meta">${cur.apCost} PA - ${range}${cd}</div>
+          <div class="gr-desc">${sp.desc || ''}</div>
+          <div class="gr-lines">${lines}</div>
+          ${next ? `<div class="gr-next">Niveau ${e.level + 1} : ${next}</div>` : ''}
+        </div>
+        <div class="gr-action">${action}</div>
+      </div>`;
+    }).join('');
+    this.stageEl.innerHTML = `
+      <div class="gr-tabs">${tabs}</div>
+      <div class="gr-head">
+        <div class="gr-title">${def.name} <span>${def.role}</span></div>
+        <div class="gr-level">Niveau ${hero.level}${hero.level >= MAX_LEVEL ? ' (max)' : ''}</div>
+        <div class="gr-xp"><div class="gr-xp-fill" style="width:${pct}%"></div></div>
+        <div class="gr-xpnum">${hero.level >= MAX_LEVEL ? 'Niveau maximum' : `${hero.xp} / ${need} XP`}</div>
+        <div class="gr-stats"><span>PV ${st.hp}</span><span>PA ${st.pa}</span><span>PM ${st.pm}</span><span>Degats +${Math.round((st.damage - 1) * 100)}%</span>
+          <span class="gr-points">${hero.points} point${hero.points > 1 ? 's' : ''} de sort</span>
+          <button class="gr-reset" id="gr-reset">Rendre les points</button></div>
+      </div>
+      <div class="gr-spells">${spells}</div>
+      <div class="gr-help">Chaque niveau rapporte 1 point de sort (2 aux niveaux 5, 10, 15, 20). Ameliorer un sort : niveau 1 &rarr; 2 = 1 point, 2 &rarr; 3 = 2 points.</div>
+    `;
+    this.stageEl.querySelectorAll('.gr-tab').forEach(b => b.addEventListener('click', () => {
+      this.audio && this.audio.sfx('uiSelect');
+      this.grimoireClass = b.dataset.cls;
+      this.renderGrimoire();
+    }));
+    this.stageEl.querySelectorAll('.gr-up').forEach(b => b.addEventListener('click', () => {
+      if (upgradeSpell(cls, b.dataset.spell, def.spellIds)) {
+        this.audio && this.audio.sfx('cast_boost');
+      } else {
+        this.audio && this.audio.sfx('uiError');
+      }
+      this.renderGrimoire();
+    }));
+    const reset = this.stageEl.querySelector('#gr-reset');
+    if (reset) reset.addEventListener('click', () => {
+      resetSpellPoints(cls);
+      this.audio && this.audio.sfx('uiClick');
+      this.renderGrimoire();
+    });
+    this.backBtn.style.visibility = 'visible';
+    this.nextBtn.style.display = 'none';
+    this.grimoireBtn.style.display = 'none';
+  }
+
   // (Re)dessine l etape courante.
   renderStage() {
     const step = this.steps[this.step];
     const prog = this.globalProgress();
 
-    this.subEl.innerHTML = `Selection guidee &mdash; etape ${this.step + 1} sur 3
+    if (step.key === 'tier') step.options = this.tierOptions();
+    this.subEl.innerHTML = `Selection guidee &mdash; etape ${this.step + 1} sur ${this.steps.length}
       <span class="menu-prog">${starSvg('gold', 16)}${prog.gold}
         &nbsp;${starSvg('silver', 16)}${prog.silver}
         &nbsp;<span style="color:#9aa">/ ${prog.total}</span></span>`;
 
     this.stepsEl.innerHTML = this.steps.map((s, i) => {
       const cls = i === this.step ? 'active' : (i < this.step ? 'done' : '');
-      const labels = ['Heros', 'Combat', 'Terrain'];
+      const labels = ['Heros', 'Combat', 'Niveau', 'Terrain'];
       return `<div class="menu-stepitem ${cls}">
         <div class="menu-dot">${i < this.step ? '&#10003;' : (i + 1)}</div>${labels[i]}</div>`;
     }).join('');
@@ -991,9 +1146,11 @@ export class Menu {
     // La 1re etape garde "Retour" : il ramene a l ecran d accueil.
     this.backBtn.style.visibility = 'visible';
     this.nextBtn.style.display = '';
-    this.nextBtn.textContent = this.step === 2 ? 'COMBATTRE' : 'Suivant';
-    this.nextBtn.classList.toggle('fight', this.step === 2);
-    this.nextBtn.classList.toggle('primary', this.step !== 2);
+    const last = this.step === this.steps.length - 1;
+    this.nextBtn.textContent = last ? 'COMBATTRE' : 'Suivant';
+    this.nextBtn.classList.toggle('fight', last);
+    this.nextBtn.classList.toggle('primary', !last);
+    this.grimoireBtn.style.display = this.step === 0 ? '' : 'none';
   }
 
   renderOption(key, o) {
@@ -1006,6 +1163,11 @@ export class Menu {
         // En multi, un pastille numerotee indique l ordre de selection.
         if (this.mode === 'multi') badge = `<div class="opt-num">${idx + 1}</div>`;
       }
+      const hero = getHero(o.id);
+      badge += `<div class="opt-lv">Niv. ${hero.level}${hero.points > 0 ? ` <span class="opt-pts">+${hero.points}</span>` : ''}</div>`;
+    } else if (key === 'tier') {
+      if (o.id === 't' + this.selection.tier) selected = 'selected';
+      if (o.recommended) badge = '<div class="opt-startag" style="color:#9ad85a">CONSEILLE</div>';
     } else if (key === 'combatId') {
       if (o.id === this.selection.combatId) selected = 'selected';
       // Etoile de progression : meilleure obtenue avec le 1er heros choisi.
@@ -1026,7 +1188,7 @@ export class Menu {
         <div class="icon">${o.icon}</div>
         <div class="opt-name">${o.name}</div>
         <div class="opt-desc">${o.desc}</div>
-        ${o.available ? '' : '<div class="opt-soon">bientot</div>'}
+        ${o.available ? '' : `<div class="opt-soon">${o.lockedLabel || 'bientot'}</div>`}
       </button>
     `;
   }
@@ -1067,6 +1229,9 @@ export class Menu {
         const value = btn.dataset.value;
         if (key === 'class') {
           this._toggleClass(value);
+        } else if (key === 'tier') {
+          this.audio && this.audio.sfx('uiSelect');
+          this.selection.tier = parseInt(value.slice(1), 10);
         } else {
           this.audio && this.audio.sfx('uiSelect');
           this.selection[key] = value;
