@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mesh } from './kit.js';
 
 // Chafer : fantassin squelette. Crane, cage thoracique, armure de
 // plaques sombres rouillees, lance osseuse a la main.
@@ -81,27 +82,47 @@ export function buildChafer() {
     group.add(hand);
   }
 
-  // -- Crane + machoire + casque --
-  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.20, 16, 14), boneMat);
-  skull.position.y = 1.20;
+  // -- Gros crane chibi : orbites sombres, lueurs cyan, sourire
+  //    edente, casque cabosse a pointe. --
+  const skull = new THREE.Mesh(new THREE.SphereGeometry(0.27, 18, 16), boneMat);
+  skull.position.y = 1.24;
+  skull.scale.set(1, 0.95, 0.95);
   skull.castShadow = true;
   group.add(skull);
-  const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.20, 0.07, 0.16), boneDkMat);
-  jaw.position.set(0, 1.06, 0.04);
+  const jaw = mesh(new THREE.SphereGeometry(0.17, 14, 10), boneDkMat, [0, 1.05, 0.07], [1, 0.55, 0.9]);
   group.add(jaw);
-  // Casque d armure
-  const helm = new THREE.Mesh(new THREE.SphereGeometry(0.22, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), armorMat);
-  helm.position.y = 1.22;
-  group.add(helm);
-  const helmSpike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.18, 8), armorDkMat);
-  helmSpike.position.y = 1.42;
-  group.add(helmSpike);
-  // Orbites lumineuses
-  for (const dx of [-0.07, 0.07]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035, 8, 6), eyeMat);
-    eye.position.set(dx, 1.20, 0.17);
+  const socketMat = new THREE.MeshStandardMaterial({ color: 0x0c0a12, roughness: 0.9 });
+  for (const dx of [-0.1, 0.1]) {
+    const sock = new THREE.Mesh(new THREE.SphereGeometry(0.075, 12, 10), socketMat);
+    sock.position.set(dx, 1.22, 0.2);
+    sock.scale.set(1, 1.15, 0.6);
+    group.add(sock);
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), eyeMat);
+    eye.position.set(dx, 1.21, 0.25);
     group.add(eye);
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), new THREE.MeshBasicMaterial({ color: eyeCol, transparent: true, opacity: 0.35 }));
+    halo.position.set(dx, 1.21, 0.25);
+    group.add(halo);
   }
+  // Cavite nasale + dents.
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.06, 3), socketMat);
+  nose.position.set(0, 1.12, 0.25);
+  nose.rotation.x = Math.PI;
+  group.add(nose);
+  for (let i = -2; i <= 2; i++) {
+    const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.04, 0.02), boneMat);
+    tooth.position.set(i * 0.035, 1.05, 0.21 - Math.abs(i) * 0.01);
+    group.add(tooth);
+  }
+  // Casque d armure cabosse.
+  const helm = new THREE.Mesh(new THREE.SphereGeometry(0.29, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.45), armorMat);
+  helm.position.y = 1.28;
+  helm.rotation.z = 0.12;
+  group.add(helm);
+  const helmSpike = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.22, 8), armorDkMat);
+  helmSpike.position.set(-0.03, 1.6, 0);
+  helmSpike.rotation.z = 0.12;
+  group.add(helmSpike);
 
   // -- Lance osseuse, tenue dans la main droite --
   const spear = new THREE.Group();

@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addEyes, mouth as mouthArc } from './kit.js';
 
 // Crapaud : grosse boule verte aplatie, gros yeux protruberants, 4 pattes,
 // bouche large. Style cartoon assume.
@@ -63,26 +64,34 @@ export function buildCrapaud() {
   //    partie du corps spheroide ; on ajoute juste les yeux qui sortent
   //    et la bouche tres large.
 
-  // -- Yeux protruberants (2 grosses spheres blanches au-dessus) --
+  // -- Yeux protruberants : bosses vertes surmontees de grands yeux
+  //    dores a pupille horizontale, paupieres lourdes (air ronchon). --
   for (const dx of [-0.16, 0.16]) {
-    const eyeBall = new THREE.Mesh(new THREE.SphereGeometry(0.12, 14, 10), eyeMat);
-    eyeBall.position.set(dx, 0.66, 0.16);
-    eyeBall.castShadow = true;
-    group.add(eyeBall);
-    const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), pupilMat);
-    pupil.position.set(dx, 0.66, 0.26);
-    group.add(pupil);
-    // Reflets blancs sur la pupille
-    const glint = new THREE.Mesh(new THREE.SphereGeometry(0.018, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-    glint.position.set(dx - 0.015, 0.67, 0.30);
-    group.add(glint);
+    const socket = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), bodyMat);
+    socket.position.set(dx, 0.64, 0.14);
+    socket.castShadow = true;
+    group.add(socket);
   }
+  addEyes(group, { x: 0, y: 0.67, z: 0.22, size: 0.105, spacing: 0.32, turn: 0.35, iris: 0xf0c020, lid: 0x4a8a2a, sleepy: true });
 
-  // -- Bouche large : box noir aplati --
-  const mouthMesh = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.04, 0.08), new THREE.MeshStandardMaterial({ color: mouth, roughness: 0.95 }));
-  mouthMesh.position.set(0, 0.38, 0.42);
-  mouthMesh.rotation.x = 0.1;
-  group.add(mouthMesh);
+  // -- Grande bouche en sourire + langue rose --
+  const mouthMat = new THREE.MeshStandardMaterial({ color: mouth, roughness: 0.95 });
+  const m = mouthArc(mouthMat, 0.16, { thick: 0.016 });
+  m.position.set(0, 0.44, 0.42);
+  m.rotation.x = -0.5;
+  m.userData.noOutline = true;
+  group.add(m);
+  const tongue = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), new THREE.MeshStandardMaterial({ color: 0xe05a7a, roughness: 0.6 }));
+  tongue.position.set(0.08, 0.35, 0.42);
+  tongue.scale.set(1, 0.5, 0.8);
+  group.add(tongue);
+  // Joues roses.
+  for (const dx of [-0.26, 0.26]) {
+    const ch = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), new THREE.MeshStandardMaterial({ color: 0xf08a8a }));
+    ch.position.set(dx, 0.46, 0.33);
+    ch.scale.set(1.2, 0.7, 0.5);
+    group.add(ch);
+  }
 
   return group;
 }

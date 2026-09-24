@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addEyes } from './kit.js';
 
 // Dragounet Rouge : petit dragon invoque, style chibi -- corps rond
 // rouge, grosse tete a museau, cornes, petites ailes membraneuses,
@@ -116,17 +117,12 @@ export function buildDragounetRouge() {
   ember.position.set(0, 0.79, 0.46);
   group.add(ember);
 
-  // ============ Yeux + sourcils ============
-  for (const dx of [-0.11, 0.11]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.055, 12, 10), eyeMat);
-    eye.position.set(dx, 0.96, 0.24);
-    group.add(eye);
-    const pupil = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.05, 0.02), blackMat);
-    pupil.position.set(dx, 0.96, 0.29);
-    group.add(pupil);
-    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.10, 0.035, 0.05), scaleDkMat);
-    brow.position.set(dx, 1.02, 0.23);
-    brow.rotation.z = dx > 0 ? 0.3 : -0.3;
+  // ============ Grands yeux dores a pupille fendue + sourcils ============
+  addEyes(group, { x: 0, y: 0.97, z: 0.25, size: 0.08, spacing: 0.24, turn: 0.35, iris: 0xffc830, slit: true, lid: 0xc0392b, angry: true });
+  for (const dx of [-0.12, 0.12]) {
+    const brow = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.035, 0.05), scaleDkMat);
+    brow.position.set(dx, 1.06, 0.26);
+    brow.rotation.z = dx > 0 ? 0.35 : -0.35;
     group.add(brow);
   }
 

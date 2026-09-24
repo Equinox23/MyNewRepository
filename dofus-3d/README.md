@@ -53,6 +53,20 @@ cd dofus-3d && python3 -m http.server 8080
 - **Ambiance lumineuse par carte** : soleil dore, clair de lune au
   cimetiere, lumiere verdatre au marais...
 
+## Combat facon Dofus
+
+- **Phase de placement** : avant le combat, cases de depart bleues (toi)
+  et rouges (adversaire). Clique une case bleue pour y placer ton heros
+  (clic sur un heros = le selectionner), puis **PRET** ou Espace.
+- **Animations des membres** (`src/Rig.js`) : les pieces de chaque modele
+  sont rattachees a des pivots (hanches, epaules, cou) -> marche jambe
+  apres jambe, bras qui balancent, coup d arme arme puis abattu, bras
+  leves au lancement d un sort, recul a l impact.
+- **Effets propres a chaque sort** (`VFX.signature`) : roue de la fortune,
+  piece de Pile ou Face, cadran d horloge du Xelor, vague du Pandawa,
+  tonneau qui roule (Karcham), souffle de feu, plumes, griffures,
+  tourbillon de vent, spores, bulles, eclats de roche...
+
 ## Stack technique
 
 - **Three.js 0.160** charge en module ES depuis jsDelivr (import map).

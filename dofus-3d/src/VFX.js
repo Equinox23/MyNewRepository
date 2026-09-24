@@ -184,6 +184,95 @@ function tex(name) {
         ctx.fillStyle = g; ctx.fill();
       });
       break;
+    case 'feather':
+      TEX.feather = canvasTex(s, (ctx) => {
+        ctx.translate(h, h); ctx.rotate(-0.6);
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 0.42);
+        ctx.bezierCurveTo(s * 0.22, -s * 0.2, s * 0.16, s * 0.25, 0, s * 0.4);
+        ctx.bezierCurveTo(-s * 0.16, s * 0.25, -s * 0.22, -s * 0.2, 0, -s * 0.42);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.strokeStyle = 'rgba(120,120,120,0.9)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(0, -s * 0.38); ctx.lineTo(0, s * 0.46); ctx.stroke();
+      });
+      break;
+    case 'leaf':
+      TEX.leaf = canvasTex(s, (ctx) => {
+        ctx.translate(h, h); ctx.rotate(0.5);
+        ctx.beginPath();
+        ctx.moveTo(0, -s * 0.4);
+        ctx.quadraticCurveTo(s * 0.3, 0, 0, s * 0.4);
+        ctx.quadraticCurveTo(-s * 0.3, 0, 0, -s * 0.4);
+        ctx.fillStyle = '#fff'; ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(0, -s * 0.36); ctx.lineTo(0, s * 0.36); ctx.stroke();
+      });
+      break;
+    case 'bubble':
+      TEX.bubble = canvasTex(s, (ctx) => {
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = s * 0.06;
+        ctx.beginPath(); ctx.arc(h, h, s * 0.4, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.25)'; ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.ellipse(h - s * 0.14, h - s * 0.16, s * 0.1, s * 0.06, -0.7, 0, Math.PI * 2); ctx.fill();
+      });
+      break;
+    case 'claw':
+      TEX.claw = canvasTex(256, (ctx, S) => {
+        const H = S / 2;
+        for (let i = -1; i <= 1; i++) {
+          ctx.save();
+          ctx.translate(H + i * S * 0.2, H);
+          ctx.rotate(-0.5);
+          const g = ctx.createLinearGradient(0, -H, 0, H);
+          g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.5, '#fff'); g.addColorStop(1, 'rgba(255,255,255,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.ellipse(0, 0, S * 0.035, H * 0.85, 0, 0, Math.PI * 2); ctx.fill();
+          ctx.restore();
+        }
+      });
+      break;
+    case 'clock':
+      TEX.clock = canvasTex(256, (ctx, S) => {
+        const H = S / 2;
+        ctx.strokeStyle = '#fff'; ctx.fillStyle = '#fff'; ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.arc(H, H, H * 0.88, 0, Math.PI * 2); ctx.stroke();
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.arc(H, H, H * 0.74, 0, Math.PI * 2); ctx.stroke();
+        for (let i = 0; i < 12; i++) {
+          const a = (i / 12) * Math.PI * 2;
+          ctx.beginPath();
+          ctx.moveTo(H + Math.cos(a) * H * 0.62, H + Math.sin(a) * H * 0.62);
+          ctx.lineTo(H + Math.cos(a) * H * (i % 3 === 0 ? 0.46 : 0.54), H + Math.sin(a) * H * (i % 3 === 0 ? 0.46 : 0.54));
+          ctx.lineWidth = i % 3 === 0 ? 8 : 4; ctx.stroke();
+        }
+        ctx.beginPath(); ctx.arc(H, H, H * 0.07, 0, Math.PI * 2); ctx.fill();
+      });
+      break;
+    case 'hand': // aiguille d horloge (pointe vers le haut du canvas)
+      TEX.hand = canvasTex(s, (ctx) => {
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.moveTo(h, s * 0.06); ctx.lineTo(h + s * 0.05, h); ctx.lineTo(h, h + s * 0.06); ctx.lineTo(h - s * 0.05, h);
+        ctx.closePath(); ctx.fill();
+      });
+      break;
+    case 'wheel':
+      TEX.wheel = canvasTex(256, (ctx, S) => {
+        const H = S / 2;
+        const cols = ['#e8322a', '#f8d040', '#3a9ae0', '#62b83a', '#9a4ad0', '#ff8a2a', '#e8322a', '#f8d040'];
+        for (let i = 0; i < 8; i++) {
+          ctx.beginPath(); ctx.moveTo(H, H);
+          ctx.arc(H, H, H * 0.92, (i / 8) * Math.PI * 2, ((i + 1) / 8) * Math.PI * 2);
+          ctx.closePath(); ctx.fillStyle = cols[i]; ctx.fill();
+          ctx.strokeStyle = '#3a2208'; ctx.lineWidth = 4; ctx.stroke();
+        }
+        ctx.lineWidth = 12; ctx.strokeStyle = '#c8820a';
+        ctx.beginPath(); ctx.arc(H, H, H * 0.92, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = '#ffd24a';
+        ctx.beginPath(); ctx.arc(H, H, H * 0.16, 0, Math.PI * 2); ctx.fill();
+      });
+      break;
   }
   return TEX[name];
 }
@@ -445,6 +534,256 @@ export class VFX {
     return new Promise(res => setTimeout(res, 120));
   }
 
+  // ---------- EFFETS PROPRES A CHAQUE SORT ----------
+  // Appele au lancement (en parallele des effets generiques). `delay`
+  // (ms) = temps estime avant l impact (projectile en vol).
+  signature(spellId, caster, target) {
+    const tc = target || caster;
+    const dist = Math.hypot(tc.c - caster.c, tc.r - caster.r);
+    const delay = dist > 1.5 ? (dist / 7) * 1000 + 60 : 120;
+    const at = (ms, fn) => setTimeout(fn, ms);
+    const V = (p, y) => new THREE.Vector3(p.c, y, p.r);
+    switch (spellId) {
+      case 'concentration': // aura de flammes rouges
+        this.burst(V(caster, 0.2), { tex: 'glow', color: [0xff4a10, 0xff8a2a, 0xffd040], count: 26, speed: [0.3, 0.8], upward: 2, spread: 0.4, gravity: 1.2, life: 0.8, size: [0.3, 0.5], jitter: 0.7, delaySpread: 0.4 });
+        break;
+      case 'precipitation': // traits de vitesse + eclair
+        this.burst(V(caster, 0.8), { tex: 'spark', color: [0xffe060, 0xffffff], count: 18, speed: [3, 5], upward: 0, gravity: 0, life: 0.35, size: [0.5, 0.8], drag: 1 });
+        this._pop(V(caster, 1.6), 'star', 0xfff27a, { from: 0.4, to: 2, duration: 0.4 });
+        break;
+      case 'roueChance': this._spinningDisc(caster, 'wheel', { y: 2.1, size: 1.1, duration: 1.2, spin: 14 }); break;
+      case 'pileOuFace':
+        at(delay, () => {
+          this._coinFlip(tc);
+        });
+        break;
+      case 'horloge':
+      case 'aiguille':
+        at(delay, () => this._clockDial(tc, { color: 0x4ab0ff, reverse: false }));
+        break;
+      case 'ralentissement':
+        at(delay, () => {
+          this._clockDial(tc, { color: 0x7a8aff, reverse: true });
+          this.burst(V(tc, 1.4), { tex: 'glow', color: [0xf8d060, 0xffe8a0], count: 16, speed: [0.05, 0.2], upward: -1, gravity: -2, life: 0.8, size: [0.08, 0.14], jitter: 0.3, delaySpread: 0.5 });
+        });
+        break;
+      case 'vaguePandawa':
+        at(delay, () => {
+          this._ground(tc.c, tc.r, 'ring', 0x4ab0ff, { from: 0.4, to: 4.2, duration: 0.7, opacity: 1, fadeIn: 0.05, fadePow: 1 });
+          this._ground(tc.c, tc.r, 'ring', 0xd8f4ff, { from: 0.3, to: 3.2, duration: 0.6, opacity: 0.8, fadeIn: 0.05 });
+          this.burst(V(tc, 0.2), { tex: 'drop', color: [0x4ab0ff, 0xbfeaff, 0xffffff], count: 30, speed: [1.8, 3.4], upward: 1.4, spread: 1.2, gravity: -7, life: 0.8, size: [0.14, 0.26] });
+        });
+        break;
+      case 'bourrasque':
+        at(delay, () => this._whirl(tc, { color: 0xe2ffb0, tex: 'spark', leaves: true }));
+        break;
+      case 'sporeToxique':
+      case 'nuageDeSpores':
+        at(delay, () => {
+          this.burst(V(tc, 0.6), { tex: 'smoke', color: 0x9a4ad0, normalBlend: true, count: 14, speed: [0.4, 1.2], upward: 0.5, gravity: 0.2, life: 1.1, size: [0.5, 0.8], grow: 1.3, opacity: 0.75, jitter: 0.8 });
+          this.burst(V(tc, 0.6), { tex: 'glow', color: [0xd8a8ff, 0xb46ae8], count: 20, speed: [0.3, 0.9], upward: 0.8, gravity: 0.3, life: 1, size: [0.08, 0.14], jitter: 1 });
+        });
+        break;
+      case 'picole':
+        this.burst(V(caster, 1.0), { tex: 'bubble', color: [0xffe0a0, 0xffc8e0, 0xffffff], count: 14, speed: [0.2, 0.6], upward: 2, spread: 0.6, gravity: 0.6, life: 1, size: [0.12, 0.24], jitter: 0.4, delaySpread: 0.5 });
+        break;
+      case 'laitDeBambou':
+        at(delay, () => {
+          this.burst(V(tc, 1.4), { tex: 'drop', color: [0xffffff, 0xfffaf0], count: 16, speed: [0.3, 0.9], upward: -0.5, gravity: -5, life: 0.7, size: [0.1, 0.18], jitter: 0.5 });
+          this.burst(V(tc, 0.3), { tex: 'leaf', color: [0x6ab83a, 0x9ad85a], count: 10, speed: [0.5, 1.2], upward: 1.6, gravity: -0.8, life: 1, size: [0.16, 0.26], normalBlend: true });
+        });
+        break;
+      case 'invisibilite':
+        this.burst(V(caster, 0.5), { tex: 'smoke', color: 0xc8c8d8, normalBlend: true, count: 18, speed: [0.8, 1.8], upward: 0.4, gravity: 0, life: 0.9, size: [0.5, 0.8], grow: 1.5, opacity: 0.85, drag: 3 });
+        this.burst(V(caster, 0.8), { tex: 'star', color: 0xffffff, count: 10, speed: [1, 2], upward: 0.5, gravity: 0, life: 0.5, size: [0.12, 0.2] });
+        break;
+      case 'coupDeBec':
+      case 'bourrasqueFeathers':
+        at(delay, () => this.burst(V(tc, 0.8), { tex: 'feather', color: [0xffffff, 0xfff2c0], count: 12, speed: [1, 2.2], upward: 1, gravity: -1.2, life: 1, size: [0.2, 0.32], normalBlend: true, drag: 2.5 }));
+        break;
+      case 'griffeFeline':
+      case 'coupDeGriffe':
+        at(delay, () => {
+          this._pop(V(tc, 0.85), 'claw', 0xff5a4a, { from: 0.6, to: 1.6, duration: 0.35, rotation: -0.3 });
+          this._pop(V(tc, 0.85), 'claw', 0xffffff, { from: 0.4, to: 1.2, duration: 0.3, rotation: -0.3 });
+        });
+        break;
+      case 'tirPandatak':
+        at(delay, () => {
+          this.burst(V(tc, 0.9), { tex: 'star', color: [0xfff27a, 0xffffff], count: 12, speed: [2, 3.5], upward: 0.4, gravity: -3, life: 0.5, size: [0.2, 0.34] });
+          this.burst(V(tc, 0.1), { tex: 'smoke', color: 0xb8a078, normalBlend: true, count: 8, speed: [1, 2], upward: 0.2, gravity: 0, life: 0.6, size: [0.35, 0.5], grow: 1.2, opacity: 0.7, drag: 3 });
+        });
+        break;
+      case 'dragoflamme':
+        break; // gere par le projectile de feu
+      case 'poserBombe':
+        at(delay, () => {
+          this.burst(V(tc, 0.3), { tex: 'smoke', color: 0x9a9aa8, normalBlend: true, count: 8, speed: [0.6, 1.2], upward: 0.4, gravity: 0, life: 0.6, size: [0.35, 0.5], grow: 1.2, opacity: 0.7, drag: 3 });
+          this.burst(V(tc, 0.6), { tex: 'spark', color: [0xffd040, 0xff8a2a], count: 10, speed: [1.5, 2.5], upward: 1, gravity: -4, life: 0.4, size: [0.16, 0.26] });
+        });
+        break;
+      case 'pulsar':
+        at(delay, () => {
+          for (let i = 0; i < 3; i++) at(i * 110, () => this._ground(tc.c, tc.r, 'ring', i % 2 ? 0xffd040 : 0xff7a2a, { from: 0.3, to: 2.6, duration: 0.5, opacity: 1, fadeIn: 0.05, fadePow: 1 }));
+        });
+        break;
+      case 'momification':
+        this._whirl(caster, { color: 0xf0e6cc, tex: 'spark', normal: true });
+        break;
+      case 'devouement':
+        this.burst(V(caster, 0.2), { tex: 'spark', color: [0xffe060, 0xffffff], count: 20, speed: [2, 3], upward: 3, spread: 0.15, gravity: 0, life: 0.6, size: [0.4, 0.7], jitter: 1.4, drag: 2 });
+        this._ground(caster.c, caster.r, 'ring', 0xffd040, { from: 0.5, to: 5, duration: 0.8, opacity: 0.9, fadeIn: 0.05, fadePow: 1 });
+        break;
+      case 'piqureMotivante':
+        at(delay, () => this.burst(V(tc, 1.0), { tex: 'star', color: [0x8ae04a, 0xe2ffb0, 0xffffff], count: 16, speed: [0.8, 1.8], upward: 1.2, gravity: 0, life: 0.7, size: [0.14, 0.24] }));
+        break;
+      case 'frappeCraqueleur':
+        at(delay, () => this._rockDebris(tc, 10));
+        break;
+      case 'bond':
+      case 'bondDuFelin':
+        this.burst(V(caster, 0.1), { tex: 'smoke', color: 0xc8b890, normalBlend: true, count: 10, speed: [1, 2], upward: 0.3, gravity: 0, life: 0.6, size: [0.35, 0.55], grow: 1.3, opacity: 0.7, drag: 3 });
+        break;
+      case 'pression':
+        at(delay, () => this._pop(V(tc, 0.9), 'slash', 0xffe08a, { from: 1.2, to: 2.4, duration: 0.3, rotation: 0.8 }));
+        break;
+    }
+  }
+
+  // Disque texture qui tourne en l air (roue de la fortune...).
+  _spinningDisc(p, texName, o = {}) {
+    const duration = o.duration || 1;
+    return this._makeEffect({
+      duration,
+      build: () => {
+        const sp = mkSprite(spriteMat(texName, 0xffffff, { additive: false }));
+        sp.position.set(p.c, o.y || 1.8, p.r);
+        sp.scale.setScalar(0.01);
+        return sp;
+      },
+      tick: (t, sp) => {
+        const k = t < 0.2 ? t / 0.2 : 1;
+        sp.scale.setScalar((o.size || 1) * easeOut(k));
+        sp.material.rotation += (o.spin || 10) * 0.016 * (1 - t * 0.8);
+        sp.material.opacity = t > 0.8 ? (1 - t) / 0.2 : 1;
+        if (t > 0.75 && !sp.userData.burst) {
+          sp.userData.burst = true;
+          this.burst(sp.position.clone(), { tex: 'star', color: [0xffd040, 0xffffff], count: 14, speed: [1.2, 2.4], upward: 0.3, gravity: -1, life: 0.6, size: [0.16, 0.28] });
+        }
+      },
+    });
+  }
+
+  // Piece qui tournoie au-dessus de la cible puis retombe (Pile ou Face).
+  _coinFlip(p) {
+    return this._makeEffect({
+      duration: 0.9,
+      build: () => {
+        const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.05, 24), new THREE.MeshToonMaterial({ color: 0xffc830, emissive: 0x6a4a00 }));
+        coin.position.set(p.c, 1.4, p.r);
+        return coin;
+      },
+      tick: (t, coin) => {
+        coin.position.y = 1.4 + Math.sin(t * Math.PI) * 0.9;
+        coin.rotation.x = t * Math.PI * 8;
+        if (t > 0.9 && !coin.userData.done) {
+          coin.userData.done = true;
+          this._pop(coin.position.clone(), 'star', 0xffd040, { from: 0.4, to: 1.6, duration: 0.35 });
+        }
+      },
+    });
+  }
+
+  // Cadran d horloge au sol dont l aiguille tourne (sorts du Xelor).
+  _clockDial(p, o = {}) {
+    const color = o.color || 0x4ab0ff;
+    const duration = 0.95;
+    this._ground(p.c, p.r, 'clock', color, { from: 0.8, to: 1.5, duration, opacity: 1, fadeIn: 0.15 });
+    return this._makeEffect({
+      duration,
+      build: () => {
+        const grp = new THREE.Group();
+        for (const [len, w] of [[0.62, 1], [0.42, 1.4]]) {
+          const m = new THREE.Mesh(new THREE.PlaneGeometry(0.22 * w, len * 1.1), planeMat('hand', lighten(color, 0.4), { additive: false }));
+          m.rotation.x = -Math.PI / 2;
+          m.position.y = 0.1;
+          const pivot = new THREE.Group();
+          m.position.z = -len * 0.35;
+          pivot.add(m);
+          grp.add(pivot);
+        }
+        grp.position.set(p.c, 0, p.r);
+        return grp;
+      },
+      tick: (t, grp) => {
+        const dir = o.reverse ? 1 : -1;
+        grp.children[0].rotation.y = dir * t * Math.PI * 4;
+        grp.children[1].rotation.y = dir * t * Math.PI * 0.6;
+        const op = t < 0.15 ? t / 0.15 : t > 0.8 ? (1 - t) / 0.2 : 1;
+        grp.children.forEach(pv => { pv.children[0].material.opacity = op; });
+        const s = 0.8 + easeOut(Math.min(1, t * 1.4)) * 0.7;
+        grp.scale.setScalar(s);
+      },
+    });
+  }
+
+  // Tourbillon de traits (vent, bandelettes).
+  _whirl(p, o = {}) {
+    return this._makeEffect({
+      duration: 1.0,
+      build: () => {
+        const grp = new THREE.Group();
+        for (let i = 0; i < 16; i++) {
+          const sp = mkSprite(spriteMat(i % 4 === 0 && o.leaves ? 'leaf' : o.tex || 'spark', i % 4 === 0 && o.leaves ? 0x6ab83a : o.color || 0xffffff, { additive: false }));
+          sp.userData = { a0: (i / 16) * Math.PI * 2, h0: (i % 4) * 0.35, s: rand(0.3, 0.55) };
+          sp.scale.setScalar(0.001);
+          grp.add(sp);
+        }
+        grp.position.set(p.c, 0, p.r);
+        return grp;
+      },
+      tick: (t, grp) => {
+        for (const sp of grp.children) {
+          const u = sp.userData;
+          const a = u.a0 + t * Math.PI * 5;
+          const rad = 0.65 - t * 0.2;
+          sp.position.set(Math.cos(a) * rad, 0.2 + u.h0 + t * 0.6, Math.sin(a) * rad);
+          sp.material.rotation = -a + Math.PI / 2;
+          sp.scale.setScalar(u.s * (t < 0.15 ? t / 0.15 : 1));
+          sp.material.opacity = t > 0.7 ? (1 - t) / 0.3 : 1;
+        }
+      },
+    });
+  }
+
+  // Eclats de roche qui volent (frappe sismique).
+  _rockDebris(p, n = 8) {
+    return this._makeEffect({
+      duration: 0.9,
+      build: () => {
+        const grp = new THREE.Group();
+        const mat = new THREE.MeshToonMaterial({ color: 0x8a7a66 });
+        for (let i = 0; i < n; i++) {
+          const m = new THREE.Mesh(new THREE.IcosahedronGeometry(rand(0.06, 0.13), 0), mat);
+          const a = Math.random() * Math.PI * 2;
+          const v = rand(1.5, 3);
+          m.userData = { vx: Math.cos(a) * v, vz: Math.sin(a) * v, vy: rand(2.5, 4.5) };
+          grp.add(m);
+        }
+        grp.position.set(p.c, 0.1, p.r);
+        return grp;
+      },
+      tick: (t, grp, sec) => {
+        for (const m of grp.children) {
+          const u = m.userData;
+          m.position.set(u.vx * sec, Math.max(0, u.vy * sec - 4.9 * sec * sec), u.vz * sec);
+          m.rotation.x += 0.2; m.rotation.y += 0.15;
+          m.scale.setScalar(t > 0.8 ? (1 - t) / 0.2 : 1);
+        }
+      },
+    });
+  }
+
   // ---------- PROJECTILE BALISTIQUE ----------
   // Boule lumineuse (coeur blanc + halo colore) sur un arc parabolique,
   // traine d etincelles et eclat a l impact. `opts.kind` personnalise :
@@ -472,8 +811,35 @@ export class VFX {
           const rock = new THREE.Mesh(g, new THREE.MeshToonMaterial({ color: 0x8a7a66 }));
           grp.add(rock);
           grp.userData.spinner = rock;
+        } else if (kind === 'barrel') {
+          // Tonneau qui roule (Karcham).
+          const barrel = new THREE.Group();
+          const wood = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.4, 14), new THREE.MeshToonMaterial({ color: 0x9a6232 }));
+          wood.rotation.z = Math.PI / 2;
+          barrel.add(wood);
+          for (const x of [-0.13, 0.13]) {
+            const hoop = new THREE.Mesh(new THREE.TorusGeometry(0.225, 0.025, 6, 16), new THREE.MeshToonMaterial({ color: 0x8a8a96 }));
+            hoop.rotation.y = Math.PI / 2;
+            hoop.position.x = x;
+            barrel.add(hoop);
+          }
+          barrel.rotation.y = Math.atan2(dx, dz) + Math.PI / 2;
+          grp.add(barrel);
+          grp.userData.roller = barrel;
+        } else if (kind === 'coin') {
+          const coin = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.04, 20), new THREE.MeshToonMaterial({ color: 0xffc830, emissive: 0x6a4a00 }));
+          grp.add(coin);
+          grp.userData.spinner = coin;
+        } else if (kind === 'needle') {
+          const n = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.6, 6), new THREE.MeshToonMaterial({ color: 0xffd24a, emissive: 0x6a4a00 }));
+          n.rotation.x = Math.PI / 2;
+          const holder = new THREE.Group();
+          holder.add(n);
+          holder.lookAt(dx, 0, dz);
+          grp.add(holder);
         } else {
-          const core = mkSprite(spriteMat(kind === 'spit' ? 'drop' : kind === 'heal' ? 'heart' : 'glow', kind === 'orb' ? 0xffffff : lighten(color, 0.3)));
+          const coreTex = { spit: 'drop', heal: 'heart', feather: 'feather', fire: 'glow' }[kind] || 'glow';
+          const core = mkSprite(spriteMat(coreTex, kind === 'orb' ? 0xffffff : lighten(color, 0.3)));
           core.scale.setScalar(radius * (kind === 'orb' ? 3.2 : 3.6));
           grp.add(core);
           grp.userData.core = core;
@@ -498,13 +864,27 @@ export class VFX {
         grp.position.set(x, y, z);
         const u = grp.userData;
         if (u.spinner) { u.spinner.rotation.x += 0.3; u.spinner.rotation.y += 0.2; }
+        if (u.roller) { u.roller.children.forEach(ch => { ch.rotation.x -= 0.35; }); grp.position.y = 0.3 + Math.abs(Math.sin(t * Math.PI * 3)) * 0.25; }
+        if (u.core && kind === 'feather') u.core.material.rotation = Math.sin(t * 12) * 0.6;
         if (u.halo) u.halo.material.rotation += 0.1;
         if (u.core && kind === 'spit') {
           // La goutte s oriente dans le sens de la chute.
           u.core.material.rotation = t < 0.5 ? Math.PI : 0;
         }
         // Traine : petites etincelles semees le long du trajet.
-        if (kind !== 'rock' && sec - lastEmit > 0.03) {
+        if (kind === 'fire' && sec - lastEmit > 0.02) {
+          lastEmit = sec;
+          this.burst(new THREE.Vector3(x, y, z), {
+            tex: 'glow', color: [0xffe27a, 0xff8a2a, 0xff4a10], count: 3, speed: [0.2, 0.7],
+            upward: 1, gravity: 1.5, life: 0.4, size: [0.3, 0.55], grow: 0.5,
+          });
+        } else if (kind === 'barrel' && sec - lastEmit > 0.05) {
+          lastEmit = sec;
+          this.burst(new THREE.Vector3(x, 0.1, z), {
+            tex: 'smoke', color: 0xb8a078, normalBlend: true, count: 1, speed: [0.1, 0.3],
+            gravity: 0, life: 0.5, size: [0.3, 0.45], grow: 1, opacity: 0.6,
+          });
+        } else if (kind !== 'rock' && kind !== 'barrel' && kind !== 'coin' && kind !== 'needle' && sec - lastEmit > 0.03) {
           lastEmit = sec;
           this.burst(new THREE.Vector3(x, y, z), {
             tex: kind === 'heal' ? 'heart' : 'star', color: [color, lighten(color, 0.5), 0xffffff], count: 3,

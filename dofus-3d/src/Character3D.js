@@ -21,6 +21,7 @@ import { buildChampignon } from './models/champignon.js';
 import { buildChampignonRoyal } from './models/champignonRoyal.js';
 import { HpBar3D } from './HpBar3D.js';
 import { toonify } from './Toon.js';
+import { rigModel, poseRig } from './Rig.js';
 
 const BUILDERS = {
   iop: buildIop,
@@ -62,8 +63,8 @@ const HP_BAR_Y = {
   dragounetRouge: 1.40,
   chatonBlanc: 1.45,
   pandawa: 2.05,
-  chafer: 1.60,
-  chaferRoyal: 2.30,
+  chafer: 1.85,
+  chaferRoyal: 2.6,
   tofu: 1.05,
   tofuRoyal: 1.55,
   champignon: 1.45,
@@ -89,6 +90,8 @@ export class Character3D {
     // Style Dofus : cel-shading + contour sombre.
     toonify(this.body, { width: 0.018, minRadius: 0.06 });
     this.group.add(this.body);
+    // Pivots de membres (bras / jambes / tete) pour les animations.
+    this.rig = rigModel(this.body, classId);
     this._materials = [];
     this.body.traverse(o => {
       if (o.isMesh && !o.userData.isOutline && o.material && o.material.emissive && !this._materials.includes(o.material)) {
@@ -153,6 +156,13 @@ export class Character3D {
     this.body.scale.set(1 - b * 0.018, 1 + b * 0.03, 1 - b * 0.018);
     this.body.position.y = 0;
     this.body.rotation.set(0, 0, Math.sin(time * 1.2 + this.idleOffset) * 0.02);
+    // Bras qui bougent legerement, tete qui regarde autour.
+    poseRig(this.rig, {
+      armSwing: b * 0.05,
+      armOut: 0.06 + b * 0.03,
+      headTilt: Math.sin(time * 0.9 + this.idleOffset) * 0.05,
+      headTurn: Math.sin(time * 0.5 + this.idleOffset * 2) * 0.12,
+    });
   }
 
   // Petite animation "procedurale" du corps pendant `duration` ms :
@@ -169,6 +179,7 @@ export class Character3D {
           this.body.scale.set(1, 1, 1);
           this.body.position.set(0, 0, 0);
           this.body.rotation.set(0, 0, 0);
+          poseRig(this.rig, {});
           this._anim = false;
           resolve();
         }
@@ -183,6 +194,7 @@ export class Character3D {
       if (t < 0.3) {
         const k = t / 0.3;
         this.body.scale.set(1 + 0.12 * k, 1 - 0.18 * k, 1 + 0.12 * k);
+        poseRig(this.rig, { armL: -0.4 * k, armR: -0.4 * k, armOut: 0.2 * k, headTilt: 0.15 * k, legSwing: 0 });
       } else {
         const k = (t - 0.3) / 0.7;
         const hop = Math.sin(k * Math.PI);
@@ -190,6 +202,9 @@ export class Character3D {
         const st = Math.sin(Math.min(1, k * 2) * Math.PI) * 0.16;
         this.body.scale.set(1 - st * 0.5, 1 + st, 1 - st * 0.5);
         this.body.rotation.x = -hop * 0.15;
+        // Bras leves vers le ciel pour canaliser le sort.
+        const up = Math.sin(Math.min(1, k * 1.4) * Math.PI);
+        poseRig(this.rig, { armL: -0.4 - 2.2 * up, armR: -0.4 - 2.2 * up, armOut: 0.2 + 0.35 * up, headTilt: -0.25 * up, legSwing: 0.25 * hop });
       }
     });
   }
@@ -208,6 +223,7 @@ export class Character3D {
       this.body.position.z = -k * 0.12;
       this.body.position.x = Math.sin(t * 40) * 0.04 * (1 - t);
       this.body.scale.set(1 + k * 0.08, 1 - k * 0.1, 1 + k * 0.08);
+      poseRig(this.rig, { armL: 0.7 * k, armR: 0.7 * k, armOut: 0.6 * k, headTilt: -0.35 * k, legSwing: 0.2 * k });
     }).then(() => {
       for (let i = 0; i < mats.length; i++) mats[i].emissive.copy(base[i]);
     });
@@ -257,6 +273,10 @@ export class Character3D {
         this.body.rotation.x = 0.12 * hop;
         const land = t > 0.8 ? Math.sin((t - 0.8) / 0.2 * Math.PI) * 0.1 : 0;
         this.body.scale.set(1 + land, 1 - land * 1.2 + hop * 0.05, 1 + land);
+        // Un pas par case : jambes et bras en opposition (on alterne la
+        // jambe de depart d une case a l autre).
+        const stride = Math.sin(t * Math.PI) * (this._stepSide = this._stepSide || 1);
+        poseRig(this.rig, { legSwing: stride * 0.75, armSwing: stride * 0.6, armOut: 0.08, headTilt: 0.06 });
         if (t < 1) requestAnimationFrame(step);
         else {
           this.group.position.x = c;
@@ -264,6 +284,8 @@ export class Character3D {
           this.body.position.y = 0;
           this.body.rotation.x = 0;
           this.body.scale.set(1, 1, 1);
+          this._stepSide = -(this._stepSide || 1);
+          poseRig(this.rig, {});
           this.busy = false;
           resolve();
         }
@@ -306,12 +328,19 @@ export class Character3D {
         this.group.position.z = sz + uz * offset;
         this.body.rotation.x = lean;
         this.body.scale.set(1 + sq, 1 - sq, 1 + sq);
+        // Bras arme : leve haut pendant l elan, puis abattu devant soi.
+        let strike;
+        if (t < 0.3) strike = -2.6 * (t / 0.3);
+        else if (t < 0.55) strike = -2.6 + 2.9 * ((t - 0.3) / 0.25);
+        else strike = 0.3 * (1 - (t - 0.55) / 0.45);
+        poseRig(this.rig, { armR: strike, armL: -strike * 0.25, legSwing: lean * 0.9, headTilt: lean * 0.4 });
         if (t < 1) requestAnimationFrame(step);
         else {
           this.group.position.x = sx;
           this.group.position.z = sz;
           this.body.rotation.x = 0;
           this.body.scale.set(1, 1, 1);
+          poseRig(this.rig, {});
           this.busy = false;
           resolve();
         }

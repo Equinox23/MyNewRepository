@@ -25,12 +25,12 @@ export function buildChaferRoyal() {
 
   // Couronne sur le sommet du casque (~1.42 * 1.4 = 1.99).
   const crownBase = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.20, 0.10, 12), gold);
-  crownBase.position.y = 2.05;
+  crownBase.position.y = 2.2;
   group.add(crownBase);
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2;
     const spike = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 6), gold);
-    spike.position.set(Math.cos(a) * 0.17, 2.17, Math.sin(a) * 0.17);
+    spike.position.set(Math.cos(a) * 0.17, 2.32, Math.sin(a) * 0.17);
     group.add(spike);
   }
 
