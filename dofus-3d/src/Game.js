@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { Fighter } from './Fighter.js';
 import { Character3D } from './Character3D.js';
 import { TurnManager } from './TurnManager.js';
@@ -7,6 +8,8 @@ import { spellElementColor } from './SpellIcons.js';
 import { getHero, addXp, monsterXp, bombBonus, heroStats } from './Leveling.js';
 import { MAP_BOOSTS } from './Map3D.js';
 import { recordWin, recordTier } from './Progress.js';
+import { damageElementOf, elementHex, ELEMENT_LABEL } from './Elements.js';
+import { equipmentStats, rollLoot, addItems } from './Items.js';
 
 // `homeMap` : la carte "maison" du monstre. Le vaincre dessus rapporte
 // une etoile d or, ailleurs une etoile d argent.
@@ -41,6 +44,25 @@ export const COMBATS = {
     enemyComposition: ['champignon', 'champignon', 'champignon', 'champignonRoyal'],
     homeMap: 'marais',
   },
+  // ---------- BOSS ----------
+  craqueleurLegendaire: {
+    name: 'Craqueleur Legendaire',
+    enemyComposition: ['craqueleurSauvage', 'craqueleurSauvage', 'craqueleurLegendaire'],
+    homeMap: 'falaise',
+    boss: true,
+  },
+  kwakwa: {
+    name: 'Kwakwa',
+    enemyComposition: ['tofu', 'tofu', 'kwakwa'],
+    homeMap: 'cascade',
+    boss: true,
+  },
+  minotoror: {
+    name: 'Minotoror',
+    enemyComposition: ['chafer', 'chafer', 'minotoror'],
+    homeMap: 'cimetiere',
+    boss: true,
+  },
 };
 
 const PLAYER_SPAWNS = [
@@ -59,13 +81,17 @@ function buildEnemyComposition(combat, playerCount) {
   const royal = base[base.length - 1];
   const comp = base.slice();
   if (playerCount >= 2) comp.push(minion, minion);
-  if (playerCount >= 3) comp.push(minion, royal);
+  // Un seul boss par combat : les combats de boss ne gagnent que des sbires.
+  if (playerCount >= 3) comp.push(minion, combat && combat.boss ? minion : royal);
   return comp;
 }
 
 export class Game {
-  constructor({ scene3d, map3d, picker, hud, rangeOverlay, vfx, audio }) {
+  constructor({ scene3d, map3d, picker, hud, rangeOverlay, zoneOverlay, vfx, audio }) {
     this.scene3d = scene3d;
+    this.zoneOverlay = zoneOverlay || null;
+    // Glyphes et pieges poses au sol.
+    this.zones = [];
     this.map3d = map3d;
     this.picker = picker;
     this.hud = hud;
@@ -95,6 +121,9 @@ export class Game {
     this.mode = 'move';
     this.selectedSpellId = null;
     this.rangeOverlay && this.rangeOverlay.clear();
+    this.zones = [];
+    this._paintZones();
+    this.lastResult = null;
 
     // Rebuild la carte si necessaire (eau/pont/foret/cascade).
     if (config.mapId) this.map3d.rebuild(config.mapId);
@@ -115,12 +144,19 @@ export class Game {
       let opts;
       if (team === 'player') {
         const hero = getHero(cls);
-        opts = { kind: 'hero', level: hero.level, spellLevels: hero.spellLevels };
+        opts = { kind: 'hero', level: hero.level, spellLevels: hero.spellLevels, equipment: equipmentStats(cls) };
       } else {
         opts = { kind: 'monster', level: monsterLevel };
       }
       const f = new Fighter(cls, team, pos.c, pos.r, opts);
+      // Aventure : les PV sont conserves d une salle a l autre.
+      const carried = config.adventure && config.adventure.hp && config.adventure.hp[cls];
+      if (team === 'player' && carried !== undefined) f.hp = Math.max(1, Math.min(f.maxHp, Math.round(carried * f.maxHp)));
       f.character = new Character3D(this.scene3d.scene, cls, team, pos.c, pos.r);
+      if (f.def.elementCycle) {
+        f.currentElement = f.def.elementCycle[0];
+        f.character.setElementTint(elementHex(f.currentElement));
+      }
       this.fighters.push(f);
     };
     playerClasses.forEach((cls, i) => spawn(cls, 'player', PLAYER_SPAWNS, i));
@@ -302,6 +338,9 @@ export class Game {
       }
     }
     this.fighters = [];
+    this.zones = [];
+    this._paintZones();
+    this.hud.clearPreviewTags && this.hud.clearPreviewTags();
     this.busy = false;
     // On NE remet PAS `ended` a false ni `turn` a null ici : si un combat
     // est abandonne pendant le tour de l IA, ses promesses en cours
@@ -331,7 +370,8 @@ export class Game {
     for (const b of cur.buffs) {
       if (b.dot && cur.alive) {
         const dmg = b.dot.min + Math.floor(Math.random() * (b.dot.max - b.dot.min + 1));
-        const actual = cur.takeDamage(dmg);
+        const res = cur.res[b.dot.element || 'neutre'] || 0;
+        const actual = cur.takeDamage(Math.round(dmg * (1 - res / 100)));
         dotTotal += actual;
       }
     }
@@ -356,7 +396,36 @@ export class Game {
     }
     if (this.checkEnd()) return;
 
+    // Glyphes : ceux du combattant actif vieillissent, puis ceux des
+    // adversaires sous ses pieds se declenchent (debut de tour).
+    this._tickZones(cur);
+    await this._triggerGlyphs(cur);
+    if (this.ended) return;
+    if (!cur.alive) {
+      this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
+      if (this.checkEnd()) return;
+      this.turn.advance();
+      this.startTurn();
+      return;
+    }
+
     cur.startTurn();
+    // Glyphe de ralentissement : retrait de PM applique apres le rafraichissement.
+    if (cur._glyphPmLoss) {
+      cur.pm = Math.max(0, cur.pm - cur._glyphPmLoss);
+      cur._glyphPmLoss = 0;
+    }
+    // Kwakwa : change d element a chaque tour.
+    if (cur.def.elementCycle) {
+      const cyc = cur.def.elementCycle;
+      const i = (cyc.indexOf(cur.currentElement) + 1) % cyc.length;
+      cur.currentElement = cyc[i];
+      cur.character.setElementTint(elementHex(cur.currentElement));
+      this.vfx && this.vfx.buffAura({ c: cur.c, r: cur.r }, { color: elementHex(cur.currentElement) });
+      this.hud.log && this.hud.log(`${cur.name} passe a l element ${ELEMENT_LABEL[cur.currentElement]} !`, 'buff');
+      this.hud.flash(`${cur.def.name} : element ${ELEMENT_LABEL[cur.currentElement]}`, 1300);
+    }
+    cur._turnStart = { c: cur.c, r: cur.r };
     for (const f of this.fighters) f.character.setActive(f === cur);
     // Synchronise le rendu fantomatique : l invisibilite expire au
     // debut du tour de son porteur (decrement des buffs).
@@ -420,6 +489,7 @@ export class Game {
     this.mode = mode;
     if (mode !== 'spell') this.selectedSpellId = null;
     this._pendingCast = null;
+    this.clearPreview();
     this.refreshRangeOverlay();
     this.hud.update(cur, this.mode, this.selectedSpellId);
   }
@@ -457,6 +527,7 @@ export class Game {
     }
     this.selectedSpellId = spell.id;
     this.mode = 'spell';
+    this.clearPreview();
     this.refreshRangeOverlay();
     this.hud.update(cur, this.mode, this.selectedSpellId);
   }
@@ -518,19 +589,153 @@ export class Game {
     if (cost > cur.pm) return;
     this.busy = true;
     this.picker.setHover(null);
-    cur.character.popCost(cost, 'pm');
-    for (const step of path.slice(1)) {
-      cur.pm--;
-      this.audio && this.audio.sfx('step');
-      this.hud.update(cur, this.mode, this.selectedSpellId);
-      this.refreshRangeOverlay();
-      await cur.character.moveTo(step.c, step.r, 170);
-      cur.c = step.c;
-      cur.r = step.r;
-    }
+    this.hud.clearPreviewTags && this.hud.clearPreviewTags();
+    await this._walk(cur, path.slice(1), 170);
     this.busy = false;
+    if (this.checkEnd()) return;
     this.refreshRangeOverlay();
     this.hud.update(cur, this.mode, this.selectedSpellId);
+  }
+
+
+  // ---------- TACLE / FUITE ----------
+  // Quitter une case au contact d ennemis coute des PM (et un peu de PA),
+  // selon la fuite du fuyard et le tacle cumule des adversaires au
+  // contact : esquive = (fuite + 2) / (2 x (tacle + 2)), comme dans Dofus.
+  tackleInfo(f, c = f.c, r = f.r) {
+    const adj = this.fighters.filter(o => o.alive && o.team !== f.team && !o.isBomb
+      && Math.abs(o.c - c) + Math.abs(o.r - r) === 1);
+    if (!adj.length) return null;
+    const tacle = adj.reduce((sum, o) => sum + o.tacle, 0);
+    const esquive = Math.max(0, Math.min(1, (f.fuite + 2) / (2 * (tacle + 2))));
+    return { tacle, esquive, count: adj.length };
+  }
+
+  _tackleLoss(f) {
+    const info = this.tackleInfo(f);
+    if (!info || info.esquive >= 1) return null;
+    const pm = Math.floor(f.pm * (1 - info.esquive));
+    const pa = Math.floor(f.pa * (1 - info.esquive) * 0.5);
+    if (pm <= 0 && pa <= 0) return null;
+    return { pm, pa, esquive: info.esquive };
+  }
+
+  // Deplace un combattant case par case : tacle au depart de chaque case
+  // au contact d un ennemi, pieges declenches a l arrivee.
+  async _walk(f, steps, speed = 200) {
+    let walked = 0;
+    for (const step of steps) {
+      if (!f.alive || this.ended) break;
+      if (f.pm <= 0 || f.rooted) break;
+      const loss = this._tackleLoss(f);
+      if (loss) {
+        f.pm = Math.max(0, f.pm - loss.pm);
+        f.pa = Math.max(0, f.pa - loss.pa);
+        const txt = `TACLE${loss.pm ? ' -' + loss.pm + ' PM' : ''}${loss.pa ? ' -' + loss.pa + ' PA' : ''}`;
+        f.character.popText(txt, '#ffb040', { fontSize: 20, yStart: 1.6, yRise: 0.6, scaleX: 1.5, scaleY: 0.42 });
+        this.vfx && this.vfx.flash(f.c, f.r, { color: 0xffa040, duration: 0.3 });
+        this.audio && this.audio.sfx('uiError');
+        this.hud.log && this.hud.log(`${f.name} est tacle (${Math.round(loss.esquive * 100)}% d esquive) : -${loss.pm} PM, -${loss.pa} PA`, 'buff');
+        this.hud.update(this.turn.current(), this.mode, this.selectedSpellId);
+        await new Promise(r => setTimeout(r, 380));
+        if (f.pm <= 0) break;
+      }
+      f.pm--;
+      walked++;
+      if (f.team === 'player') this.audio && this.audio.sfx('step');
+      this.hud.update(this.turn.current(), this.mode, this.selectedSpellId);
+      if (f.team === 'player' && !f.def.ai) this.refreshRangeOverlay();
+      await f.character.moveTo(step.c, step.r, speed);
+      f.c = step.c;
+      f.r = step.r;
+      if (await this._checkTraps(f)) break;
+    }
+    if (walked) f.character.popCost(walked, 'pm');
+    return walked;
+  }
+
+  // ---------- GLYPHES ET PIEGES ----------
+  // zone : { kind: 'glyph' | 'trap', cells, c, r, owner, team, turns,
+  //          color, name, element, onTurn | trigger, radius }
+  _paintZones() {
+    if (!this.zoneOverlay) return;
+    this.zoneOverlay.clear();
+    for (const z of this.zones) {
+      // Les pieges adverses restent invisibles pour le joueur.
+      if (z.kind === 'trap' && z.team !== 'player') continue;
+      this.zoneOverlay.paint(z.cells, z.color, z.kind === 'trap' ? 0.32 : 0.5);
+    }
+  }
+
+  _tickZones(cur) {
+    let changed = false;
+    for (const z of this.zones) {
+      if (z.owner === cur && z.kind === 'glyph') { z.turns--; changed = true; }
+    }
+    const before = this.zones.length;
+    this.zones = this.zones.filter(z => z.kind !== 'glyph' || (z.turns > 0 && z.owner && z.owner.alive));
+    if (changed || before !== this.zones.length) this._paintZones();
+  }
+
+  async _triggerGlyphs(f) {
+    for (const z of this.zones.slice()) {
+      if (z.kind !== 'glyph' || z.team === f.team || !f.alive) continue;
+      if (!z.cells.some(cl => cl.c === f.c && cl.r === f.r)) continue;
+      this.vfx && this.vfx.shockwave(f.c, f.r, { color: z.color, radius: 0.9, duration: 0.5 });
+      this.hud.log && this.hud.log(`${f.name} commence son tour dans ${z.name}`, 'attack');
+      const t = z.onTurn || {};
+      if (t.damage) {
+        const base = t.damage.min + Math.floor(Math.random() * (t.damage.max - t.damage.min + 1));
+        await this._zoneDamage(z, f, base);
+      }
+      if (f.alive && t.debuffPm) {
+        f._glyphPmLoss = (f._glyphPmLoss || 0) + t.debuffPm;
+        f.character.popText('-' + t.debuffPm + ' PM', '#74e69b', { fontSize: 22, dx: -0.45, yStart: 1.35, scaleX: 1.1, scaleY: 0.42 });
+      }
+      if (f.alive && t.debuffPa) f.pendingPaDebuff = (f.pendingPaDebuff || 0) + t.debuffPa;
+      await new Promise(r => setTimeout(r, 300));
+    }
+  }
+
+  async _zoneDamage(z, tf, base) {
+    const mult = (z.owner && z.owner.damageMultiplier) ? z.owner.damageMultiplier() : 1;
+    const res = tf.res[z.element || 'neutre'] || 0;
+    const dmg = Math.round(base * mult * (1 - res / 100));
+    const actual = tf.takeDamage(dmg);
+    tf.character.popDamage(actual);
+    tf.character.hpBar.setHp(tf.hp, tf.maxHp);
+    tf.character.hitReact && tf.character.hitReact();
+    this.hud.log && this.hud.log(`${z.name} : ${tf.name} subit ${actual} degats`, 'attack');
+    if (!tf.alive) {
+      this.hud.log && this.hud.log(`${tf.name} est vaincu !`, 'death');
+      this.audio && this.audio.sfx('death');
+      await tf.character.die();
+      this.hud.setTurnOrder && this.hud.setTurnOrder(this.turn.order, this.turn.current());
+      this.checkEnd();
+    }
+  }
+
+  // Piege adverse sur la case du combattant : explosion en zone.
+  async _checkTraps(f) {
+    const z = this.zones.find(t => t.kind === 'trap' && t.team !== f.team && t.c === f.c && t.r === f.r);
+    if (!z) return false;
+    this.zones = this.zones.filter(t => t !== z);
+    this._paintZones();
+    this.audio && this.audio.sfx('explosion');
+    if (this.vfx) {
+      this.vfx.shockwave(z.c, z.r, { color: 0xff8a3a, radius: (z.radius || 1) + 0.7, duration: 0.6 });
+      this.vfx.flash(z.c, z.r, { color: 0xffd166, duration: 0.4 });
+    }
+    this.hud.log && this.hud.log(`${f.name} declenche ${z.name} !`, 'attack');
+    const cells = this.circleCells(z.c, z.r, z.radius || 0);
+    const keys = new Set(cells.map(cl => cl.c + ',' + cl.r));
+    const victims = this.fighters.filter(o => o.alive && !o.isBomb && o.team !== z.team && keys.has(o.c + ',' + o.r));
+    for (const v of victims) {
+      const d = z.trigger.damage;
+      await this._zoneDamage(z, v, d.min + Math.floor(Math.random() * (d.max - d.min + 1)));
+      if (this.ended) return true;
+    }
+    return true;
   }
 
   // ---------- SORTS (joueur) ----------
@@ -557,14 +762,15 @@ export class Game {
       if (isTouch) this.setMode('move');
       return;
     }
-    // Sorts en 2 clics (confirmCast) : le 1er clic affiche l apercu
-    // de la zone d effet, le 2eme sur la MEME case lance reellement.
-    if (spell.confirmCast) {
+    // Sorts en 2 clics (confirmCast, et tous les sorts sur ecran tactile,
+    // comme Dofus Touch) : le 1er appui affiche l apercu de la zone et des
+    // degats, le 2eme sur la MEME case lance reellement.
+    if (spell.confirmCast || isTouch) {
       if (!this._pendingCast || this._pendingCast.spellId !== spell.id
           || this._pendingCast.c !== c || this._pendingCast.r !== r) {
         this._pendingCast = { spellId: spell.id, c, r };
         this.showCastPreview(cur, spell, c, r);
-        this.hud.flash('Touchez a nouveau la case pour confirmer', 1200);
+        this.hud.flash('Touche a nouveau la case pour lancer', 1200);
         return;
       }
       this._pendingCast = null;
@@ -585,6 +791,7 @@ export class Game {
     this.hud.update(cur, this.mode, this.selectedSpellId);
     this.busy = true;
     this.picker.setHover(null);
+    this.clearPreview();
     this.rangeOverlay.clear();
     await this.applySpellEffects(cur, spell, { c, r });
     this.busy = false;
@@ -699,16 +906,7 @@ export class Game {
   async applyEffect(effect, caster, spell, target) {
     switch (effect.type) {
       case 'damage': {
-        let cells;
-        if (spell.area && spell.area.type === 'line') {
-          cells = this.lineCells(caster, target, spell.area.length, !!spell.area.piercing);
-        } else if (spell.area && spell.area.type === 'cross') {
-          cells = this.crossCells(target.c, target.r, spell.area.size);
-        } else if (spell.area && spell.area.type === 'circle') {
-          cells = this.circleCells(target.c, target.r, spell.area.radius);
-        } else {
-          cells = [{ c: target.c, r: target.r }];
-        }
+        const cells = this.areaCells(caster, spell, target);
         const firstCell = cells[0] || target;
         const dist = Math.abs(caster.c - firstCell.c) + Math.abs(caster.r - firstCell.r);
         const isLine = spell.area && spell.area.type === 'line';
@@ -807,6 +1005,7 @@ export class Game {
 
         const dying = [];
         let touched = 0;
+        let totalDealt = 0;
         // Pour la ligne, on echelonne les impacts pour suivre la lame.
         const cellDelay = isLine ? 70 : 0;
         for (let i = 0; i < cells.length; i++) {
@@ -815,8 +1014,10 @@ export class Game {
           const tf = this.fighters.find(f => f.alive && f.c === cell.c && f.r === cell.r);
           if (!tf) continue;
           if (tf === caster) continue;
-          const base = effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1));
-          const dmg = Math.round(base * caster.damageMultiplier());
+          // Degats : jet, bonus du lanceur, critique, puis resistance
+          // elementaire de la cible et enfin boucliers.
+          const hit = this.rollHit(caster, tf, spell, effect);
+          const dmg = hit.dmg;
           // Degats apres bouclier ; une part peut etre renvoyee a
           // l attaquant (buff Momification du Xelor).
           const postShield = tf.computeShielded(dmg);
@@ -828,10 +1029,13 @@ export class Game {
           const actual = Math.max(0, postShield - reflected);
           tf.hp = Math.max(0, tf.hp - actual);
           if (tf.hp <= 0) tf.alive = false;
-          tf.character.popDamage(actual);
+          tf.character.popDamage(actual, hit.crit ? '#ffcf3a' : undefined);
+          if (hit.crit) tf.character.popText('CRITIQUE !', '#ffcf3a', { fontSize: 20, yStart: 1.9, yRise: 0.6, scaleX: 1.3, scaleY: 0.42 });
           tf.character.hpBar.setHp(tf.hp, tf.maxHp);
-          if (this.vfx) this.vfx.impact(cell.c, cell.r, { color: spellElementColor(spell), big: actual >= 40 });
-          this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} subit ${actual} degats`, 'attack');
+          if (this.vfx) this.vfx.impact(cell.c, cell.r, { color: elementHex(hit.el), big: actual >= 40 || hit.crit });
+          totalDealt += actual;
+          const resTxt = hit.res ? ` (res. ${ELEMENT_LABEL[hit.el]} ${hit.res > 0 ? '+' : ''}${hit.res}%)` : '';
+          this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} subit ${actual} degats${hit.crit ? ' CRITIQUES' : ''}${resTxt}`, 'attack');
           if (!tf.alive) dying.push(tf);
           touched++;
           // Renvoi de degats vers l attaquant.
@@ -848,6 +1052,15 @@ export class Game {
           this.hud.log && this.hud.log(`${caster.name} lance ${spell.name} (sans cible)`, 'cast');
         } else {
           this.audio && this.audio.sfx('hit');
+        }
+        // Vol de vie (Mot Blessant) : le lanceur recupere une part des degats.
+        if (effect.lifesteal && totalDealt > 0 && caster.alive) {
+          const healed = caster.heal(Math.round(totalDealt * effect.lifesteal));
+          if (healed > 0) {
+            caster.character.popHeal(healed);
+            caster.character.hpBar.setHp(caster.hp, caster.maxHp);
+            this.hud.log && this.hud.log(`${caster.name} recupere ${healed} PV`, 'heal');
+          }
         }
         if (lunge) await lunge;
         for (const d of dying) {
@@ -895,6 +1108,7 @@ export class Game {
         caster.r = target.r;
         if (this.vfx) this.vfx.portal(target.c, target.r, { color: 0x6ee7b6 });
         this.hud.log && this.hud.log(`${caster.name} se teleporte (${spell.name})`, 'cast');
+        await this._checkTraps(caster);
         return;
       }
       case 'buff': {
@@ -936,17 +1150,31 @@ export class Game {
             if (effect.shield) this.vfx.shieldDome({ c: tf.c, r: tf.r }, { color: buffColorHex });
             else this.vfx.buffAura({ c: tf.c, r: tf.r }, { color: buffColorHex });
           }
+          // Roue de la Fortune : bonus de degats tire au hasard.
+          let dmgMult = effect.damageMult;
+          if (effect.damageMultRoll) {
+            const [lo, hi] = effect.damageMultRoll;
+            dmgMult = +(lo + Math.random() * (hi - lo)).toFixed(2);
+            tf.character.popText(`+${Math.round(dmgMult * 100)}% !`, '#ffcf3a', { fontSize: 22, yStart: 1.7, yRise: 0.6, scaleX: 1.2, scaleY: 0.45 });
+            this.hud.log && this.hud.log(`${spell.name} : +${Math.round(dmgMult * 100)}% de degats`, 'buff');
+          }
           tf.buffs.push({
             duration: (effect.duration || 1) + 1,
-            damageMult: effect.damageMult,
+            damageMult: dmgMult,
             bonusPa: effect.bonusPa,
             bonusPm: effect.bonusPm,
             shield: effect.shield,
             reflect: effect.reflect,
             invisible: effect.invisible,
+            crit: effect.crit,
+            fuite: effect.fuite,
+            tacle: effect.tacle,
+            stabilized: effect.stabilized,
+            res: effect.res,
+            source: spell.name,
           });
-          if (effect.bonusPa) tf.pa += effect.bonusPa;
-          if (effect.bonusPm) tf.pm += effect.bonusPm;
+          if (effect.bonusPa) tf.pa = Math.max(0, tf.pa + effect.bonusPa);
+          if (effect.bonusPm) tf.pm = Math.max(0, tf.pm + effect.bonusPm);
           tf.character.flashGlow(buffColorHex, 900);
           if (effect.invisible && tf.character.setGhost) tf.character.setGhost(true);
         }
@@ -1057,7 +1285,7 @@ export class Game {
         }
         tf.buffs.push({
           duration: (effect.duration || 1) + 1,
-          dot: { min: effect.min, max: effect.max },
+          dot: { min: effect.min, max: effect.max, element: damageElementOf(spell, caster) },
         });
         tf.character.popText('POISON', '#c39bd3', {
           fontSize: 18, yStart: 1.5, yRise: 0.7, scaleX: 1.1, scaleY: 0.4,
@@ -1208,6 +1436,11 @@ export class Game {
         // Repousse la cible en ligne droite, loin du lanceur.
         const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
         if (!tf || tf === caster) return;
+        if (tf.stabilized) {
+          tf.character.popText('STABILISE', '#d8c8a0', { fontSize: 18, yStart: 1.6, yRise: 0.5, scaleX: 1.3, scaleY: 0.4 });
+          this.hud.log && this.hud.log(`${tf.name} est stabilise : il ne bouge pas`, 'cast');
+          return;
+        }
         const dc0 = tf.c - caster.c, dr0 = tf.r - caster.r;
         let sc = 0, sr = 0;
         if (Math.abs(dc0) >= Math.abs(dr0)) sc = Math.sign(dc0) || 1;
@@ -1228,12 +1461,13 @@ export class Game {
         if (this.vfx) this.vfx.flash(tf.c, tf.r, { color: 0xffd166, duration: 0.25 });
         this.audio && this.audio.sfx('knockback');
         let cc = tf.c, cr = tf.r;
+        this.hud.log && this.hud.log(`${caster.name} repousse ${tf.name}`, 'cast');
         while (cc !== destC || cr !== destR) {
           cc += sc; cr += sr;
           await tf.character.moveTo(cc, cr, 110);
+          tf.c = cc; tf.r = cr;
+          if (await this._checkTraps(tf)) break;
         }
-        tf.c = destC; tf.r = destR;
-        this.hud.log && this.hud.log(`${caster.name} repousse ${tf.name}`, 'cast');
         return;
       }
       case 'gainPa': {
@@ -1250,6 +1484,80 @@ export class Game {
         this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : +${effect.amount} PA`, 'buff');
         this.hud.update(this.turn.current(), this.mode, this.selectedSpellId);
         await new Promise(r => setTimeout(r, 350));
+        return;
+      }
+      case 'state': {
+        // Etat (enracinement) applique aux adversaires de la zone.
+        const cells = this.areaCells(caster, spell, target);
+        const keys = new Set(cells.map(cl => cl.c + ',' + cl.r));
+        const victims = this.fighters.filter(f => f.alive && !f.isBomb && f.team !== caster.team && keys.has(f.c + ',' + f.r));
+        for (const tf of victims) {
+          if (effect.rooted) {
+            tf.buffs.push({ duration: (effect.duration || 1) + 1, rooted: true, source: spell.name });
+            if (this.turn.current() === tf) tf.pm = 0;
+            tf.character.popText('ENRACINE', '#c8a060', { fontSize: 20, yStart: 1.7, yRise: 0.6, scaleX: 1.4, scaleY: 0.42 });
+            tf.character.flashGlow(0x8a6a3a, 700);
+            this.vfx && this.vfx.debuffCloud({ c: tf.c, r: tf.r }, { color: 0x8a6a3a });
+            this.hud.log && this.hud.log(`${tf.name} est enracine (${effect.duration} tours)`, 'buff');
+          }
+        }
+        if (victims.length) await new Promise(r => setTimeout(r, 350));
+        return;
+      }
+      case 'glyph': {
+        const cells = this.circleCells(target.c, target.r, effect.radius || 1)
+          .filter(cl => !this.map3d.isWater(cl.c, cl.r) || this.map3d.isBridge(cl.c, cl.r));
+        // Un seul glyphe du meme sort par lanceur : le nouveau remplace l ancien.
+        this.zones = this.zones.filter(z => !(z.owner === caster && z.spellId === spell.id));
+        this.zones.push({
+          kind: 'glyph', spellId: spell.id, cells, c: target.c, r: target.r, radius: effect.radius || 1,
+          owner: caster, team: caster.team, turns: effect.duration || 2, color: effect.color || 0x4ab0ff,
+          name: effect.name || 'Glyphe', element: damageElementOf(spell, caster), onTurn: effect.onTurn || {},
+        });
+        this._paintZones();
+        this.vfx && this.vfx.castGlyph && this.vfx.castGlyph(target.c, target.r, { color: effect.color || 0x4ab0ff });
+        this.hud.log && this.hud.log(`${caster.name} pose ${effect.name || 'un glyphe'} (${effect.duration} tours)`, 'summon');
+        await new Promise(r => setTimeout(r, 250));
+        return;
+      }
+      case 'trap': {
+        if (this.fighters.some(f => f.alive && f.c === target.c && f.r === target.r)) return;
+        this.zones = this.zones.filter(z => !(z.owner === caster && z.spellId === spell.id));
+        this.zones.push({
+          kind: 'trap', spellId: spell.id, cells: [{ c: target.c, r: target.r }], c: target.c, r: target.r,
+          radius: effect.radius || 1, owner: caster, team: caster.team, color: effect.color || 0x9a8a78,
+          name: effect.name || 'Piege', element: damageElementOf(spell, caster), trigger: effect.trigger,
+        });
+        this._paintZones();
+        if (caster.team === 'player' && this.vfx) this.vfx.portal(target.c, target.r, { color: effect.color || 0x9a8a78, duration: 0.4 });
+        this.hud.log && this.hud.log(caster.team === 'player' ? `${caster.name} pose ${effect.name}` : `${caster.name} pose quelque chose au sol...`, 'summon');
+        return;
+      }
+      case 'charge': {
+        // Le lanceur fonce en ligne droite jusqu a la case avant la cible.
+        const dc = Math.sign(target.c - caster.c), dr = Math.sign(target.r - caster.r);
+        if (caster.stabilized && caster.rooted) return;
+        let cc = caster.c, cr = caster.r;
+        const path = [];
+        while (true) {
+          const nc = cc + dc, nr = cr + dr;
+          if (nc === target.c && nr === target.r) break;
+          if (!this.map3d.inBounds(nc, nr) || this.map3d.isBlockedFor(nc, nr, caster)) break;
+          if (this.fighters.some(f => f.alive && f.c === nc && f.r === nr)) break;
+          path.push({ c: nc, r: nr });
+          cc = nc; cr = nr;
+          if (path.length > 12) break;
+        }
+        if (!path.length) return;
+        this.audio && this.audio.sfx('knockback');
+        this.vfx && this.vfx.flash(caster.c, caster.r, { color: 0xffd166, duration: 0.3 });
+        for (const st of path) {
+          await caster.character.moveTo(st.c, st.r, 90);
+          caster.c = st.c; caster.r = st.r;
+          if (await this._checkTraps(caster)) break;
+        }
+        caster.character.faceToward(target.c, target.r);
+        this.hud.log && this.hud.log(`${caster.name} charge !`, 'attack');
         return;
       }
       case 'chanceStrike': {
@@ -1312,8 +1620,8 @@ export class Game {
         if (!tf._exploding) chained.push(tf);
         continue;
       }
-      // Allies comme ennemis : pas de filtre de team.
-      const actual = tf.takeDamage(dmg);
+      // Allies comme ennemis : pas de filtre de team. Degats de feu.
+      const actual = tf.takeDamage(Math.round(dmg * (1 - (tf.res.feu || 0) / 100)));
       tf.character.popDamage(actual);
       tf.character.hpBar.setHp(tf.hp, tf.maxHp);
       if (this.vfx) this.vfx.flash(cell.c, cell.r, { color: 0xff8a00, duration: 0.3 });
@@ -1409,6 +1717,36 @@ export class Game {
     return cells.filter(c => this.map3d.inBounds(c.c, c.r) && !this.map3d.isWall(c.c, c.r));
   }
 
+  // Cases touchees par un sort lance sur `target`.
+  areaCells(caster, spell, target) {
+    const a = spell.area;
+    if (a && a.type === 'line') return this.lineCells(caster, target, a.length, !!a.piercing);
+    if (a && a.type === 'cross') return this.crossCells(target.c, target.r, a.size);
+    if (a && a.type === 'circle') return this.circleCells(target.c, target.r, a.radius);
+    return [{ c: target.c, r: target.r }];
+  }
+
+  // Jet de degats d un effet sur une cible : bonus du lanceur, coup
+  // critique (x1.3), resistance elementaire de la cible.
+  rollHit(caster, tf, spell, effect) {
+    const base = effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1));
+    const el = damageElementOf(spell, caster);
+    let dmg = base * caster.damageMultiplier();
+    const crit = !caster.isBomb && Math.random() < caster.critChance;
+    if (crit) dmg *= 1.3;
+    const res = tf.res[el] || 0;
+    dmg *= (1 - res / 100);
+    return { dmg: Math.max(0, Math.round(dmg)), crit, el, res };
+  }
+
+  // Estimation (sans hasard) des degats d un effet apres resistances et
+  // boucliers : sert a l apercu avant le lancer.
+  estimateHit(caster, tf, spell, min, max) {
+    const el = damageElementOf(spell, caster);
+    const k = caster.damageMultiplier() * (1 - (tf.res[el] || 0) / 100);
+    return { min: tf.computeShielded(Math.round(min * k)), max: tf.computeShielded(Math.round(max * k)), el };
+  }
+
   refreshRangeOverlay() {
     if (this.phase === 'placement') { this._refreshPlacement(); return; }
     this.rangeOverlay.clear();
@@ -1462,7 +1800,113 @@ export class Game {
     }
   }
 
-  showCastPreview(_caster, _spell, _c, _r) {}
+  showCastPreview(_caster, _spell, c, r) {
+    this._previewKey = null;
+    this.previewAt(c, r);
+  }
+
+  clearPreview() {
+    this._previewKey = null;
+    this.hud.clearPreviewTags && this.hud.clearPreviewTags();
+  }
+
+  // Apercu au survol (ou au 1er appui tactile) : zone d effet du sort en
+  // orange et estimation des degats / soins sur chaque cible. En mode
+  // deplacement, affiche l esquive si le heros est au contact d ennemis.
+  previewAt(c, r) {
+    if (!this.turn || this.busy || this.ended || this.phase === 'placement') { this.clearPreview(); return; }
+    const cur = this.turn.current();
+    if (!cur || cur.team !== 'player' || cur.def.ai) { this.clearPreview(); return; }
+    if (this.mode === 'move') {
+      const info = this.tackleInfo(cur);
+      const key = `move:${cur.c},${cur.r}:${info ? info.esquive : '-'}`;
+      if (key === this._previewKey) return;
+      this._previewKey = key;
+      if (!info || info.esquive >= 1) { this.hud.clearPreviewTags && this.hud.clearPreviewTags(); return; }
+      const loss = Math.floor(cur.pm * (1 - info.esquive));
+      this._showTags([{ f: cur, lines: [{ text: `Esquive ${Math.round(info.esquive * 100)}%`, color: '#ffcf5a' }, { text: `-${loss} PM si tu pars`, color: '#ffb040' }] }]);
+      return;
+    }
+    if (this.mode !== 'spell' || !this.selectedSpellId) { this.clearPreview(); return; }
+    const spell = cur.spellById(this.selectedSpellId);
+    if (!spell) return;
+    const key = `${spell.id}:${c},${r}`;
+    if (key === this._previewKey) return;
+    this._previewKey = key;
+    this.refreshRangeOverlay();
+    if (c === null || c === undefined || this.validateSpellTarget(cur, spell, c, r)) {
+      this.hud.clearPreviewTags && this.hud.clearPreviewTags();
+      return;
+    }
+    const target = { c, r };
+    const area = this.areaCells(cur, spell, target);
+    this.rangeOverlay.paint(area, 0xff8a2a, 0.72);
+    this._showTags(this.estimateSpell(cur, spell, target, area));
+  }
+
+  // Estimation des effets d un sort sur chaque combattant touche.
+  estimateSpell(caster, spell, target, area) {
+    const keys = new Set(area.map(cl => cl.c + ',' + cl.r));
+    const inArea = this.fighters.filter(f => f.alive && keys.has(f.c + ',' + f.r));
+    const onCell = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
+    const out = new Map();
+    const add = (f, line) => {
+      if (!out.has(f)) out.set(f, { f, lines: [], min: 0, max: 0 });
+      out.get(f).lines.push(line);
+    };
+    for (const e of spell.effects) {
+      if (e.type === 'damage') {
+        for (const f of inArea) {
+          if (f === caster) continue;
+          const est = this.estimateHit(caster, f, spell, e.min, e.max);
+          const entry = out.get(f) || { f, lines: [], min: 0, max: 0 };
+          out.set(f, entry);
+          entry.min += est.min; entry.max += est.max;
+          entry.el = est.el;
+        }
+      } else if (e.type === 'chanceStrike' && onCell) {
+        const est = this.estimateHit(caster, onCell, spell, e.dmgMin, e.dmgMax);
+        add(onCell, { text: `50% : ${est.min}-${est.max}`, color: '#ff7a5a' });
+        add(onCell, { text: `50% : soin ${e.healMin}-${e.healMax}`, color: '#7ae08a' });
+      } else if ((e.type === 'heal' || e.type === 'heal_percent') && onCell) {
+        const lo = e.type === 'heal' ? e.min : Math.round(onCell.maxHp * e.percent);
+        const hi = e.type === 'heal' ? e.max : lo;
+        add(onCell, { text: `+${Math.min(lo, onCell.maxHp - onCell.hp)}${hi !== lo ? '-' + Math.min(hi, onCell.maxHp - onCell.hp) : ''} PV`, color: '#7ae08a' });
+      } else if (e.type === 'knockback' && onCell && onCell !== caster) {
+        add(onCell, { text: onCell.stabilized ? 'Stabilise' : `Recul ${e.distance}`, color: '#ffd166' });
+      } else if ((e.type === 'debuff_pa' || e.type === 'debuff_pm') && onCell && onCell !== caster) {
+        const v = e.value !== undefined ? e.value : `${e.min}-${e.max}`;
+        add(onCell, { text: `-${v} ${e.type === 'debuff_pa' ? 'PA' : 'PM'}${e.chance ? ` (${Math.round(e.chance * 100)}%)` : ''}`, color: e.type === 'debuff_pa' ? '#7ec6ff' : '#74e69b' });
+      } else if (e.type === 'state' && e.rooted) {
+        for (const f of inArea) if (f.team !== caster.team) add(f, { text: 'Enracine', color: '#c8a060' });
+      }
+    }
+    const list = [];
+    for (const entry of out.values()) {
+      if (entry.max > 0) {
+        const lethal = entry.min >= entry.f.hp;
+        const maybe = !lethal && entry.max >= entry.f.hp;
+        entry.lines.unshift({
+          text: `${entry.min}-${entry.max}${lethal ? ' KO' : maybe ? ' KO ?' : ''}`,
+          color: lethal ? '#ff3a3a' : '#ff9a6a', big: true, el: entry.el,
+        });
+      }
+      if (entry.lines.length) list.push(entry);
+    }
+    return list;
+  }
+
+  _showTags(list) {
+    if (!this.hud.showPreviewTags) return;
+    const v = new THREE.Vector3();
+    const tags = list.map(t => {
+      t.f.character.hpBar.sprite.getWorldPosition(v);
+      v.y += 0.35;
+      const p = this.scene3d.worldToScreen(v);
+      return { x: p.x, y: p.y, lines: t.lines, team: t.f.team };
+    });
+    this.hud.showPreviewTags(tags);
+  }
 
   // ---------- IA ----------
   async runAI() {
@@ -1483,6 +1927,8 @@ export class Game {
       craqueleur: () => this.runCraqueleur(ai),
       dragounet: () => this.runDragounet(ai),
       chaton: () => this.runChaton(ai),
+      boss: () => this.runBoss(ai),
+      bossRanged: () => this.runFearful(ai),
     };
     const fn = dispatch[profile] || dispatch.aggressive;
     await fn();
@@ -1496,9 +1942,76 @@ export class Game {
   aiAttackSpells(ai) {
     return ai.spells.filter(s =>
       !ai.isOnCooldown(s.id) &&
-      s.effects.some(e => e.type === 'damage' || e.type === 'debuff_pm' || e.type === 'debuff_pa' || e.type === 'dot' || e.type === 'chanceStrike') &&
+      s.effects.some(e => e.type === 'damage' || e.type === 'debuff_pm' || e.type === 'debuff_pa' || e.type === 'dot' || e.type === 'chanceStrike' || e.type === 'state') &&
+      !s.effects.some(e => e.type === 'trap') &&
       (s.target === 'enemy' || s.target === 'tile')
     );
+  }
+
+  // BOSS de melee (Craqueleur Legendaire, Minotoror) : se renforce, ouvre
+  // avec son sort de controle (enracinement / charge), puis combat au
+  // corps a corps sans relache.
+  async runBoss(ai) {
+    await this.aiSelfBuff(ai);
+    if (this.ended) return;
+    const target = this.pickWeakestTarget(ai);
+    if (target) {
+      const openers = this.aiAttackSpells(ai).filter(s => s.effects.some(e => e.type === 'state' || e.type === 'charge'));
+      const usable = this.usableSpellsOn(ai, target, openers);
+      if (usable.length) {
+        const spell = usable[0];
+        ai.pa -= spell.apCost;
+        if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
+        ai.character.popCost(spell.apCost, 'pa');
+        this.hud.update(ai, this.mode, this.selectedSpellId);
+        await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
+        if (this.checkEnd()) return;
+        await this.aiPause(320);
+      }
+    }
+    await this.runRelentlessMelee(ai, 1);
+  }
+
+  // Sort de renforcement sur soi (Fureur...) quand un heros est proche.
+  async aiSelfBuff(ai) {
+    const hero = this.pickClosestHero(ai);
+    if (!hero || this._dist(ai, hero) > 7) return false;
+    const spell = ai.spells.find(s => s.target === 'self' && !ai.isOnCooldown(s.id) && ai.pa >= s.apCost
+      && s.effects.some(e => e.type === 'buff' && !e.invisible));
+    if (!spell) return false;
+    ai.pa -= spell.apCost;
+    if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
+    ai.character.popCost(spell.apCost, 'pa');
+    this.hud.update(ai, this.mode, this.selectedSpellId);
+    await this.applySpellEffects(ai, spell, { c: ai.c, r: ai.r });
+    await this.aiPause(300);
+    return true;
+  }
+
+  // Pose un piege sur une case voisine, du cote des heros (Chafer Royal).
+  async aiTryTrap(ai) {
+    const spell = ai.spells.find(s => s.effects.some(e => e.type === 'trap') && !ai.isOnCooldown(s.id) && ai.pa >= s.apCost);
+    if (!spell) return false;
+    const hero = this.pickClosestHero(ai);
+    if (!hero) return false;
+    let best = null, bd = 1e9;
+    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+      const c = ai.c + dc, r = ai.r + dr;
+      const d0 = Math.abs(dc) + Math.abs(dr);
+      if (d0 < spell.range.min || d0 > spell.range.max) continue;
+      if (!this.map3d.inBounds(c, r) || this.map3d.isBlockedFor(c, r, ai)) continue;
+      if (this.fighters.some(f => f.alive && f.c === c && f.r === r)) continue;
+      if (this.zones.some(z => z.c === c && z.r === r)) continue;
+      const d = Math.abs(c - hero.c) + Math.abs(r - hero.r);
+      if (d < bd) { bd = d; best = { c, r }; }
+    }
+    if (!best) return false;
+    ai.pa -= spell.apCost;
+    if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
+    ai.character.popCost(spell.apCost, 'pa');
+    await this.applySpellEffects(ai, spell, best);
+    await this.aiPause(300);
+    return true;
   }
 
   _dist(a, b) {
@@ -1532,6 +2045,8 @@ export class Game {
     // est ignore par aiTryInvisibility s il est deja invisible ou en
     // recharge).
     if (!target || this._dist(ai, target) > 1) {
+      await this.aiTryTrap(ai);
+      if (this.ended) return;
       await this.aiTryInvisibility(ai);
       if (this.ended) return;
     }
@@ -2135,15 +2650,8 @@ export class Game {
     if (!fullPath || fullPath.length <= 1) return false;
     const maxSteps = Math.min(ai.pm, fullPath.length - 1);
     if (maxSteps === 0) return false;
-    ai.character.popCost(maxSteps, 'pm');
     const steps = fullPath.slice(1, maxSteps + 1);
-    for (const step of steps) {
-      ai.pm--;
-      this.hud.update(ai, this.mode, this.selectedSpellId);
-      await ai.character.moveTo(step.c, step.r, 220);
-      ai.c = step.c;
-      ai.r = step.r;
-    }
+    await this._walk(ai, steps, 220);
     return true;
   }
 
@@ -2184,14 +2692,7 @@ export class Game {
     if (!path || path.length <= 1) return false;
     const steps = path.slice(1);
     if (steps.length === 0) return false;
-    ai.character.popCost(steps.length, 'pm');
-    for (const step of steps) {
-      ai.pm--;
-      this.hud.update(ai, this.mode, this.selectedSpellId);
-      await ai.character.moveTo(step.c, step.r, 220);
-      ai.c = step.c;
-      ai.r = step.r;
-    }
+    await this._walk(ai, steps, 220);
     return true;
   }
 
@@ -2219,8 +2720,9 @@ export class Game {
         this.audio.music(null);
         this.audio.sfx(winner === 'player' ? 'victory' : 'defeat');
       }
-      const combat = this.config && COMBATS[this.config.combatId];
-      const enemyLabel = combat ? combat.name : 'tes adversaires';
+      const adv = this.config && this.config.adventure;
+      const combat = !adv && this.config && COMBATS[this.config.combatId];
+      const enemyLabel = adv ? adv.roomName : combat ? combat.name : 'tes adversaires';
       // Victoire : on enregistre l etoile (or si vaincu sur la carte
       // maison du monstre, argent sinon).
       let starResult = null;
@@ -2249,11 +2751,24 @@ export class Game {
           return { ...res, classId: h.classId, name: h.def.name, level: hero.level, xp: hero.xp, points: hero.points,
             unlockedNames: res.unlocked.map(id => (SPELLS[id] && SPELLS[id].name) || id) };
         });
-        if (this.config.tier) tierUnlocked = recordTier(this.config.combatId, this.config.tier);
+        if (this.config.tier && !adv) tierUnlocked = recordTier(this.config.combatId, this.config.tier);
       }
+      // Butin : objets laches par les monstres vaincus.
+      let loot = [];
+      if (winner === 'player') {
+        loot = addItems(rollLoot(this.initialEnemies || []));
+      }
+      // Resultat transmis au mode aventure (PV restants des heros).
+      this.lastResult = {
+        winner,
+        heroes: this.fighters.filter(f => f.team === 'player' && f.levelKind === 'hero')
+          .map(f => ({ classId: f.classId, alive: f.alive, hpRatio: f.alive ? f.hp / f.maxHp : 0 })),
+      };
+      let buttonLabel = 'REJOUER';
+      if (adv) buttonLabel = winner !== 'player' ? 'QUITTER LE DONJON' : adv.last ? 'OUVRIR LE COFFRE' : 'SALLE SUIVANTE';
       setTimeout(() => this.hud.showEnd(winner, () => {
         if (this.onEnd) this.onEnd();
-      }, enemyLabel, starResult, { xpResults, tierUnlocked, tier: this.config && this.config.tier }), 600);
+      }, enemyLabel, starResult, { xpResults, tierUnlocked, tier: this.config && this.config.tier, loot, buttonLabel, adventure: adv }), 600);
       return true;
     }
     return false;

@@ -2,20 +2,23 @@
 // Met tout le jeu en cache a la premiere visite : ensuite il se lance
 // meme sans connexion. A chaque nouvelle version (empreinte VERSION),
 // le nouveau cache remplace l ancien.
-const VERSION = '42d85fc5d9';
+const VERSION = 'f2bb74651f';
 const CACHE = 'dofus3d-' + VERSION;
 const FILES = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
+  "./src/Adventure.js",
   "./src/Audio.js",
   "./src/Avatars.js",
   "./src/Character3D.js",
+  "./src/Elements.js",
   "./src/Fighter.js",
   "./src/Game.js",
   "./src/GroundPainter.js",
   "./src/HpBar3D.js",
   "./src/Hud.js",
+  "./src/Items.js",
   "./src/Leveling.js",
   "./src/Map3D.js",
   "./src/Menu.js",
@@ -27,12 +30,14 @@ const FILES = [
   "./src/Scene3D.js",
   "./src/SpellIcons.js",
   "./src/Spells.js",
+  "./src/States.js",
   "./src/Toon.js",
   "./src/TurnManager.js",
   "./src/VFX.js",
   "./src/dofus-theme.css",
   "./src/main.js",
   "./src/models/bombeRoublard.js",
+  "./src/models/bosses.js",
   "./src/models/bouftou.js",
   "./src/models/bouftouRoyal.js",
   "./src/models/chafer.js",
@@ -48,6 +53,7 @@ const FILES = [
   "./src/models/eniripsa.js",
   "./src/models/foliage.js",
   "./src/models/humanoid.js",
+  "./src/models/index.js",
   "./src/models/iop.js",
   "./src/models/kit.js",
   "./src/models/osamodas.js",

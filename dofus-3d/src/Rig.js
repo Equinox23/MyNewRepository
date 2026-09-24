@@ -25,9 +25,10 @@ const RIGS = {
   // Quadrupedes / petites creatures : seulement les pattes.
   bouftou:   { quad: true, hip: 0.22 },
   tofu:      { hip: 0.26, legOnly: true },
+  kwakwa:    { hip: 0.3, legOnly: true },
 };
 // Variantes "royales" : meme squelette (le modele est simplement agrandi).
-const ALIAS = { chaferRoyal: 'chafer', bouftouRoyal: 'bouftou', tofuRoyal: 'tofu', waWabbit: 'wabbit', bouftouInvoc: 'bouftou' };
+const ALIAS = { chaferRoyal: 'chafer', bouftouRoyal: 'bouftou', tofuRoyal: 'tofu', waWabbit: 'wabbit', bouftouInvoc: 'bouftou', craqueleurSauvage: 'craqueleur', craqueleurLegendaire: 'craqueleur' };
 
 export function rigModel(body, classId) {
   // Modeles construits sur la base d anatomie (humanoid.js) : pivots

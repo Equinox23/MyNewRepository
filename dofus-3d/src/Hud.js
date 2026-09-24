@@ -3,6 +3,9 @@ import { getAvatar } from './Avatars.js';
 import { spellIconFrame } from './SpellIcons.js';
 import { xpToNext, MAX_LEVEL, scaledSpell } from './Leveling.js';
 import { SPELLS } from './Spells.js';
+import { statesHtml } from './States.js';
+import { elementIcon, ELEMENT_LABEL, ELEMENT_CSS, damageElementOf, DAMAGE_ELEMENTS } from './Elements.js';
+import { itemIcon, RARITY, statLines } from './Items.js';
 
 // HUD DOM : panneau bas avec stats + barre de sorts.
 // Chaque slot affiche le numero de touche (haut-gauche), une icone SVG
@@ -743,6 +746,13 @@ export class Hud {
       <div class="hp-row"><span class="hp-desc">Annuler la selection</span><span class="hp-key">Echap</span></div>
       <div class="hp-row"><span class="hp-desc">Fin de tour</span><span class="hp-key">Espace</span></div>
 
+      <div class="hp-section">REGLES</div>
+      <div class="hp-row"><span class="hp-desc">Survoler une cible avec un sort : zone + degats estimes</span><span class="hp-key">Apercu</span></div>
+      <div class="hp-row"><span class="hp-desc">Sur mobile : 1er appui = apercu, 2e appui = lancer</span><span class="hp-key">Tactile</span></div>
+      <div class="hp-row"><span class="hp-desc">Quitter le contact d un ennemi coute des PM (fuite vs tacle)</span><span class="hp-key">Tacle</span></div>
+      <div class="hp-row"><span class="hp-desc">Chaque monstre resiste a certains elements (voir son infobulle)</span><span class="hp-key">Elements</span></div>
+      <div class="hp-row"><span class="hp-desc">Glyphe : agit au debut du tour de qui est dessus</span><span class="hp-key">Glyphes</span></div>
+
       <div class="hp-section">CAMERA</div>
       <div class="hp-row"><span class="hp-desc">Zoom</span><span class="hp-key">Molette</span></div>
       <div class="hp-row"><span class="hp-desc">Rotation libre</span><span class="hp-key">Clic droit + drag</span></div>
@@ -1283,6 +1293,9 @@ export class Hud {
       : `${spell.range.min} a ${spell.range.max} cases`;
     const cdLine = spell.cooldown
       ? `<div class="tip-row"><span class="lbl">Recharge :</span> ${spell.cooldown} tours</div>` : '';
+    const hasDmg = spell.effects.some(e => e.type === 'damage' || e.type === 'chanceStrike' || e.type === 'glyph' || e.type === 'trap');
+    const el0 = damageElementOf(spell, this._lastFighter);
+    const elLine = hasDmg ? `<div class="tip-row"><span class="lbl">Element :</span> ${elementIcon(el0, 13)} <span style="color:${ELEMENT_CSS[el0]}">${spell.dynamicElement ? 'Variable' : ELEMENT_LABEL[el0]}</span></div>` : '';
     el.innerHTML = `
       <div class="tip-name" style="color: ${spell.color};">${spell.name}${spell.spellLevel ? ` <span style="color:#ffcf5a;font-size:12px">Niv. ${spell.spellLevel}/3</span>` : ''}</div>
       <div class="tip-desc">${spell.desc}</div>
@@ -1291,6 +1304,7 @@ export class Hud {
       <div class="tip-row"><span class="lbl">Cout :</span> ${spell.apCost} PA</div>
       <div class="tip-row"><span class="lbl">Portee :</span> ${rangeTxt}</div>
       <div class="tip-row"><span class="lbl">Vue :</span> ${losTxt}</div>
+      ${elLine}
       ${cdLine}
     `;
     el.classList.add('show');
@@ -1356,6 +1370,11 @@ export class Hud {
         if (b.reflect) parts.push(`renvoie ${Math.round(b.reflect * 100)}% des degats`);
         if (b.invisible) parts.push('Invisible');
         if (b.dot) parts.push(`Poison ${b.dot.min}-${b.dot.max}/tour`);
+        if (b.rooted) parts.push('Enracine');
+        else if (b.stabilized) parts.push('Stabilise');
+        if (b.crit) parts.push(`+${Math.round(b.crit * 100)}% crit.`);
+        if (b.fuite) parts.push(`+${b.fuite} fuite`);
+        if (b.tacle) parts.push(`+${b.tacle} tacle`);
         if (parts.length === 0) continue;
         const tag = b.permanent ? '(carte)' : `(${Math.max(0, b.duration - 1)}t)`;
         lines.push(`<span class="buff">${parts.join(', ')} ${tag}</span>`);
@@ -1395,6 +1414,8 @@ export class Hud {
     // on rafraichit ses stats en direct (PA / PM / PV mis a jour au fil
     // des sorts et des deplacements, meme si ce n est pas l actif).
     if (this._infoFighter) this.renderFighterInfo();
+    // Etats et PV de la timeline suivent les changements.
+    if (this._turnOrder) this.refreshTurnOrder();
   }
 
   // Etoile SVG : 'gold', 'silver' ou 'empty'.
@@ -1432,15 +1453,76 @@ export class Hud {
         : `${label} t ont vaincu...`}</div>
       ${starBlock}
       ${this._xpBlock(extra)}
-      <button id="btn-replay">REJOUER</button>
+      ${this._lootBlock(extra.loot)}
+      <button id="btn-replay">${extra.buttonLabel || 'REJOUER'}</button>
     `;
     document.body.appendChild(overlay);
-    document.getElementById('btn-replay').addEventListener('click', () => {
+    overlay.querySelector('#btn-replay').addEventListener('click', () => {
       overlay.remove();
       onReplay && onReplay();
       this._lastFighterId = null; // force rebuild de la barre
       this._lastFighter = null;
     });
+  }
+
+  // Bloc "butin" de l ecran de fin.
+  _lootBlock(loot) {
+    if (!loot || !loot.length) return '';
+    return `<div class="loot-block"><div class="loot-title">Butin</div>${loot.map(it => this.itemCardHtml(it)).join('')}
+      <div class="xp-num" style="text-align:center">Equipe tes objets depuis l Inventaire (menu).</div></div>`;
+  }
+
+  itemCardHtml(it) {
+    const R = RARITY[it.rarity];
+    return `<div class="loot-item">${itemIcon(it, 42)}<div class="loot-txt">
+      <div class="loot-name" style="color:${R.color}">${it.name} <span>Niv. ${it.level}</span></div>
+      <div class="loot-stats">${statLines(it.stats).join(' - ')}</div></div></div>`;
+  }
+
+  // Coffre de fin de donjon.
+  showChest(title, items, xpBonus, onClose) {
+    document.body.classList.add('in-menu');
+    const overlay = document.createElement('div');
+    overlay.id = 'end-overlay';
+    overlay.innerHTML = `
+      <div class="title" style="color:#ffcf5a">COFFRE DU DONJON</div>
+      <div class="sub">${title} termine !</div>
+      <div class="chest-art">${CHEST_SVG}</div>
+      ${xpBonus ? `<div class="xp-tier">+${xpBonus} XP de bonus pour chaque heros</div>` : ''}
+      <div class="loot-block">${items.map(it => this.itemCardHtml(it)).join('')}</div>
+      <button id="btn-replay">RETOUR AU MENU</button>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector('#btn-replay').addEventListener('click', () => {
+      overlay.remove();
+      onClose && onClose();
+    });
+  }
+
+  // Transition entre deux salles de donjon.
+  showRoomIntro(text, sub) {
+    const el = document.createElement('div');
+    el.className = 'room-intro';
+    el.innerHTML = `<div class="ri-title">${text}</div><div class="ri-sub">${sub || ''}</div>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.classList.add('out'), 1600);
+    setTimeout(() => el.remove(), 2300);
+  }
+
+  // Etiquettes d apercu (degats estimes, esquive...) au-dessus des cibles.
+  showPreviewTags(tags) {
+    if (!this.previewLayer) {
+      const el = document.createElement('div');
+      el.id = 'preview-layer';
+      document.body.appendChild(el);
+      this.previewLayer = el;
+    }
+    this.previewLayer.innerHTML = tags.map(t => `<div class="pv-tag ${t.team === 'player' ? 'ally' : 'enemy'}" style="left:${Math.round(t.x)}px;top:${Math.round(t.y)}px">
+      ${t.lines.map(l => `<div class="pv-line ${l.big ? 'big' : ''}" style="color:${l.color}">${l.el ? elementIcon(l.el, 12) : ''}${l.text}</div>`).join('')}
+    </div>`).join('');
+  }
+
+  clearPreviewTags() {
+    if (this.previewLayer) this.previewLayer.innerHTML = '';
   }
 
   // Apercu du palier suivant d un sort (infobulle de la barre de sorts).
@@ -1506,12 +1588,26 @@ export class Hud {
   // ----- Ordre de jeu -----
   setTurnOrder(order, current) {
     if (!this.turnOrderListEl) return;
+    this._turnOrder = order;
+    this._turnCurrent = current;
     this.turnOrderListEl.innerHTML = '';
-    for (const f of order) {
+    // Timeline facon Dofus : on part du combattant actif, les morts
+    // disparaissent, un separateur marque le debut du tour suivant.
+    const alive = order.filter(f => f.alive && !f.isBomb);
+    const start = Math.max(0, alive.indexOf(current));
+    const rotated = alive.slice(start).concat(alive.slice(0, start));
+    const firstIdx = alive.length ? order.indexOf(alive[0]) : 0;
+    rotated.forEach((f, i) => {
+      if (i > 0 && order.indexOf(f) === firstIdx) {
+        const sep = document.createElement('div');
+        sep.className = 'to-sep';
+        sep.innerHTML = '<span>+1</span>';
+        this.turnOrderListEl.appendChild(sep);
+      }
       const slot = document.createElement('div');
-      slot.className = 'to-slot';
-      if (!f.alive) slot.classList.add('dead');
+      slot.className = 'to-slot ' + (f.team === 'player' ? 'team-ally' : 'team-enemy');
       if (f === current) slot.classList.add('active');
+      if (f.def && f.def.isBoss) slot.classList.add('boss');
       const teamColor = f.team === 'player' ? '#2f7de0' : '#d8322a';
       const ratio = Math.max(0, Math.min(1, f.hp / f.maxHp));
       const shortName = f.name.replace(/\s*\(Invoc\.\)\s*/, '');
@@ -1532,10 +1628,20 @@ export class Hud {
         ${avatarHtml}
         <div class="to-name">${shortName}</div>
         <div class="to-hp"><div class="to-hp-fill" style="width: ${ratio * 100}%;"></div></div>
+        <div class="to-states">${statesHtml(f, 11, 4)}</div>
       `;
       slot.title = `${f.name} - ${f.hp}/${f.maxHp} PV`;
+      // Survol / clic d un portrait : infos du combattant.
+      slot.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') this.showFighterInfo(f); });
+      slot.addEventListener('pointerleave', (e) => { if (e.pointerType === 'mouse') this.showFighterInfo(null); });
+      slot.addEventListener('click', () => this.pinFighterInfo(f));
       this.turnOrderListEl.appendChild(slot);
-    }
+    });
+  }
+
+  // Rafraichit la timeline (PV, etats) sans changer l ordre.
+  refreshTurnOrder() {
+    if (this._turnOrder) this.setTurnOrder(this._turnOrder, this._turnCurrent);
   }
 
   fighterColor(f) {
@@ -1667,10 +1773,18 @@ export class Hud {
         <div class="fi-row"><span class="lbl">Degats</span><span class="val hp">${nextDmg}</span></div>
       `;
     } else {
+      const res = f.res || {};
+      const resHtml = DAMAGE_ELEMENTS.map(el => {
+        const v = res[el] || 0;
+        return `<span class="fi-res ${v > 0 ? 'pos' : v < 0 ? 'neg' : ''}" title="Resistance ${ELEMENT_LABEL[el]}">${elementIcon(el, 12)}${v}%</span>`;
+      }).join('');
       bodyRows = `
         <div class="fi-row"><span class="lbl">PV</span><span class="val hp">${f.hp} / ${f.maxHp}</span></div>
         <div class="fi-row"><span class="lbl">PA</span><span class="val pa">${f.pa} / ${effMaxPa}</span></div>
         <div class="fi-row"><span class="lbl">PM</span><span class="val pm">${f.pm} / ${effMaxPm}</span></div>
+        <div class="fi-row"><span class="lbl">Tacle / Fuite</span><span class="val">${f.tacle} / ${f.fuite}</span></div>
+        <div class="fi-resrow">${resHtml}</div>
+        <div class="fi-states">${statesHtml(f, 14, 10)}</div>
       `;
     }
     this.fighterInfoEl.innerHTML = `
@@ -1690,3 +1804,12 @@ export class Hud {
     }
   }
 }
+
+const CHEST_SVG = `<svg width="130" height="110" viewBox="0 0 130 110" xmlns="http://www.w3.org/2000/svg">
+  <path d="M15 50 Q15 18 65 18 Q115 18 115 50 Z" fill="#b8742a" stroke="#241208" stroke-width="4"/>
+  <rect x="15" y="50" width="100" height="50" rx="6" fill="#8a4a1a" stroke="#241208" stroke-width="4"/>
+  <rect x="58" y="44" width="14" height="22" rx="3" fill="#f2c84a" stroke="#241208" stroke-width="3"/>
+  <path d="M15 50 H115" stroke="#f2c84a" stroke-width="5"/>
+  <path d="M40 20 V100 M90 20 V100" stroke="#f2c84a" stroke-width="5" opacity="0.8"/>
+  <circle cx="65" cy="12" r="6" fill="#fff6c8"><animate attributeName="r" values="4;8;4" dur="1.4s" repeatCount="indefinite"/></circle>
+</svg>`;

@@ -36,7 +36,7 @@ export function cellTexture() {
 // On pre-alloue tous les meshes (15x15 = 225) pour eviter les alloc
 // runtime.
 export class RangeOverlay {
-  constructor(scene, mapSize) {
+  constructor(scene, mapSize, y = 0.065) {
     this.scene = scene;
     this.mapSize = mapSize;
     this.meshes = [];
@@ -54,9 +54,9 @@ export class RangeOverlay {
         });
         const mesh = new THREE.Mesh(geom, mat);
         mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set(c, 0.065, r);
+        mesh.position.set(c, y, r);
         mesh.visible = false;
-        mesh.renderOrder = 1;
+        mesh.renderOrder = y < 0.065 ? 0 : 1;
         scene.add(mesh);
         row.push(mesh);
       }

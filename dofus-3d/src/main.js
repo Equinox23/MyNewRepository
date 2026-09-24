@@ -7,6 +7,10 @@ import { RangeOverlay } from './RangeOverlay.js';
 import { Menu } from './Menu.js';
 import { VFX } from './VFX.js';
 import { AudioEngine } from './Audio.js';
+import { DUNGEONS, roomComposition, recordDungeonClear, REST_HEAL, REVIVE_HP } from './Adventure.js';
+import { DEFS } from './Fighter.js';
+import { chestLoot, addItems } from './Items.js';
+import { addXp } from './Leveling.js';
 
 // --- CURSEURS PERSONNALISES ---
 // Curseur de base : fleche doree style RPG (hotspot a la pointe = 3,2).
@@ -32,13 +36,15 @@ const scene3d = new Scene3D();
 const map3d = new Map3D(scene3d.scene);
 const picker = new Picker(scene3d, map3d);
 const rangeOverlay = new RangeOverlay(scene3d.scene, MAP_SIZE);
+// Couche des glyphes / pieges (sous la surbrillance des portees).
+const zoneOverlay = new RangeOverlay(scene3d.scene, MAP_SIZE, 0.062);
 const hud = new Hud();
 const vfx = new VFX(scene3d.scene);
 const audio = new AudioEngine();
 vfx.onShake = (i, d) => scene3d.shake(i, d);
 hud.audio = audio;
 hud.refreshAudioControls();
-const game = new Game({ scene3d, map3d, picker, hud, rangeOverlay, vfx, audio });
+const game = new Game({ scene3d, map3d, picker, hud, rangeOverlay, zoneOverlay, vfx, audio });
 
 // Le contexte audio demarre suspendu (politique navigateur, stricte sur
 // mobile) : on le reveille au premier geste. On reessaie tant qu il n est
@@ -71,24 +77,76 @@ const menu = new Menu(selection => {
   menu.hide();
   scene3d.resetCamera();
   document.body.style.cursor = POINTER_CURSOR;
-  game.setup({
-    playerClasses: selection.playerClasses,
-    combatId: selection.combatId,
-    mapId: selection.mapId,
-    monsterLevel: selection.monsterLevel,
-    tier: selection.tier,
-  });
+  if (selection.adventure) {
+    startAdventure(selection);
+  } else {
+    run = null;
+    game.setup({
+      playerClasses: selection.playerClasses,
+      combatId: selection.combatId,
+      mapId: selection.mapId,
+      monsterLevel: selection.monsterLevel,
+      tier: selection.tier,
+    });
+  }
   audio.music('combat');
 }, audio);
-// Quand la partie se termine et que le joueur clique "Rejouer",
-// on revient sur le menu.
+
+// --- MODE AVENTURE : enchainement des salles d un donjon ---
+let run = null;
+function startAdventure(selection) {
+  const dungeon = DUNGEONS.find(d => d.id === selection.adventure.dungeonId) || DUNGEONS[0];
+  run = { dungeon, classes: selection.playerClasses.slice(), room: 0, hp: {} };
+  startRoom();
+}
+function startRoom() {
+  const d = run.dungeon;
+  const i = run.room;
+  const last = i === d.rooms.length - 1;
+  hud.showRoomIntro(d.name, last ? `Salle du boss : ${DEFS[d.boss].name} !` : `Salle ${i + 1} / ${d.rooms.length}`);
+  scene3d.resetCamera();
+  game.setup({
+    playerClasses: run.classes,
+    enemyComposition: roomComposition(d, i, run.classes.length),
+    mapId: d.map,
+    monsterLevel: d.level,
+    adventure: {
+      dungeonId: d.id, room: i, last, hp: run.hp,
+      roomName: last ? DEFS[d.boss].name : `la salle ${i + 1} du donjon`,
+    },
+  });
+}
+// Fin de combat : salle suivante, coffre du donjon ou retour au menu.
 game.onEnd = () => {
+  const res = game.lastResult;
+  if (run && res && res.winner === 'player') {
+    const d = run.dungeon;
+    if (run.room < d.rooms.length - 1) {
+      // Repos entre deux salles : les PV remontent un peu, un heros tombe revient.
+      for (const h of res.heroes) run.hp[h.classId] = h.alive ? Math.min(1, h.hpRatio + REST_HEAL) : REVIVE_HP;
+      run.room++;
+      game.cleanup();
+      startRoom();
+      return;
+    }
+    recordDungeonClear(d.id);
+    const items = addItems(chestLoot(d.family, d.level + 1, 2 + (run.classes.length - 1)));
+    const bonus = 40 + d.level * 25;
+    for (const cls of run.classes) addXp(cls, bonus, DEFS[cls].spellIds);
+    game.cleanup();
+    const title = d.name;
+    run = null;
+    hud.showChest(title, items, bonus, () => { menu.show(); audio.music('menu'); });
+    return;
+  }
+  run = null;
   game.cleanup();
   menu.show();
   audio.music('menu');
 };
 // Bouton "retour au menu" du HUD : abandonne le combat en cours.
 hud.on('onAbandon', () => {
+  run = null;
   game.abandon();
   menu.show();
   audio.music('menu');
@@ -139,6 +197,7 @@ canvas.addEventListener('pointermove', (e) => {
       if (cur) {
         scene3d.pan(p.panAnchor.x - cur.x, p.panAnchor.z - cur.z);
         picker.setHover(null);
+        game.clearPreview();
       }
       return;
     }
@@ -196,9 +255,11 @@ function handleHover(x, y) {
     picker.setHover(null);
     canvas.style.cursor = POINTER_CURSOR;
     hud.showFighterInfo(null);
+    game.previewAt(null, null);
     return;
   }
   picker.setHover(hit.c, hit.r, hit.isWall);
+  game.previewAt(hit.c, hit.r);
   const fighterHere = game.fighters.find(f =>
     f.alive && f.c === hit.c && f.r === hit.r
   );
@@ -259,7 +320,7 @@ document.addEventListener('keydown', (e) => {
     game.selectSpellSlot(ctrl ? 18 : 9);
     return;
   }
-  if (key === 'Escape') {
+  if (key === 'Escape' || key === 'Esc') {
     e.preventDefault();
     // Si l aide est ouverte, on la ferme en priorite.
     if (hud.helpPanelEl && hud.helpPanelEl.classList.contains('show')) {
@@ -305,3 +366,6 @@ function loop(now) {
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
+
+// Acces de debogage (console du navigateur / tests automatises).
+window.__dofus = { game, menu, hud, scene3d };

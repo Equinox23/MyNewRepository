@@ -113,6 +113,26 @@ node dofus-3d/tools/build-sw.mjs
   de l Ecaflip, kimono du Pandawa, jupe corolle et ailes de l Eniripsa,
   cornes et queue de l Osamodas. L ecran de selection et le Grimoire
   affichent des portraits en buste rendus depuis ces modeles 3D.
+- **Elements et resistances** (`src/Elements.js`) : chaque sort offensif a
+  un element (feu, eau, terre, air, neutre), chaque creature des
+  resistances (Chafers faibles au feu, Tofus resistants a l air...).
+  Coups critiques (x1.3, 5% de base, plus avec le Trefle ou l equipement).
+- **Tacle et fuite** : quitter le contact d un ennemi coute des PM (et un
+  peu de PA) : esquive = (fuite + 2) / (2 x (tacle adverse + 2)).
+- **Etats, glyphes et pieges** (`src/States.js`) : poison, enracine,
+  stabilise, invisible... affiches sur la timeline. Glyphe du Sablier
+  (Xelor), nappe de spores (Champignon Royal), piege sournois (Chafer
+  Royal, invisible).
+- **Timeline facon Dofus** (a partir du joueur actif, separateur de tour,
+  etats, survol = infos) et **apercu** : au survol d une cible, zone
+  d effet en orange et degats estimes (apres resistances et boucliers),
+  "KO" si la cible tombe. Sur mobile : 1er appui = apercu, 2e = lancer.
+- **Boss** : Craqueleur Legendaire (enracine), Kwakwa (change d element
+  chaque tour), Minotoror (charge en ligne). Modeles dans `models/bosses.js`.
+- **Equipement et butin** (`src/Items.js`) : coiffe, cape, amulette, anneau,
+  bottes, 4 raretes, panoplies par famille de monstres ; ecran Inventaire.
+- **Mode Aventure** (`src/Adventure.js`) : 5 donjons de 3 salles, PV
+  conserves entre les salles, boss final et coffre.
 - **Effets propres a chaque sort** (`VFX.signature`) : roue de la fortune,
   piece de Pile ou Face, cadran d horloge du Xelor, vague du Pandawa,
   tonneau qui roule (Karcham), souffle de feu, plumes, griffures,

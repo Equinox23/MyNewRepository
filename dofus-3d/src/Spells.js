@@ -1,4 +1,5 @@
 import { paintedSpellIcon } from './SpellIcons.js';
+import { ELEMENT_LABEL, damageElementOf } from './Elements.js';
 // Registre central des sorts. Chaque sort a son propre dessin SVG (icon),
 // sa couleur de categorie (rouge = attaque, rose = soin, jaune = boost,
 // vert = deplacement), et ses effets composables.
@@ -303,8 +304,8 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 2 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 30, max: 50 }],
-    desc: 'Coup rapide a 1 a 2 cases.',
+    effects: [{ type: 'damage', min: 28, max: 42 }],
+    desc: 'Le coup de base du Iop : frappe rapide a 1 ou 2 cases.',
   },
   bond: {
     id: 'bond', name: 'Bond', short: 'BD', icon: ICON_JUMP,
@@ -312,7 +313,8 @@ export const SPELLS = {
     apCost: 4, range: { min: 1, max: 5 }, needsLOS: false,
     target: 'tile', area: { type: 'single' },
     effects: [{ type: 'teleport' }],
-    desc: 'Bondit sur une case libre, meme sans ligne de vue.',
+    levels: { 3: { apCost: 3 } },
+    desc: 'Bondit sur une case libre, meme sans ligne de vue (ignore le tacle). 3 PA au niveau 3.',
   },
   epeeDivine: {
     id: 'epeeDivine', name: 'Epee Divine', short: 'ED', icon: ICON_LINE,
@@ -320,16 +322,17 @@ export const SPELLS = {
     apCost: 5, range: { min: 1, max: 1 }, needsLOS: false,
     // length: -1 = jusqu au bord de la carte. piercing = traverse murs et combattants.
     target: 'tile', area: { type: 'line', length: -1, piercing: true },
-    effects: [{ type: 'damage', min: 40, max: 70 }],
-    desc: 'Lance sur la case devant soi : la lame divine fonce ensuite tout droit jusqu au bord de la carte et traverse murs et ennemis.',
+    cooldown: 2,
+    effects: [{ type: 'damage', min: 38, max: 58 }],
+    desc: 'Lance sur la case devant soi : la lame divine fonce tout droit jusqu au bord de la carte et traverse murs et ennemis.',
   },
   concentration: {
     id: 'concentration', name: 'Concentration', short: 'CO', icon: ICON_FIST,
     category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
-    target: 'self', area: { type: 'single' },
+    target: 'self', area: { type: 'single' }, maxCastsPerTurn: 1,
     effects: [{ type: 'buff', damageMult: 0.3, duration: 2 }],
-    desc: '+30% degats pendant 2 tours. Cumulable.',
+    desc: '+30% degats pendant 2 tours. Une fois par tour, cumulable d un tour a l autre.',
   },
   precipitation: {
     id: 'precipitation', name: 'Precipitation', short: 'PE', icon: ICON_HASTE,
@@ -337,8 +340,8 @@ export const SPELLS = {
     apCost: 1, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
     cooldown: 4,
-    effects: [{ type: 'gainPa', amount: 6, nextTurnPenalty: 3 }],
-    desc: 'Gagne 6 PA pour ce tour puis perd 3 PA au tour suivant. A lancer sur soi-meme.',
+    effects: [{ type: 'gainPa', amount: 5, nextTurnPenalty: 3 }],
+    desc: 'Gagne 5 PA pour ce tour puis perd 3 PA au tour suivant.',
   },
 
   // ---------- ROUBLARD ----------
@@ -558,27 +561,28 @@ export const SPELLS = {
   ralentissement: {
     id: 'ralentissement', name: 'Ralentissement', short: 'RA', icon: ICON_GEAR,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 1, range: { min: 1, max: 8 }, needsLOS: true,
+    apCost: 2, range: { min: 1, max: 8 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
     effects: [{ type: 'debuff_pa', value: 2, currentTurnOnly: true }],
-    desc: 'Retire 2 PA a un adversaire pour son prochain tour. Portee 8.',
+    levels: { 3: { apCost: 1 } },
+    desc: 'Retire 2 PA a un adversaire pour son prochain tour (une fois par cible et par tour). 1 PA au niveau 3.',
   },
   devouement: {
     id: 'devouement', name: 'Devouement', short: 'DV', icon: ICON_BOOST,
     category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'circle', radius: 2 },
-    cooldown: 3,
+    cooldown: 4,
     effects: [{ type: 'buff', bonusPa: 2, duration: 3 }],
     desc: '+2 PA au lanceur et aux allies dans un rayon de 2 cases, pendant 3 tours.',
   },
   aiguille: {
     id: 'aiguille', name: 'Aiguille', short: 'AI', icon: ICON_LINE,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 4, range: { min: 1, max: 7 }, needsLOS: true,
+    apCost: 3, range: { min: 1, max: 7 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 20, max: 35 }],
-    desc: 'Plante une aiguille du cadran : 20-35 degats. Portee 7.',
+    effects: [{ type: 'damage', min: 18, max: 26 }, { type: 'debuff_pa', value: 1, currentTurnOnly: true }],
+    desc: 'Plante une aiguille du cadran : degats et -1 PA au prochain tour de la cible (-2 au niveau 3).',
   },
   momification: {
     id: 'momification', name: 'Momification', short: 'MO', icon: ICON_SHIELD,
@@ -597,18 +601,18 @@ export const SPELLS = {
     apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
     effects: [
-      { type: 'damage', min: 20, max: 70 },
-      { type: 'debuff_pa', value: 1, chance: 0.2, turns: 10 },
+      { type: 'damage', min: 15, max: 55 },
+      { type: 'debuff_pa', value: 1, chance: 0.25, turns: 3 },
     ],
-    desc: 'Coup de griffe acere : 20-70 degats, 20% de chance de retirer 1 PA a la cible pendant 10 tours.',
+    desc: 'Coup de griffe tres aleatoire (15-55), 25% de chance de retirer 1 PA pendant 3 tours.',
   },
   pileOuFace: {
     id: 'pileOuFace', name: 'Pile ou Face', short: 'PF', icon: ICON_COIN,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 4, range: { min: 1, max: 6 }, needsLOS: true,
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 5, max: 45 }],
-    desc: 'Lance une piece : degats totalement aleatoires (5-45).',
+    effects: [{ type: 'damage', min: 10, max: 50 }],
+    desc: 'Lance une piece : degats totalement aleatoires a distance.',
   },
   roueChance: {
     id: 'roueChance', name: 'Roue de la Fortune', short: 'RF', icon: ICON_BOOST,
@@ -616,8 +620,8 @@ export const SPELLS = {
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
     cooldown: 3,
-    effects: [{ type: 'buff', damageMult: 0.5, duration: 2 }],
-    desc: 'Tente sa chance : +50% degats pendant 2 tours.',
+    effects: [{ type: 'buff', damageMultRoll: [0.2, 0.8], duration: 2 }],
+    desc: 'La roue tourne : de +20% a +80% de degats pendant 2 tours, au hasard.',
   },
   bondDuFelin: {
     id: 'bondDuFelin', name: 'Bond du Felin', short: 'BF', icon: ICON_JUMP,
@@ -652,8 +656,8 @@ export const SPELLS = {
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
     cooldown: 3,
-    effects: [{ type: 'buff', damageMult: 0.4, duration: 3 }],
-    desc: 'Le Pandawa s enivre : +40% degats pendant 3 tours. Cumulable.',
+    effects: [{ type: 'buff', damageMult: 0.35, bonusPm: -1, duration: 2 }],
+    desc: 'Le Pandawa s enivre : +35% degats mais -1 PM pendant 2 tours (etat Saoul).',
   },
   tirPandatak: {
     id: 'tirPandatak', name: 'Tir Pandatak', short: 'TP', icon: ICON_FIST,
@@ -661,34 +665,35 @@ export const SPELLS = {
     apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
     effects: [
-      { type: 'damage', min: 30, max: 45 },
+      { type: 'damage', min: 30, max: 42 },
       { type: 'knockback', distance: 2 },
     ],
-    desc: 'Un grand coup de pied : 30-45 degats et repousse la cible de 2 cases.',
+    desc: 'Un grand coup de pied : degats et repousse la cible de 2 cases.',
   },
   karcham: {
     id: 'karcham', name: 'Karcham', short: 'KA', icon: ICON_BARREL,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 5 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 22, max: 34 }],
-    desc: 'Lance son tonneau sur un ennemi (portee 5) : 22-34 degats.',
+    effects: [{ type: 'damage', min: 22, max: 32 }],
+    desc: 'Lance son tonneau sur un ennemi (portee 5).',
   },
   vaguePandawa: {
     id: 'vaguePandawa', name: 'Vague', short: 'VG', icon: ICON_WAVE,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 5, range: { min: 1, max: 4 }, needsLOS: true,
     target: 'tile', area: { type: 'circle', radius: 1 },
-    effects: [{ type: 'damage', min: 18, max: 28 }],
-    desc: 'Deferle une vague en zone (rayon 1) : 18-28 degats a tout ce qu elle touche.',
+    effects: [{ type: 'damage', min: 20, max: 30 }],
+    desc: 'Deferle une vague en zone (rayon 1) sur tout ce qu elle touche.',
   },
   laitDeBambou: {
     id: 'laitDeBambou', name: 'Lait de Bambou', short: 'LB', icon: ICON_HEAL_CROSS,
     category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
-    apCost: 4, range: { min: 1, max: 4 }, needsLOS: true,
+    apCost: 4, range: { min: 0, max: 4 }, needsLOS: true,
     target: 'ally', area: { type: 'single' },
-    effects: [{ type: 'heal_percent', percent: 0.28 }],
-    desc: 'Offre un lait de bambou apaisant : soigne 28% des PV max d un allie.',
+    cooldown: 2,
+    effects: [{ type: 'heal_percent', percent: 0.2 }],
+    desc: 'Un lait de bambou apaisant : soigne 20% des PV max (allie ou soi-meme).',
   },
 
   // ---------- CHAFER (squelette) ----------
@@ -753,8 +758,11 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 5, range: { min: 1, max: 4 }, needsLOS: true,
     target: 'tile', area: { type: 'circle', radius: 1 },
-    effects: [{ type: 'damage', min: 14, max: 20 }],
-    desc: 'Liberе un nuage de spores : degats en zone (rayon 1).',
+    effects: [
+      { type: 'damage', min: 14, max: 20 },
+      { type: 'glyph', radius: 1, duration: 2, color: 0x9a4ad0, name: 'Nappe de spores', onTurn: { damage: { min: 6, max: 10 } } },
+    ],
+    desc: 'Libere un nuage de spores : degats en zone (rayon 1) et une nappe toxique reste 2 tours.',
   },
 
   // ---------- ENIRIPSA (fee soigneuse) ----------
@@ -763,8 +771,8 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 22, max: 32 }],
-    desc: 'Un mot cinglant lance a distance : 22-32 degats.',
+    effects: [{ type: 'damage', min: 20, max: 28, lifesteal: 0.3 }],
+    desc: 'Un mot cinglant lance a distance. La fee recupere 30% des degats infliges.',
   },
   motSoignant: {
     id: 'motSoignant', name: 'Mot Soignant', short: 'MS', icon: ICON_HEAL_CROSS,
@@ -837,16 +845,17 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 2, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 10, max: 15 }, { type: 'knockback', distance: 2 }],
-    desc: 'Un coup d epaule qui repousse : 10-15 degats et recul de 2 cases.',
+    effects: [{ type: 'damage', min: 12, max: 18 }, { type: 'knockback', distance: 2 }],
+    desc: 'Un coup d epaule qui repousse de 2 cases : ideal pour se liberer d un tacleur.',
   },
   epeeDuJugement: {
     id: 'epeeDuJugement', name: 'Epee du Jugement', short: 'EJ', icon: ICON_SWORD,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 4, range: { min: 2, max: 5 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 24, max: 34 }],
-    desc: 'Une epee de lumiere frappe a distance : 24-34 degats.',
+    effects: [{ type: 'damage', min: 26, max: 36 }],
+    levels: { 3: { effects: [null, { type: 'debuff_pm', value: 1 }] } },
+    desc: 'Une epee de lumiere frappe a distance (air). Retire 1 PM au niveau 3.',
   },
   colereDeIop: {
     id: 'colereDeIop', name: 'Colere de Iop', short: 'CI', icon: ICON_SWORD,
@@ -854,8 +863,8 @@ export const SPELLS = {
     apCost: 7, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
     cooldown: 3,
-    effects: [{ type: 'damage', min: 65, max: 85 }],
-    desc: 'Le coup ultime du Iop : 65-85 degats au corps a corps (recharge 3 tours).',
+    effects: [{ type: 'damage', min: 85, max: 105 }],
+    desc: 'Le coup ultime du Iop : enorme frappe au corps a corps (recharge 3 tours).',
   },
 
   // ---------- OSAMODAS ----------
@@ -929,18 +938,23 @@ export const SPELLS = {
   frappeDuXelor: {
     id: 'frappeDuXelor', name: 'Frappe du Xelor', short: 'FX', icon: ICON_HOURGLASS,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
+    apCost: 3, range: { min: 1, max: 2 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 28, max: 38 }],
-    desc: 'Un coup de baton temporel : 28-38 degats au corps a corps.',
+    effects: [{ type: 'damage', min: 24, max: 32 }],
+    desc: 'Un coup de baton temporel a 1 ou 2 cases.',
   },
   sablier: {
     id: 'sablier', name: 'Sablier', short: 'SB', icon: ICON_HOURGLASS,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 4, range: { min: 2, max: 6 }, needsLOS: true,
-    target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 16, max: 24 }, { type: 'debuff_pm', value: 2 }],
-    desc: 'Le sable du temps ralentit la cible : 16-24 degats et -2 PM.',
+    target: 'tile', area: { type: 'circle', radius: 1 },
+    cooldown: 3,
+    effects: [
+      { type: 'damage', min: 14, max: 20 },
+      { type: 'glyph', radius: 1, duration: 2, color: 0x4ab0ff, name: 'Glyphe du Sablier',
+        onTurn: { damage: { min: 8, max: 12 }, debuffPm: 2 } },
+    ],
+    desc: 'Le sable du temps se repand (zone rayon 1) : degats, puis un glyphe reste 2 tours. Un ennemi qui commence son tour dessus perd 2 PM et subit des degats.',
   },
 
   // ---------- ECAFLIP ----------
@@ -949,8 +963,9 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 4, range: { min: 1, max: 4 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'chanceStrike', dmgMin: 40, dmgMax: 110, healMin: 10, healMax: 25 }],
-    desc: 'Pari risque : 50% de chances de 40-110 degats... ou de soigner la cible.',
+    cooldown: 1,
+    effects: [{ type: 'chanceStrike', dmgMin: 45, dmgMax: 110, healMin: 10, healMax: 25 }],
+    desc: 'Pari risque : 50% de chances de 45-110 degats... ou de soigner la cible.',
   },
   reflexes: {
     id: 'reflexes', name: 'Reflexes', short: 'RF', icon: ICON_SHIELD,
@@ -958,8 +973,8 @@ export const SPELLS = {
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
     cooldown: 3,
-    effects: [{ type: 'buff', shield: 0.35, duration: 2 }],
-    desc: 'Reflexes felins : subit 35% de degats en moins pendant 2 tours.',
+    effects: [{ type: 'buff', shield: 0.25, fuite: 15, duration: 2 }],
+    desc: 'Reflexes felins : -25% de degats subis et +15 fuite (echappe au tacle) pendant 2 tours.',
   },
   trefle: {
     id: 'trefle', name: 'Trefle', short: 'TF', icon: ICON_BOOST,
@@ -967,8 +982,8 @@ export const SPELLS = {
     apCost: 3, range: { min: 0, max: 4 }, needsLOS: true,
     target: 'ally', area: { type: 'single' },
     cooldown: 3,
-    effects: [{ type: 'buff', damageMult: 0.3, duration: 2 }],
-    desc: 'Un trefle porte-bonheur : +30% degats a un allie pendant 2 tours.',
+    effects: [{ type: 'buff', damageMult: 0.2, crit: 0.25, duration: 2 }],
+    desc: 'Un trefle porte-bonheur : +20% degats et +25% de coups critiques pendant 2 tours (allie ou soi-meme).',
   },
 
   // ---------- PANDAWA ----------
@@ -985,8 +1000,8 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 5 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 10, max: 16 }, { type: 'debuff_pm', value: 2 }],
-    desc: 'Une bouteille lancee a la tete : 10-16 degats et -2 PM.',
+    effects: [{ type: 'damage', min: 12, max: 18 }, { type: 'debuff_pm', value: 2 }],
+    desc: 'Une bouteille lancee a la tete : degats et -2 PM.',
   },
   stabilisation: {
     id: 'stabilisation', name: 'Stabilisation', short: 'ST', icon: ICON_SHIELD,
@@ -994,8 +1009,8 @@ export const SPELLS = {
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
     cooldown: 4,
-    effects: [{ type: 'buff', shield: 0.4, duration: 2 }],
-    desc: 'Le Pandawa s ancre au sol : 40% de degats en moins pendant 2 tours.',
+    effects: [{ type: 'buff', shield: 0.3, stabilized: true, tacle: 10, duration: 2 }],
+    desc: 'Le Pandawa s ancre au sol pendant 2 tours : -30% degats subis, +10 tacle, ne peut plus etre deplace.',
   },
 
   // ---------- ENIRIPSA ----------
@@ -1026,6 +1041,103 @@ export const SPELLS = {
     effects: [{ type: 'damage', min: 40, max: 55 }],
     desc: 'Le mot que nul ne doit prononcer : 40-55 degats (recharge 2 tours).',
   },
+
+  // ---------- BOSS & MONSTRES (glyphes, pieges, etats) ----------
+  frappeRocheuse: {
+    id: 'frappeRocheuse', name: 'Frappe Rocheuse', short: 'FR', icon: ICON_CROSS_PUNCH,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 24, max: 32 }],
+    desc: 'Un poing de pierre au corps a corps.',
+  },
+  poingLegendaire: {
+    id: 'poingLegendaire', name: 'Poing Legendaire', short: 'PL', icon: ICON_CROSS_PUNCH,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 34, max: 44 }],
+    desc: 'Le poing du golem legendaire ecrase sa cible.',
+  },
+  enracinement: {
+    id: 'enracinement', name: 'Enracinement', short: 'EN', icon: ICON_ROCK_THROW,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 5 }, needsLOS: true,
+    target: 'tile', area: { type: 'circle', radius: 1 },
+    cooldown: 3,
+    effects: [{ type: 'damage', min: 10, max: 16 }, { type: 'state', rooted: true, duration: 2 }],
+    desc: 'Des racines de pierre jaillissent (rayon 1) : degats et les ennemis touches sont ENRACINES 2 tours (ni marche ni deplacement).',
+  },
+  eboulement: {
+    id: 'eboulement', name: 'Eboulement', short: 'EB', icon: ICON_ROCK_THROW,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 5, range: { min: 1, max: 4 }, needsLOS: true,
+    target: 'tile', area: { type: 'circle', radius: 1 },
+    cooldown: 2,
+    effects: [{ type: 'damage', min: 28, max: 38 }],
+    desc: 'Une pluie de rochers en zone (rayon 1).',
+  },
+  kwakElementaire: {
+    id: 'kwakElementaire', name: 'Kwak Elementaire', short: 'KE', icon: ICON_FEATHER,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 5, range: { min: 1, max: 6 }, needsLOS: true, dynamicElement: true,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 26, max: 34 }],
+    desc: 'Un cri charge de l element du moment du Kwakwa.',
+  },
+  plumesTranchantes: {
+    id: 'plumesTranchantes', name: 'Plumes Tranchantes', short: 'PT', icon: ICON_FEATHER,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 5 }, needsLOS: true, dynamicElement: true,
+    target: 'tile', area: { type: 'circle', radius: 1 },
+    cooldown: 2,
+    effects: [{ type: 'damage', min: 20, max: 28 }],
+    desc: 'Une volee de plumes elementaires en zone (rayon 1).',
+  },
+  souffleKwakwa: {
+    id: 'souffleKwakwa', name: 'Souffle du Kwakwa', short: 'SK', icon: ICON_FEATHER,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: true, dynamicElement: true,
+    target: 'enemy', area: { type: 'single' },
+    cooldown: 1,
+    effects: [{ type: 'damage', min: 10, max: 14 }, { type: 'debuff_pm', value: 2 }],
+    desc: 'Un souffle glacial ou brulant : degats et -2 PM.',
+  },
+  chargeMinotoror: {
+    id: 'chargeMinotoror', name: 'Charge', short: 'CH', icon: ICON_HASTE,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 2, max: 6 }, needsLOS: true, lineOnly: true,
+    target: 'enemy', area: { type: 'single' },
+    cooldown: 2,
+    effects: [{ type: 'charge' }, { type: 'damage', min: 34, max: 46 }, { type: 'knockback', distance: 2 }],
+    desc: 'Le Minotoror charge en ligne droite jusqu a sa cible, la percute et la repousse.',
+  },
+  coupDeCorne: {
+    id: 'coupDeCorne', name: 'Coup de Corne', short: 'CC', icon: ICON_BITE_ROYAL,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'enemy', area: { type: 'single' },
+    effects: [{ type: 'damage', min: 28, max: 36 }],
+    desc: 'Un violent coup de corne au corps a corps.',
+  },
+  fureurMinotoror: {
+    id: 'fureurMinotoror', name: 'Fureur', short: 'FU', icon: ICON_BOOST,
+    category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
+    apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
+    target: 'self', area: { type: 'single' },
+    cooldown: 4,
+    effects: [{ type: 'buff', damageMult: 0.3, stabilized: true, duration: 2 }],
+    desc: 'Le Minotoror entre en fureur : +30% degats et inebranlable pendant 2 tours.',
+  },
+  piegeSournois: {
+    id: 'piegeSournois', name: 'Piege Sournois', short: 'PS', icon: ICON_SPEAR,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 3 }, needsLOS: false,
+    target: 'tile', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'trap', radius: 1, color: 0x9a8a78, name: 'Piege Sournois', trigger: { damage: { min: 22, max: 30 } } }],
+    desc: 'Pose un piege invisible : le premier ennemi qui marche dessus declenche une explosion (rayon 1).',
+  },
 };
 
 // Stats des bombes par niveau du sort (heros niveau 1 ; +7% PV et +6%
@@ -1046,7 +1158,8 @@ export function spellEffectLines(spell) {
   for (const eff of spell.effects) {
     switch (eff.type) {
       case 'damage':
-        lines.push(`Degats : ${eff.min}-${eff.max}`);
+        lines.push(`Degats ${ELEMENT_LABEL[damageElementOf(spell)] || ''} : ${eff.min}-${eff.max}`.replace('  ', ' '));
+        if (eff.lifesteal) lines.push(`Vole ${Math.round(eff.lifesteal * 100)}% des degats en PV`);
         if (spell.area && spell.area.type === 'line') {
           const lenTxt = spell.area.length < 0
             ? 'jusqu au bord de la carte'
@@ -1077,6 +1190,11 @@ export function spellEffectLines(spell) {
         if (eff.shield) parts.push(`-${Math.round(eff.shield * 100)}% degats reçus`);
         if (eff.reflect) parts.push(`renvoie ${Math.round(eff.reflect * 100)}% des degats`);
         if (eff.invisible) parts.push('invisible');
+        if (eff.damageMultRoll) parts.push(`+${Math.round(eff.damageMultRoll[0] * 100)} a +${Math.round(eff.damageMultRoll[1] * 100)}% degats (hasard)`);
+        if (eff.crit) parts.push(`+${Math.round(eff.crit * 100)}% critique`);
+        if (eff.fuite) parts.push(`+${eff.fuite} fuite`);
+        if (eff.tacle) parts.push(`+${eff.tacle} tacle`);
+        if (eff.stabilized) parts.push('stabilise');
         lines.push(`${parts.join(', ')} pendant ${eff.duration} tours${eff.damageMult ? ' (cumulable)' : ''}`);
         break;
       }
@@ -1134,6 +1252,23 @@ export function spellEffectLines(spell) {
         break;
       case 'detonateBombs':
         lines.push('Detonation immediate de toutes vos bombes');
+        break;
+      case 'state':
+        if (eff.rooted) lines.push(`Enracine la cible ${eff.duration} tours`);
+        break;
+      case 'glyph': {
+        const bits = [];
+        if (eff.onTurn && eff.onTurn.damage) bits.push(`${eff.onTurn.damage.min}-${eff.onTurn.damage.max} degats`);
+        if (eff.onTurn && eff.onTurn.debuffPm) bits.push(`-${eff.onTurn.debuffPm} PM`);
+        if (eff.onTurn && eff.onTurn.debuffPa) bits.push(`-${eff.onTurn.debuffPa} PA`);
+        lines.push(`Glyphe ${eff.duration} tours (rayon ${eff.radius}) : ${bits.join(', ')} en debut de tour`);
+        break;
+      }
+      case 'trap':
+        lines.push(`Piege invisible : ${eff.trigger.damage.min}-${eff.trigger.damage.max} degats (rayon ${eff.radius})`);
+        break;
+      case 'charge':
+        lines.push('Charge jusqu au contact de la cible');
         break;
     }
   }
