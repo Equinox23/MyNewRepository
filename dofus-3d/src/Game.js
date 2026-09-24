@@ -299,30 +299,21 @@ export class Game {
     if (cur.team !== 'player' || cur.def.ai) return;
     const spell = cur.spells[slot];
     if (!spell) return;
-    if (cur.isOnCooldown(spell.id)) {
-      this.hud.flash(`${spell.name} en recharge (${cur.spellCooldowns[spell.id]} tours)`, 900);
-      this.audio && this.audio.sfx('uiError');
-      return;
-    }
-    if (spell.apCost > cur.pa) {
-      this.hud.flash('Pas assez de PA pour ' + spell.name, 900);
-      this.audio && this.audio.sfx('uiError');
-      return;
-    }
-    if (this.isSummonBlocked(cur, spell)) {
-      this.hud.flash('Cette creature est deja invoquee', 900);
-      this.audio && this.audio.sfx('uiError');
-      return;
-    }
-    if (spell.maxCastsPerTurn
-        && (cur._castCounts && cur._castCounts[spell.id] || 0) >= spell.maxCastsPerTurn) {
-      this.hud.flash(`${spell.name} : deja lance ${spell.maxCastsPerTurn} fois ce tour`, 900);
+    const blockReason = this.castBlockReason(cur, spell);
+    if (blockReason) {
+      this.hud.flash(blockReason, 900);
       this.audio && this.audio.sfx('uiError');
       return;
     }
     this.audio && this.audio.sfx('uiSelect');
     this._pendingCast = null;
     if (spell.target === 'self') {
+      // Un sort sur soi part immediatement : on abandonne la selection
+      // du sort precedent (sinon sa portee resterait affichee et il
+      // pourrait etre lance ensuite sans assez de PA).
+      this.selectedSpellId = null;
+      this.mode = 'move';
+      this.rangeOverlay.clear();
       this.busy = true;
       this.castSelf(cur, spell).finally(() => {
         this.busy = false;
@@ -337,6 +328,19 @@ export class Game {
     this.mode = 'spell';
     this.refreshRangeOverlay();
     this.hud.update(cur, this.mode, this.selectedSpellId);
+  }
+
+  // Raison pour laquelle un sort ne peut pas etre lance maintenant (PA,
+  // recharge, invocation deja presente, limite par tour), ou null.
+  castBlockReason(cur, spell) {
+    if (cur.isOnCooldown(spell.id)) return `${spell.name} en recharge (${cur.spellCooldowns[spell.id]} tours)`;
+    if (spell.apCost > cur.pa) return 'Pas assez de PA pour ' + spell.name;
+    if (this.isSummonBlocked(cur, spell)) return 'Cette creature est deja invoquee';
+    if (spell.maxCastsPerTurn
+        && (cur._castCounts && cur._castCounts[spell.id] || 0) >= spell.maxCastsPerTurn) {
+      return `${spell.name} : deja lance ${spell.maxCastsPerTurn} fois ce tour`;
+    }
+    return null;
   }
 
   async castSelf(caster, spell) {
@@ -402,6 +406,15 @@ export class Game {
     const cur = this.turn.current();
     const spell = SPELLS[this.selectedSpellId];
     if (!spell) return;
+    // Revalide au moment du lancer : les PA ont pu baisser depuis la
+    // selection du sort.
+    const blockReason = this.castBlockReason(cur, spell);
+    if (blockReason) {
+      this.hud.flash(blockReason, 900);
+      this.audio && this.audio.sfx('uiError');
+      this.setMode('move');
+      return;
+    }
     const reason = this.validateSpellTarget(cur, spell, c, r);
     if (reason) {
       this.hud.flash(reason, 900);
