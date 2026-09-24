@@ -1141,7 +1141,7 @@ export class Menu {
     const hero = getHero(cls);
     const inv = getInventory();
     const eq = equippedItems(cls, inv);
-    const worn = Object.values(eq);
+    const worn = equippedList(cls, inv);
     const totals = flatTotals(worn);
     const counts = setCounts(worn);
     const heroName = DEFS[cls].name;
@@ -1155,7 +1155,7 @@ export class Menu {
     const slots = SLOTS.map(sl => {
       const it = eq[sl];
       return `<button class="inv-slot ${it ? 'filled' : ''} ${this.invSelected && it && it.id === this.invSelected ? 'sel' : ''}" data-slot="${sl}" ${it ? `data-item="${it.id}"` : ''}>
-        ${it ? itemIcon(it, 50) : `<div class="inv-empty">${SLOT_LABEL[sl]}</div>`}</button>`;
+        ${it ? itemIcon(it, 50) : `<div class="inv-empty">${SLOT_LABEL[sl]}</div>`}${it && hero.level < it.req ? `<div class="inv-lvl bad">Niv. ${it.req}</div>` : ''}</button>`;
     }).join('');
     const totLines = statsDiff({}, totals.flat).map(r => `<div>+${r.to} ${r.label}</div>`).join('') || 'Aucun';
     const setLines = totals.sets.map(st => `<div class="inv-setact">${setEmblem(st.family, 16)} ${FAMILIES[st.family].set} (${st.count}/5)${st.bonus.special ? ` <b>${st.bonus.special.name}</b>` : ''}</div>`).join('');
@@ -1188,9 +1188,10 @@ export class Menu {
       detail = `<div class="inv-detail">
         <div class="inv-dh">${itemIcon(sel, 60)}<div>
           <div class="inv-dname" style="color:${R.color}">${sel.name}</div>
-          <div class="inv-dmeta">${R.label} - ${SLOT_LABEL[sel.slot]} - niveau ${sel.req} requis - ${FAMILIES[sel.family].set}${w ? ` - porte par ${DEFS[w] ? DEFS[w].name : w}` : ''}</div>
+          <div class="inv-dmeta">${R.label} - ${SLOT_LABEL[sel.slot]} - <span class="${hero.level < sel.req ? 'req-bad' : 'req-ok'}">niveau ${sel.req} requis</span> - ${FAMILIES[sel.family].set}${w ? ` - porte par ${DEFS[w] ? DEFS[w].name : w}` : ''}</div>
         </div></div>
         <div class="inv-dstats">${statLines(sel.stats).map(l => `<div>${l}</div>`).join('')}</div>
+        ${hero.level < sel.req ? `<div class="req-warn">${heroName} est niveau ${hero.level} : cet objet demande le niveau ${sel.req}${wornBy(sel.id, inv) === cls ? ' (porte mais inactif)' : ''}.</div>` : ''}
         ${cmp}
         <div class="inv-dbtns">
           ${onMe ? `<button class="menu-navbtn" id="inv-unequip">Retirer</button>` : `<button class="menu-navbtn primary" id="inv-equip" ${hero.level < sel.req ? 'disabled' : ''}>${hero.level < sel.req ? `Niveau ${sel.req} requis` : `Equiper sur ${heroName}`}</button>`}
@@ -1218,7 +1219,7 @@ export class Menu {
         <div class="inv-bag">${items.map(it => {
           const ww = wornBy(it.id, inv);
           return `<button class="inv-item ${this.invSelected === it.id ? 'sel' : ''} ${hero.level < it.req ? 'locked' : ''}" data-item="${it.id}" title="${it.name} (${RARITY[it.rarity].label})">
-            ${itemIcon(it, 48)}${ww ? `<div class="inv-worn">${DEFS[ww] ? DEFS[ww].name : ww}</div>` : ''}</button>`;
+            ${itemIcon(it, 48)}<div class="inv-lvl ${hero.level < it.req ? 'bad' : ''}">${it.req}</div>${ww ? `<div class="inv-worn">${DEFS[ww] ? DEFS[ww].name : ww}</div>` : ''}</button>`;
         }).join('')}</div>
       </div>`;
     }).join('') || '<div class="inv-none">Ton sac est vide : bats des monstres pour obtenir du butin !</div>';
