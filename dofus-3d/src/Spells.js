@@ -1020,6 +1020,10 @@ export const SPELLS = {
   },
 };
 
+const SUMMON_NAMES = {
+  craqueleur: 'Craqueleur', dragounetRouge: 'Dragounet Rouge', chatonBlanc: 'Chaton Blanc', bouftouInvoc: 'Bouftou apprivoise',
+};
+
 // Helpers pour fabriquer le contenu du tooltip a partir d un spell.
 export function spellEffectLines(spell) {
   const lines = [];
@@ -1060,9 +1064,12 @@ export function spellEffectLines(spell) {
         lines.push(`${parts.join(', ')} pendant ${eff.duration} tours${eff.damageMult ? ' (cumulable)' : ''}`);
         break;
       }
-      case 'summon':
-        lines.push(`Invoque : ${eff.creatureId}`);
+      case 'summon': {
+        const lv = eff.summonLevel || 1;
+        lines.push(`Invoque : ${SUMMON_NAMES[eff.creatureId] || eff.creatureId}`);
+        if (lv >= 2) lines.push(`Creature : PV et degats +${(lv - 1) * 20}%${lv >= 3 ? ', +1 PA, +1 PM' : ''}, sorts niv. ${lv}`);
         break;
+      }
       case 'debuff_pm': {
         const amt = eff.value !== undefined ? `${eff.value}` : `${eff.min}-${eff.max}`;
         lines.push(`Cible perd ${amt} PM (au prochain tour)`);

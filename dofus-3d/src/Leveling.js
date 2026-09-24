@@ -144,6 +144,19 @@ export function monsterStats(def, level) {
   };
 }
 
+// Bonus d une invocation selon le niveau du sort qui l a appelee :
+// niv. 2 : +20% PV / degats, sorts niv. 2 ; niv. 3 : +40%, +1 PA, +1 PM,
+// sorts niv. 3.
+export function summonBonus(summonLevel = 1) {
+  const lv = Math.max(1, Math.min(MAX_SPELL_LEVEL, summonLevel));
+  return {
+    level: lv,
+    mult: 1 + 0.2 * (lv - 1),
+    pa: lv >= 3 ? 1 : 0,
+    pm: lv >= 3 ? 1 : 0,
+  };
+}
+
 // XP rapportee par un monstre vaincu, pour un heros de niveau heroLevel.
 export function monsterXp(def, level, heroLevel) {
   const base = Math.round(def.hp / 4 + (def.pa + def.pm) * 2);
@@ -207,6 +220,10 @@ export function scaledSpell(spell, level = 1, extraMult = 1) {
         break;
       case 'gainPa':
         if (lv >= 3) x.amount = e.amount + 1;
+        break;
+      case 'summon':
+        // La creature invoquee profite du niveau du sort (cf. summonBonus).
+        x.summonLevel = lv;
         break;
     }
     return x;

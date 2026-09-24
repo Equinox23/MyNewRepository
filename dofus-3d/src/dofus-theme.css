@@ -407,3 +407,29 @@ html, body { height: 100%; }
   #menu-root .gr-tab { width: 46px; height: 46px; }
   #menu-root .gr-action { width: 74px; }
 }
+
+/* Grimoire : previsualisation des 3 paliers d un sort */
+#menu-root .gr-spells { grid-template-columns: 1fr; }
+#menu-root .gr-spell { align-items: flex-start; }
+#menu-root .gr-action { align-self: center; }
+#menu-root .gr-tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 4px; }
+#menu-root .gr-tier {
+  background: rgba(20, 12, 4, 0.45); border: 1px solid #5a4a32; border-radius: 6px;
+  padding: 3px 5px; font-size: 10.5px; line-height: 1.3; color: var(--d-cream-dim);
+}
+#menu-root .gr-tier.current { border-color: var(--d-gold); background: rgba(90, 64, 20, 0.55); color: var(--d-cream); box-shadow: 0 0 6px rgba(255, 207, 90, 0.35); }
+#menu-root .gr-tier.past { opacity: 0.55; }
+#menu-root .gr-tier.future { border-style: dashed; }
+#menu-root .gr-tier-h { font: 700 11px var(--d-font-title); color: var(--d-gold); display: flex; justify-content: space-between; gap: 4px; }
+#menu-root .gr-tier-h b { color: #9ad85a; font-weight: 700; }
+#menu-root .gr-tier-h span { color: #9ad85a; font-weight: 500; }
+#menu-root .gr-tier-meta { color: #8fd0ff; font-size: 10px; }
+#menu-root .gr-tier-lines { color: #ffc8d8; }
+#menu-root .gr-tier-sum { color: #9ad85a; font-size: 10px; margin-top: 2px; }
+@media (max-width: 640px) {
+  #menu-root .gr-spells { grid-template-columns: 1fr; }
+  #menu-root .gr-spell { flex-wrap: wrap; }
+  #menu-root .gr-body { flex-basis: calc(100% - 70px); }
+  #menu-root .gr-action { width: 100%; }
+  #menu-root .gr-tiers { grid-template-columns: 1fr; }
+}

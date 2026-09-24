@@ -1,7 +1,8 @@
 import { spellEffectLines } from './Spells.js';
 import { getAvatar } from './Avatars.js';
 import { spellIconFrame } from './SpellIcons.js';
-import { xpToNext, MAX_LEVEL } from './Leveling.js';
+import { xpToNext, MAX_LEVEL, scaledSpell } from './Leveling.js';
+import { SPELLS } from './Spells.js';
 
 // HUD DOM : panneau bas avec stats + barre de sorts.
 // Chaque slot affiche le numero de touche (haut-gauche), une icone SVG
@@ -1286,6 +1287,7 @@ export class Hud {
       <div class="tip-name" style="color: ${spell.color};">${spell.name}${spell.spellLevel ? ` <span style="color:#ffcf5a;font-size:12px">Niv. ${spell.spellLevel}/3</span>` : ''}</div>
       <div class="tip-desc">${spell.desc}</div>
       <div class="tip-row tip-effects">${effectLines.map(l => `<div class="eff">${l}</div>`).join('')}</div>
+      ${this._nextTierHtml(spell)}
       <div class="tip-row"><span class="lbl">Cout :</span> ${spell.apCost} PA</div>
       <div class="tip-row"><span class="lbl">Portee :</span> ${rangeTxt}</div>
       <div class="tip-row"><span class="lbl">Vue :</span> ${losTxt}</div>
@@ -1439,6 +1441,15 @@ export class Hud {
       this._lastFighterId = null; // force rebuild de la barre
       this._lastFighter = null;
     });
+  }
+
+  // Apercu du palier suivant d un sort (infobulle de la barre de sorts).
+  _nextTierHtml(spell) {
+    const lv = spell.spellLevel || 1;
+    if (lv >= 3 || !SPELLS[spell.id]) return '';
+    const nx = scaledSpell(SPELLS[spell.id], lv + 1);
+    const lines = spellEffectLines(nx).join(' - ');
+    return `<div class="tip-row" style="color:#9ad85a;font-size:12px;margin-top:6px">Niv. ${lv + 1} (Grimoire) : ${lines}</div>`;
   }
 
   // Bloc "experience gagnee" de l ecran de fin.
