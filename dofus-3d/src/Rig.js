@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { VARIANTS } from './models/variants.js';
 
 // "Rig" automatique des modeles procéduraux : les pieces de chaque modele
 // (enfants directs du corps) sont reparties en jambes / bras / tete selon
@@ -29,6 +30,8 @@ const RIGS = {
 };
 // Variantes "royales" : meme squelette (le modele est simplement agrandi).
 const ALIAS = { chaferRoyal: 'chafer', bouftouRoyal: 'bouftou', tofuRoyal: 'tofu', waWabbit: 'wabbit', bouftouInvoc: 'bouftou', craqueleurSauvage: 'craqueleur', craqueleurLegendaire: 'craqueleur' };
+// Variantes du bestiaire : squelette de leur modele de base.
+for (const [id, v] of Object.entries(VARIANTS)) if (RIGS[v.base] || ALIAS[v.base]) ALIAS[id] = ALIAS[v.base] || v.base;
 
 export function rigModel(body, classId) {
   // Modeles construits sur la base d anatomie (humanoid.js) : pivots
@@ -44,7 +47,7 @@ export function rigModel(body, classId) {
   // mis a l echelle : on travaille sur ce sous-groupe.
   let root = body;
   let scale = 1;
-  if (ALIAS[classId] && body.children.length && body.children[0].isGroup && body.children[0].scale.x !== 1) {
+  if (ALIAS[classId] && body.children.length && body.children[0].isGroup && (body.children[0].scale.x !== 1 || body.children.length === 1)) {
     root = body.children[0];
     scale = root.scale.x;
   }

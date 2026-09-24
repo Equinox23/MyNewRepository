@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { HpBar3D } from './HpBar3D.js';
 import { toonify } from './Toon.js';
-import { BUILDERS } from './models/index.js';
+import { BUILDERS, VARIANTS } from './models/index.js';
 import { rigModel, poseRig } from './Rig.js';
 import { attachWearables, detachWearables } from './models/wearables.js';
 
@@ -104,7 +104,8 @@ export class Character3D {
 
     // Barre de vie au-dessus de la tete
     this.hpBar = new HpBar3D(team);
-    this.hpBar.sprite.position.y = HP_BAR_Y[classId] || 1.4;
+    const vr = VARIANTS[classId];
+    this.hpBar.sprite.position.y = HP_BAR_Y[classId] || (vr && HP_BAR_Y[vr.base] ? HP_BAR_Y[vr.base] * (vr.scale || 1) + 0.05 : 1.4);
     this.group.add(this.hpBar.sprite);
   }
 

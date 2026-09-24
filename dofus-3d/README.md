@@ -93,8 +93,12 @@ node dofus-3d/tools/build-sw.mjs
 
 - Classes (8 sorts chacune) : Iop, Osamodas (dont Invocation de Bouftou),
   Roublard, Xelor, Ecaflip, Pandawa, Eniripsa.
-- Combats : Bouftous, Crapauds, Chafers, Tofus, Champignons, **Wabbits**
-  (Terrier des Wabbits : 3 Wabbits + le Wa Wabbit, foret).
+- **Bestiaire** (`src/Bestiary.js`) : 9 familles de 3 a 4 monstres a
+  niveau FIXE (Bouftou 1 ... Minotoror 20), chacune sur sa carte. Le palier
+  choisi (1 a 10) fixe le nombre et la composition du groupe, pas la force
+  des monstres (palier 1 = 3 sbires ... palier 10 = plusieurs royaux).
+  Les variantes (Boufton Noir, Chef de Guerre, Tofu Malefique, Kwaks...)
+  sont dans `models/variants.js`.
 
 ## Combat facon Dofus
 
@@ -138,8 +142,9 @@ node dofus-3d/tools/build-sw.mjs
   objets (Toison, Envol, Os durs, Spores, Fureur...). Butin rare : 10%
   par monstre (legendaire 0,5%). Inventaire trie par panoplie, avec
   comparatif ligne par ligne (objet et total du heros).
-- **Mode Aventure** (`src/Adventure.js`) : 5 donjons de 3 salles, PV
-  conserves entre les salles, boss final et coffre.
+- **Mode Aventure** (`src/Adventure.js`) : 9 donjons (un par famille) de 4
+  salles aux monstres de niveau fixe, PV conserves entre les salles, boss
+  final et coffre.
 - **Effets propres a chaque sort** (`VFX.signature`) : roue de la fortune,
   piece de Pile ou Face, cadran d horloge du Xelor, vague du Pandawa,
   tonneau qui roule (Karcham), souffle de feu, plumes, griffures,
