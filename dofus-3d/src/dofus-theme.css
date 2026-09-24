@@ -599,3 +599,9 @@ html, body { height: 100%; }
   #menu-root .inv-preview { width: 120px; height: 120px; }
   #menu-root .inv-set-more { display: none; }
 }
+#menu-root .inv-item, #menu-root .inv-slot { position: relative; }
+#menu-root .inv-lvl { position: absolute; top: 1px; left: 2px; font: 700 9px/12px var(--d-font-title); color: #1a120a; background: #ffcf5a; border-radius: 6px; padding: 0 4px; }
+#menu-root .inv-lvl.bad { background: #d8322a; color: #fff; }
+#menu-root .req-bad { color: #ff6a5a; font-weight: 700; }
+#menu-root .req-ok { color: #9ad85a; }
+#menu-root .req-warn { color: #ff8a6a; font-size: 12px; margin-bottom: 6px; }

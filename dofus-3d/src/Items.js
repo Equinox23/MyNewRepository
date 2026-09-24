@@ -1,4 +1,5 @@
 import { itemIcon } from './ItemArt.js';
+import { getHero } from './Leveling.js';
 
 // ===========================================================================
 // Equipement et panoplies facon Dofus.
@@ -216,8 +217,11 @@ export function equippedItems(classId, inv = load()) {
   return out;
 }
 
+// Objets portes ET actifs : un objet dont le niveau requis depasse celui
+// du heros reste equipe mais ne donne rien (ni stats, ni panoplie).
 export function equippedList(classId, inv = load()) {
-  return Object.values(equippedItems(classId, inv));
+  const lv = getHero(classId).level;
+  return Object.values(equippedItems(classId, inv)).filter(it => lv >= it.req);
 }
 
 // Equipe un objet sur un heros (le retire de celui qui le portait).
@@ -311,9 +315,10 @@ export function equipmentStats(classId) {
 
 // Equipement d un heros si l on remplacait l objet de l emplacement par `item`.
 export function withSwap(classId, item, inv = load()) {
+  const lv = getHero(classId).level;
   const eq = equippedItems(classId, inv);
   eq[item.slot] = item;
-  return Object.values(eq);
+  return Object.values(eq).filter(it => lv >= it.req);
 }
 
 // Lignes de comparaison { key, label, from, to, diff } entre deux jeux de stats.
