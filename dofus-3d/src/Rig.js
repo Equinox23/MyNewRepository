@@ -27,7 +27,7 @@ const RIGS = {
   tofu:      { hip: 0.26, legOnly: true },
 };
 // Variantes "royales" : meme squelette (le modele est simplement agrandi).
-const ALIAS = { chaferRoyal: 'chafer', bouftouRoyal: 'bouftou', tofuRoyal: 'tofu', waWabbit: 'wabbit' };
+const ALIAS = { chaferRoyal: 'chafer', bouftouRoyal: 'bouftou', tofuRoyal: 'tofu', waWabbit: 'wabbit', bouftouInvoc: 'bouftou' };
 
 export function rigModel(body, classId) {
   const key = ALIAS[classId] || classId;

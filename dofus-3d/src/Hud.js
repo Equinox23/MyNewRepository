@@ -1,6 +1,7 @@
 import { spellEffectLines } from './Spells.js';
 import { getAvatar } from './Avatars.js';
 import { spellIconFrame } from './SpellIcons.js';
+import { xpToNext, MAX_LEVEL } from './Leveling.js';
 
 // HUD DOM : panneau bas avec stats + barre de sorts.
 // Chaque slot affiche le numero de touche (haut-gauche), une icone SVG
@@ -1206,6 +1207,7 @@ export class Hud {
         <div class="key">${keyLabel}</div>
         <div class="icon">${iconHtml}</div>
         <div class="cost">${spell.apCost} PA</div>
+        ${fighter && fighter.levelKind === 'hero' ? `<div class="spell-pips">${[1, 2, 3].map(n => `<i class="${n <= (spell.spellLevel || 1) ? 'on' : ''}"></i>`).join('')}</div>` : ''}
         <div class="cd-overlay"></div>
       `;
       // Long-press tactile : affiche l infobulle apres 450ms.
@@ -1281,7 +1283,7 @@ export class Hud {
     const cdLine = spell.cooldown
       ? `<div class="tip-row"><span class="lbl">Recharge :</span> ${spell.cooldown} tours</div>` : '';
     el.innerHTML = `
-      <div class="tip-name" style="color: ${spell.color};">${spell.name}</div>
+      <div class="tip-name" style="color: ${spell.color};">${spell.name}${spell.spellLevel ? ` <span style="color:#ffcf5a;font-size:12px">Niv. ${spell.spellLevel}/3</span>` : ''}</div>
       <div class="tip-desc">${spell.desc}</div>
       <div class="tip-row tip-effects">${effectLines.map(l => `<div class="eff">${l}</div>`).join('')}</div>
       <div class="tip-row"><span class="lbl">Cout :</span> ${spell.apCost} PA</div>
@@ -1310,11 +1312,12 @@ export class Hud {
   update(fighter, mode, selectedSpellId) {
     if (!fighter) return;
     // Reconstruit la barre si les sorts changent (fighter different).
-    if (this._lastFighterId !== fighter.classId + fighter.team) {
+    if (this._lastFighter !== fighter) {
       this.rebuildSpellBar(fighter);
+      this._lastFighter = fighter;
       this._lastFighterId = fighter.classId + fighter.team;
     }
-    this.nameEl.textContent = fighter.name + (fighter.team === 'player' ? '  (vous)' : '');
+    this.nameEl.textContent = fighter.name + (fighter.team === 'player' ? '  (vous)' : '') + '  - Niv. ' + (fighter.level || 1);
     this.hpEl.textContent = `${fighter.hp}/${fighter.maxHp}`;
     // Max PA/PM "effectifs" : incluent les bonus en cours (3 Concentration
     // -> "11/11" et pas "11/8") pour que le joueur voie son cap reel.
@@ -1404,7 +1407,7 @@ export class Hud {
     </svg>`;
   }
 
-  showEnd(winner, onReplay, enemyLabel, starResult) {
+  showEnd(winner, onReplay, enemyLabel, starResult, extra = {}) {
     const label = enemyLabel || 'tes adversaires';
     const overlay = document.createElement('div');
     overlay.id = 'end-overlay';
@@ -1426,6 +1429,7 @@ export class Hud {
         ? `Tu as triomphe de ${label} !`
         : `${label} t ont vaincu...`}</div>
       ${starBlock}
+      ${this._xpBlock(extra)}
       <button id="btn-replay">REJOUER</button>
     `;
     document.body.appendChild(overlay);
@@ -1433,7 +1437,33 @@ export class Hud {
       overlay.remove();
       onReplay && onReplay();
       this._lastFighterId = null; // force rebuild de la barre
+      this._lastFighter = null;
     });
+  }
+
+  // Bloc "experience gagnee" de l ecran de fin.
+  _xpBlock(extra) {
+    const list = extra && extra.xpResults;
+    if (!list || !list.length) return '';
+    const rows = list.map(r => {
+      const need = xpToNext(r.level);
+      const pct = r.level >= MAX_LEVEL ? 100 : Math.round((r.xp / need) * 100);
+      const up = r.levelsGained > 0
+        ? `<div class="xp-up">NIVEAU ${r.level} ! <span>+${r.pointsGained} point${r.pointsGained > 1 ? 's' : ''} de sort</span></div>` : '';
+      const unl = r.unlockedNames.length
+        ? `<div class="xp-unlock">Nouveau sort : ${r.unlockedNames.join(', ')}</div>` : '';
+      return `<div class="xp-row">
+        <div class="xp-head"><b>${r.name}</b> <span class="xp-lv">Niv. ${r.level}</span> <span class="xp-gain">+${r.gained} XP</span></div>
+        <div class="xp-bar"><div class="xp-fill" style="width:${pct}%"></div></div>
+        <div class="xp-num">${r.level >= MAX_LEVEL ? 'Niveau maximum' : `${r.xp} / ${need} XP`}</div>
+        ${up}${unl}
+      </div>`;
+    }).join('');
+    const tier = extra.tierUnlocked
+      ? `<div class="xp-tier">Palier ${extra.tier + 1 <= 10 ? (extra.tier + 1) + ' debloque !' : 'max atteint !'}</div>` : '';
+    const hint = list.some(r => r.pointsGained > 0)
+      ? '<div class="xp-num" style="text-align:center">Depense tes points de sort dans le Grimoire (menu).</div>' : '';
+    return `<div class="xp-block">${rows}${tier}${hint}</div>`;
   }
 
   // Phase de placement : gros bouton "PRET" au-dessus de la barre de sorts.
@@ -1487,6 +1517,7 @@ export class Hud {
       }
       slot.innerHTML = `
         <div class="to-team-dot" style="background: ${teamColor};"></div>
+        <div class="to-lv">${f.level || 1}</div>
         ${avatarHtml}
         <div class="to-name">${shortName}</div>
         <div class="to-hp"><div class="to-hp-fill" style="width: ${ratio * 100}%;"></div></div>
@@ -1634,7 +1665,7 @@ export class Hud {
     this.fighterInfoEl.innerHTML = `
       <button class="fi-pin" type="button" title="Desepingler">x</button>
       <div class="fi-title">${isPinned ? 'INFO (epinglee)' : 'INFO'}</div>
-      <div class="fi-name">${f.name}</div>
+      <div class="fi-name">${f.name} <span class="fi-lv">Niv. ${f.level || 1}</span></div>
       <div class="fi-team ${teamClass}">${teamLabel}</div>
       ${bodyRows}
       ${buffsHtml}

@@ -4,8 +4,9 @@ import { TurnManager } from './TurnManager.js';
 import { bfs, pathTo, hasLOS } from './Path.js';
 import { SPELLS } from './Spells.js';
 import { spellElementColor } from './SpellIcons.js';
+import { getHero, addXp, monsterXp } from './Leveling.js';
 import { MAP_BOOSTS } from './Map3D.js';
-import { recordWin } from './Progress.js';
+import { recordWin, recordTier } from './Progress.js';
 
 // `homeMap` : la carte "maison" du monstre. Le vaincre dessus rapporte
 // une etoile d or, ailleurs une etoile d argent.
@@ -105,16 +106,28 @@ export class Game {
     // Placement : on cherche une case libre et marchable autour de chaque
     // ancre de spawn (les compositions etendues depassent le nb d ancres).
     const occupied = new Set();
+    const monsterLevel = config.monsterLevel || 1;
+    this.monsterLevel = monsterLevel;
     const spawn = (cls, team, anchors, i) => {
       const a = anchors[i % anchors.length];
       const pos = this._findFreeSpawn(a.c, a.r, occupied) || a;
       occupied.add(pos.c + ',' + pos.r);
-      const f = new Fighter(cls, team, pos.c, pos.r);
+      let opts;
+      if (team === 'player') {
+        const hero = getHero(cls);
+        opts = { kind: 'hero', level: hero.level, spellLevels: hero.spellLevels };
+      } else {
+        opts = { kind: 'monster', level: monsterLevel };
+      }
+      const f = new Fighter(cls, team, pos.c, pos.r, opts);
       f.character = new Character3D(this.scene3d.scene, cls, team, pos.c, pos.r);
       this.fighters.push(f);
     };
     playerClasses.forEach((cls, i) => spawn(cls, 'player', PLAYER_SPAWNS, i));
     enemyComposition.forEach((cls, i) => spawn(cls, 'enemy', ENEMY_SPAWNS, i));
+
+    // Monstres de depart (pour le calcul d XP en fin de combat).
+    this.initialEnemies = this.fighters.filter(f => f.team !== 'player');
 
     // Boosts de map : applique des buffs permanents aux creatures concernees.
     this.applyMapBoosts(config.mapId);
@@ -523,7 +536,7 @@ export class Game {
   // ---------- SORTS (joueur) ----------
   async tryCastSpell(c, r, isTouch = false) {
     const cur = this.turn.current();
-    const spell = SPELLS[this.selectedSpellId];
+    const spell = cur.spellById(this.selectedSpellId);
     if (!spell) return;
     // Revalide au moment du lancer : les PA ont pu baisser depuis la
     // selection du sort.
@@ -1062,7 +1075,8 @@ export class Game {
         if (this.vfx) this.vfx.portal(target.c, target.r, { color: 0xf1c40f, duration: 0.9 });
         this.audio && this.audio.sfx('summon');
         await new Promise(r => setTimeout(r, 200));
-        const summon = new Fighter(effect.creatureId, caster.team, target.c, target.r);
+        const summon = new Fighter(effect.creatureId, caster.team, target.c, target.r,
+          { kind: caster.team === 'player' ? 'summon' : 'monster', level: caster.level || 1 });
         summon.character = new Character3D(this.scene3d.scene, effect.creatureId, caster.team, target.c, target.r);
         const closestEnemy = this.fighters
           .filter(f => f.alive && f.team !== caster.team)
@@ -1407,7 +1421,7 @@ export class Game {
     }
 
     if (this.mode === 'spell' && this.selectedSpellId) {
-      const spell = SPELLS[this.selectedSpellId];
+      const spell = cur.spellById(this.selectedSpellId);
       if (!spell) return;
       const tiles = [];
       if ((spell.area && spell.area.type === 'line') || spell.lineOnly) {
@@ -2209,9 +2223,27 @@ export class Game {
           recordWin(classId, this.config.combatId, starResult);
         }
       }
+      // Experience : chaque monstre vaincu rapporte de l XP a chaque heros
+      // (partagee avec un bonus de groupe en multi), et le palier est valide.
+      let xpResults = null;
+      let tierUnlocked = false;
+      if (winner === 'player' && this.config) {
+        const heroes = this.fighters.filter(f => f.team === 'player' && f.levelKind === 'hero');
+        const enemies = this.initialEnemies || [];
+        const n = Math.max(1, heroes.length);
+        const share = n === 1 ? 1 : 1.3 / n;
+        xpResults = heroes.map(h => {
+          const total = enemies.reduce((sum, e) => sum + monsterXp(e.def, e.level, h.level), 0);
+          const res = addXp(h.classId, total * share, h.def.spellIds);
+          const hero = getHero(h.classId);
+          return { ...res, classId: h.classId, name: h.def.name, level: hero.level, xp: hero.xp, points: hero.points,
+            unlockedNames: res.unlocked.map(id => (SPELLS[id] && SPELLS[id].name) || id) };
+        });
+        if (this.config.tier) tierUnlocked = recordTier(this.config.combatId, this.config.tier);
+      }
       setTimeout(() => this.hud.showEnd(winner, () => {
         if (this.onEnd) this.onEnd();
-      }, enemyLabel, starResult), 600);
+      }, enemyLabel, starResult, { xpResults, tierUnlocked, tier: this.config && this.config.tier }), 600);
       return true;
     }
     return false;

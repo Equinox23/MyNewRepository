@@ -72,11 +72,27 @@ node dofus-3d/tools/build-sw.mjs
 - **Ambiance lumineuse par carte** : soleil dore, clair de lune au
   cimetiere, lumiere verdatre au marais...
 
+## Progression (niveaux, sorts, paliers)
+
+- **Niveaux 1 a 20** par heros, sauvegardes dans le navigateur
+  (`src/Leveling.js`). L XP vient des monstres vaincus : plus ils sont
+  haut niveau, plus ils rapportent (un monstre bien plus faible que le
+  heros rapporte peu). En multi, l XP est partagee avec un bonus de groupe.
+- A chaque niveau : PV +7%, degats +6%, +1 PA au niveau 10, +1 PM au 16,
+  et **1 point de sort** (2 aux niveaux 5, 10, 15, 20).
+- **8 sorts par classe**, debloques aux niveaux 1, 1, 1, 1, 2, 4, 6, 9.
+- **3 niveaux de puissance par sort** : 1 -> 2 coute 1 point, 2 -> 3 coute
+  2 points. Niv. 2 : x1.25 et +1 portee ; niv. 3 : x1.55, recharge -1,
+  effets secondaires renforces. Ecran **Grimoire** du menu pour
+  ameliorer ses sorts (et rendre les points si besoin).
+- **Monstres par paliers** : chaque combat a 10 paliers (monstres niveau
+  1, 3, 5... 19 : plus de PV et de degats). Battre un palier debloque le
+  suivant ; le menu conseille le palier adapte au niveau du heros.
+
 ## Classes et monstres
 
-- Classes : Iop, Osamodas, Roublard, Xelor, Ecaflip, Pandawa, **Eniripsa**
-  (fee soigneuse : Mot Blessant, Mot Soignant, Mot de Frayeur, Mot
-  Stimulant, Mot de Reconstitution).
+- Classes (8 sorts chacune) : Iop, Osamodas (dont Invocation de Bouftou),
+  Roublard, Xelor, Ecaflip, Pandawa, Eniripsa.
 - Combats : Bouftous, Crapauds, Chafers, Tofus, Champignons, **Wabbits**
   (Terrier des Wabbits : 3 Wabbits + le Wa Wabbit, foret).
 
