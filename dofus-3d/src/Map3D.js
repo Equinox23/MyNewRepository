@@ -4,6 +4,7 @@ import { buildRock } from './models/rock.js';
 import { buildBush, buildFlowerPatch, buildStump, buildMushroomCluster } from './models/foliage.js';
 import { paintBoard, paintOuterGround } from './GroundPainter.js';
 import { toonify, bakeStatic } from './Toon.js';
+import { WIND, RIM, DROP, buildIslandTop, buildIslandSkirt, buildWater, buildEdgeFalls, fallMaterial, buildGrass, applyWind } from './Terrain.js';
 
 export const MAP_SIZE = 15;
 export const TILE_SIZE = 1;
@@ -176,12 +177,14 @@ const GRASS_STYLE = {
   swamp:     { density: 34, colors: [0x5f8a3e, 0x6e7a3a, 0x4f7030] },
 };
 
+// `unlit` : luminosite des shaders non eclaires (eau, herbe) ; `wind` :
+// force du vent ; `rim` : contre-jour.
 const LIGHTING = {
-  forest:    { sky: 0xfff4d6, ground: 0x6b7a3a, hemi: 1.35, sun: 0xfff0d0, sunI: 1.9 },
-  river:     { sky: 0xf0f8ff, ground: 0x5a7a4a, hemi: 1.35, sun: 0xfff6e0, sunI: 1.9 },
-  graveyard: { sky: 0xb4aee0, ground: 0x3a3a2a, hemi: 1.15, sun: 0xcfc6ff, sunI: 1.25 },
-  cliff:     { sky: 0xfff8e8, ground: 0x8a7a5a, hemi: 1.4, sun: 0xfff0d4, sunI: 2.0 },
-  swamp:     { sky: 0xdfe8b8, ground: 0x3a4a22, hemi: 1.2, sun: 0xeef2c4, sunI: 1.45 },
+  forest:    { sky: 0xfff4d6, ground: 0x6b7a3a, hemi: 1.3, sun: 0xffecc4, sunI: 2.0, rim: 0xbcd6ff, rimI: 0.55, unlit: 1.0, wind: 1.0 },
+  river:     { sky: 0xf0f8ff, ground: 0x5a7a4a, hemi: 1.3, sun: 0xfff4d8, sunI: 2.0, rim: 0xb8e0ff, rimI: 0.55, unlit: 1.0, wind: 0.9 },
+  graveyard: { sky: 0xa8a2e0, ground: 0x34343a, hemi: 1.05, sun: 0xc4bcff, sunI: 1.3, rim: 0x7af0d0, rimI: 0.7, unlit: 0.62, wind: 0.7 },
+  cliff:     { sky: 0xfff8e8, ground: 0x8a7a5a, hemi: 1.35, sun: 0xffecc8, sunI: 2.1, rim: 0xc8dcff, rimI: 0.5, unlit: 1.0, wind: 2.2 },
+  swamp:     { sky: 0xd4e2b0, ground: 0x364620, hemi: 1.1, sun: 0xe6eeb8, sunI: 1.5, rim: 0x9ae06a, rimI: 0.6, unlit: 0.8, wind: 0.6 },
 };
 
 export class Map3D {
@@ -211,6 +214,9 @@ export class Map3D {
     if (this.scene.background) this.scene.background.setHex(map.bgColor);
     if (this.scene.fog) this.scene.fog.color.setHex(map.bgColor);
     this.applyLighting(map.style);
+    this.light = LIGHTING[map.style] || LIGHTING.forest;
+    WIND.uWind.value = this.light.wind;
+    this.grassSpots = [];
 
     this.tileGroup = new THREE.Group();
     this.scene.add(this.tileGroup);
@@ -219,6 +225,8 @@ export class Map3D {
     this.buildGround(map);
     this.buildTiles(map);
     this.buildBackgroundDecor(map);
+    this.buildWaterSurface(map);
+    this.buildGrassField(map);
     if (map.waterfall) this.buildWaterfall(map.waterfall);
     if (map.lilyPads) this.buildLilyPads(map.lilyPads);
     // Style cartoon : materiaux toon + contours sur les props du plateau.
@@ -226,6 +234,7 @@ export class Map3D {
     for (const obj of this.spawned) {
       if (obj !== this.tileGroup && !obj.userData.baked) toonify(obj, { width: 0.025, minRadius: 0.12 });
     }
+    if (this.onRebuild) this.onRebuild(map, this);
   }
 
   // Eclairage d ambiance propre a chaque theme (soleil dore en foret,
@@ -235,6 +244,8 @@ export class Map3D {
     this.scene.traverse(o => {
       if (o.isHemisphereLight) {
         o.color.setHex(L.sky); o.groundColor.setHex(L.ground); o.intensity = L.hemi;
+      } else if (o.isDirectionalLight && o.userData.rim) {
+        o.color.setHex(L.rim); o.intensity = L.rimI;
       } else if (o.isDirectionalLight) {
         o.color.setHex(L.sun); o.intensity = L.sunI;
       }
@@ -245,28 +256,13 @@ export class Map3D {
   // la boucle de rendu principale.
   update(dt, time) {
     if (!this.anim) return;
-    // Eau : ondulation verticale douce + derive de l ecume.
-    for (const w of this.anim.water) {
-      w.mesh.position.y = w.baseY + Math.sin(time * 1.6 + w.phase) * 0.02;
-      for (const f of w.streaks) {
-        f.t += dt;
-        const k = (f.t % f.dur) / f.dur;
-        f.mesh.position.x = f.x0 + f.dx * k;
-        f.mesh.position.z = f.z0 + f.dz * k;
-        f.mesh.material.opacity = Math.sin(k * Math.PI) * 0.5;
-      }
-    }
+    WIND.uTime.value = time;
     // Cascade : gouttes qui tombent en boucle.
     for (const d of this.anim.waterfall) {
       d.mesh.position.y -= d.speed * dt;
       if (d.mesh.position.y < d.minY) {
         d.mesh.position.y = d.maxY;
       }
-    }
-    // Herbe : balancement sous le vent (rafales globales + phase locale).
-    const gust = Math.sin(time * 0.9) * 0.06;
-    for (const g of this.anim.grass) {
-      g.mesh.rotation.z = g.base + Math.sin(time * 2.5 + g.phase) * 0.17 + gust;
     }
     // Nuages : derive lente, bouclage de part et d autre de la carte.
     for (const c of this.anim.clouds) {
@@ -285,6 +281,7 @@ export class Map3D {
             if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
             else {
               if (o.material.map) o.material.map.dispose();
+              if (o.material.uniforms && o.material.uniforms.uDist) o.material.uniforms.uDist.value.dispose();
               o.material.dispose();
             }
           }
@@ -295,38 +292,71 @@ export class Map3D {
     this.tileGroup = null;
   }
 
-  // Sol peint a la main : grand plan exterieur (texture raccordable) +
-  // plateau de combat peint avec son quadrillage, fondu sur les bords.
+  // Sol : grand plan exterieur en contrebas + plateau de combat en relief
+  // (dessus peint avec son quadrillage, flancs de terre et de roche).
   buildGround(map) {
     const center = (MAP_SIZE - 1) / 2;
     const outerTex = paintOuterGround(map.style, 4242);
     outerTex.repeat.set(120 / 6, 120 / 6);
     const base = new THREE.Mesh(
       new THREE.PlaneGeometry(120, 120),
-      new THREE.MeshToonMaterial({ map: outerTex, color: 0xf2f2ea })
+      new THREE.MeshToonMaterial({ map: outerTex, color: 0xd6d8cc })
     );
     base.rotation.x = -Math.PI / 2;
-    base.position.set(center, -0.08, center);
+    base.position.set(center, -DROP - 0.02, center);
     base.receiveShadow = true;
     base.userData.baked = true;
     this.scene.add(base);
     this.spawned.push(base);
 
-    const board = paintBoard(map.grid, map.style, { margin: 2, seed: 777 });
-    const boardMesh = new THREE.Mesh(
-      new THREE.PlaneGeometry(board.units, board.units),
-      new THREE.MeshToonMaterial({
-        map: board.texture, transparent: true, alphaTest: 0.02, depthWrite: true,
-      })
-    );
-    boardMesh.rotation.x = -Math.PI / 2;
-    boardMesh.position.set(center, 0.05, center);
-    boardMesh.receiveShadow = true;
-    boardMesh.renderOrder = -1;
-    boardMesh.userData.baked = true;
-    boardMesh.raycast = () => {};
-    this.scene.add(boardMesh);
-    this.spawned.push(boardMesh);
+    const board = paintBoard(map.grid, map.style, { margin: 1, seed: 777, island: true });
+    const top = buildIslandTop(MAP_SIZE, board.texture, board.units, board.margin, 0.05);
+    top.userData.baked = true;
+    this.scene.add(top);
+    this.spawned.push(top);
+    const skirt = buildIslandSkirt(MAP_SIZE, map.style);
+    this.scene.add(skirt);
+    this.spawned.push(skirt);
+  }
+
+  // Surface d eau animee (une seule piece) + chutes au bord du plateau.
+  buildWaterSurface(map) {
+    const water = buildWater(map.grid, map, this.light.unlit);
+    if (!water) return;
+    this.scene.add(water);
+    this.spawned.push(water);
+    this.waterMesh = water;
+    // Riviere : l eau tombe du plateau la ou elle atteint le bord (sauf
+    // cote cascade). L eau stagnante du marais ne deborde que mollement.
+    const skip = map.waterfall ? ['n'] : [];
+    const falls = buildEdgeFalls(map.grid, map, skip, this.light.unlit);
+    this.scene.add(falls.group);
+    this.spawned.push(falls.group);
+    this.fallFeet = falls.feet;
+  }
+
+  // Herbe au vent : touffes sur les cases de sol (loin du centre, pour ne
+  // pas gener la lecture) et bordure fournie sur le pourtour du plateau.
+  buildGrassField(map) {
+    const cfg = GRASS_STYLE[map.style] || GRASS_STYLE.forest;
+    const spots = this.grassSpots;
+    const n = MAP_SIZE, grid = map.grid;
+    const wet = (c, r) => c >= 0 && r >= 0 && c < n && r < n && (grid[r][c] === 2 || grid[r][c] === 3);
+    const rng = mulberry32(9090);
+    // Pourtour : anneau de touffes sur le debord du plateau.
+    const per = Math.round(cfg.density * 2.6);
+    for (let i = 0; i < per; i++) {
+      const side = i % 4, t = rng() * (n + RIM * 2) - 0.5 - RIM, d = n - 0.5 + 0.12 + rng() * (RIM - 0.2);
+      const x = side === 0 ? t : side === 1 ? t : side === 2 ? -0.5 - (d - (n - 0.5)) : d;
+      const z = side === 0 ? -0.5 - (d - (n - 0.5)) : side === 1 ? d : t;
+      const cc = Math.max(0, Math.min(n - 1, Math.round(x))), rr = Math.max(0, Math.min(n - 1, Math.round(z)));
+      if (wet(cc, rr)) continue;
+      // Coins arrondis du plateau : pas de touffe dans le vide.
+      if (Math.abs(x - (n - 1) / 2) > n / 2 + RIM - 0.45 && Math.abs(z - (n - 1) / 2) > n / 2 + RIM - 0.45) continue;
+      spots.push({ x, z, n: 4 + Math.floor(rng() * 4), spread: 0.16, scale: 1.15 });
+    }
+    const mesh = buildGrass(spots, cfg.colors, this.light.unlit, 7);
+    if (mesh) { this.scene.add(mesh); this.spawned.push(mesh); }
   }
 
   buildTiles(map) {
@@ -418,84 +448,24 @@ export class Map3D {
   // dependent de la carte). Enregistre la touffe pour l animation vent.
   maybeAddGrass(map, c, r, hash) {
     const cfg = GRASS_STYLE[map.style] || GRASS_STYLE.forest;
-    // ~density% des cases de sol reçoivent une touffe (pseudo-aleatoire).
-    if (((hash >> 5) % 100) >= cfg.density) return;
-    const blades = 2 + ((hash >> 2) % 2);  // 2 a 3 brins
-    const tuft = new THREE.Group();
-    for (let i = 0; i < blades; i++) {
-      const palIdx = (hash + i * 7) % cfg.colors.length;
-      const mat = new THREE.MeshStandardMaterial({ color: cfg.colors[palIdx], roughness: 1 });
-      const h = 0.20 + ((hash + i * 13) % 12) * 0.012;
-      const blade = new THREE.Mesh(new THREE.ConeGeometry(0.022, h, 5), mat);
-      blade.position.set(
-        ((((hash + i * 31) % 20) - 10) / 10) * 0.22,
-        h / 2,
-        ((((hash + i * 53) % 20) - 10) / 10) * 0.22,
-      );
-      blade.rotation.z = ((((hash + i * 17) % 14) - 7) / 7) * 0.25;
-      blade.userData.noOutline = true;
-      tuft.add(blade);
+    // ~density% des cases de sol reçoivent des touffes, placees vers les
+    // coins de la case (le centre reste degage pour les combattants).
+    if (((hash >> 5) % 100) >= cfg.density + 18) return;
+    const tufts = 1 + ((hash >> 3) % 2);
+    for (let i = 0; i < tufts; i++) {
+      const a = ((hash >> (7 + i * 4)) % 628) / 100;
+      const d = 0.3 + (((hash >> (2 + i * 5)) % 10) / 10) * 0.12;
+      this.grassSpots.push({ x: c + Math.cos(a) * d, z: r + Math.sin(a) * d, n: 3 + ((hash >> (9 + i)) % 3), spread: 0.09, scale: 0.8 });
     }
-    tuft.position.set(c, 0.05, r);
-    this.tileGroup.add(tuft);
-    this.anim.grass.push({
-      mesh: tuft,
-      base: tuft.rotation.z,
-      phase: (hash % 628) / 100,
-    });
   }
 
+  // Case d eau : plan invisible pour le ciblage (le visuel est la surface
+  // d eau animee, construite d un bloc dans buildWaterSurface).
   buildWaterTile(c, r) {
-    // Nuances de bleu (ou de vert pour un marais), choisies de maniere
-    // pseudo-aleatoire et stable a partir des coordonnees.
-    const bluePalette = [0x1d6f93, 0x2b8aab, 0x3aa1c2, 0x4cb3d1, 0x217fa0];
-    const murkyPalette = [0x3e5a32, 0x4a6a38, 0x355028, 0x53703e, 0x42602f];
-    const murky = !!(this.config && this.config.murkyWater);
-    const palette = murky ? murkyPalette : bluePalette;
-    const hash = ((c * 73) ^ (r * 137)) >>> 0;
-    const color = palette[hash % palette.length];
-    const waterMat = new THREE.MeshStandardMaterial({
-      color,
-      transparent: true, opacity: 0.85,
-      roughness: 0.2, metalness: 0.45,
-    });
-    const water = new THREE.Mesh(new THREE.PlaneGeometry(0.99, 0.99), waterMat);
+    if (!this._pickMat) this._pickMat = new THREE.MeshBasicMaterial({ visible: false });
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(0.99, 0.99), this._pickMat);
     water.rotation.x = -Math.PI / 2;
     water.position.set(c, -0.03, r);
-    water.receiveShadow = true;
-
-    // Stries d ecume qui derivent : vers l aval pour une riviere
-    // (config.flow), quasi immobiles et scintillantes pour un marais.
-    const flow = this.config && this.config.flow;
-    const streaks = [];
-    const nStreaks = murky ? 1 : 2;
-    for (let i = 0; i < nStreaks; i++) {
-      const foamMat = new THREE.MeshBasicMaterial({
-        color: murky ? 0xcfe0b0 : 0xeaf3f7, transparent: true, opacity: 0.0,
-      });
-      const m = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.07), foamMat);
-      m.rotation.x = -Math.PI / 2;
-      m.rotation.z = ((hash + i * 19) % 100) / 100 * Math.PI;
-      const ox = ((((hash + i * 31) % 16) - 8) / 8) * 0.30;
-      const oz = ((((hash + i * 53) % 16) - 8) / 8) * 0.30;
-      const dx = flow ? flow.x : 0;
-      const dz = flow ? flow.z : 0;
-      m.position.set(c + ox - dx / 2, -0.012, r + oz - dz / 2);
-      this.tileGroup.add(m);
-      streaks.push({
-        mesh: m,
-        x0: c + ox - dx / 2, z0: r + oz - dz / 2,
-        dx, dz,
-        t: ((hash + i * 137) % 300) / 100,
-        dur: murky ? 5.0 : 2.6,
-      });
-    }
-    this.anim.water.push({
-      mesh: water,
-      baseY: -0.03,
-      phase: (hash % 628) / 100,
-      streaks,
-    });
     return water;
   }
 
@@ -507,8 +477,8 @@ export class Map3D {
     // Falaise rocheuse derriere la cascade : 3 blocs cubiques empiles.
     const cliffMat = new THREE.MeshStandardMaterial({ color: 0x3d4148, roughness: 1 });
     for (let i = -2; i <= 2; i++) {
-      const block = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.4, 0.8), cliffMat);
-      block.position.set(pos.c + i, 1.2, pos.r - 1.4);
+      const block = new THREE.Mesh(new THREE.BoxGeometry(1.0, 2.4 + DROP, 0.8), cliffMat);
+      block.position.set(pos.c + i, 1.2 - DROP / 2, pos.r - 1.55);
       block.rotation.y = (i * 0.07);
       block.castShadow = true;
       block.receiveShadow = true;
@@ -520,23 +490,20 @@ export class Map3D {
     grp.add(peak);
 
     // Rideau d eau (vertical), legerement courbe par 3 plans superposes.
-    const waterMat = new THREE.MeshStandardMaterial({
-      color: 0x66c0e0, transparent: true, opacity: 0.78,
-      roughness: 0.1, metalness: 0.4, side: THREE.DoubleSide,
-    });
+    const waterMat = fallMaterial(false, this.light.unlit);
     const fallWidth = 4.6;
     const fallHeight = 2.6;
     for (let i = 0; i < 3; i++) {
       const w = fallWidth - i * 0.4;
       const h = fallHeight - i * 0.2;
       const sheet = new THREE.Mesh(new THREE.PlaneGeometry(w, h), waterMat);
-      sheet.position.set(pos.c, h / 2, pos.r - 1.0 + i * 0.05);
+      sheet.position.set(pos.c, h / 2, pos.r - 1.12 + i * 0.05);
       grp.add(sheet);
     }
 
     // Pied de chute : flaque d ecume au sol (devant la chute).
     const foamMat = new THREE.MeshStandardMaterial({
-      color: 0xeaf6fb, transparent: true, opacity: 0.85, roughness: 0.3,
+      color: 0xb4c8d4, transparent: true, opacity: 0.6, roughness: 0.3,
     });
     const foamGeom = new THREE.CircleGeometry(2.2, 24);
     const foam = new THREE.Mesh(foamGeom, foamMat);
@@ -563,7 +530,7 @@ export class Map3D {
       drop.scale.set(1, 2.0, 1);
       const dx = (((i * 97) % 100) / 100 - 0.5) * 4.2;
       const y0 = ((i * 53) % 100) / 100 * 2.6;
-      drop.position.set(pos.c + dx, y0, pos.r - 0.86);
+      drop.position.set(pos.c + dx, y0, pos.r - 0.98);
       grp.add(drop);
       this.anim.waterfall.push({
         mesh: drop,
@@ -619,8 +586,10 @@ export class Map3D {
   // Decor exterieur au plateau, propre a chaque theme de carte. Tout est
   // fusionne (bakeStatic) en quelques meshes pour rester fluide.
   buildBackgroundDecor(map) {
-    const props = [];
-    const ring = (builder, count, opts) => this._scatterRing(builder, count, opts, props);
+    const props = [], windy = [];
+    // Vegetation souple (arbres, buissons, fleurs, roseaux) : bouge au vent.
+    const SOFT = new Set([buildTree, buildBush, buildFlowerPatch, buildDeadTree, buildReed]);
+    const ring = (builder, count, opts) => this._scatterRing(builder, count, opts, SOFT.has(builder) ? windy : props);
     switch (map.style) {
       case 'forest':
         ring(buildTree, 150, { tall: true, seedBase: 424242, minD: 9.2, maxD: 24, scale: [1.0, 1.9] });
@@ -650,9 +619,13 @@ export class Map3D {
         ring(buildMushroomCluster, 16, { seedBase: 8686, minD: 8.4, maxD: 12, scale: [0.8, 1.3] });
         break;
     }
-    if (props.length) {
-      const baked = bakeStatic(props, { width: 0.035, minRadius: 0.1 });
+    for (const list of [props, windy]) {
+      if (!list.length) continue;
+      const baked = bakeStatic(list, { width: 0.035, minRadius: 0.1 });
       baked.userData.baked = true;
+      // Le decor repose sur le sol en contrebas du plateau.
+      baked.position.y = -DROP;
+      if (list === windy) applyWind(baked);
       this.scene.add(baked);
       this.spawned.push(baked);
     }
@@ -667,7 +640,7 @@ export class Map3D {
     const minD = opts.minD !== undefined ? opts.minD : MAP_SIZE / 2 + 1.5;
     const maxD = opts.maxD !== undefined ? opts.maxD : MAP_SIZE / 2 + 14;
     const [sMin, sMax] = opts.scale || [0.9, 1.6];
-    const keepOut = MAP_SIZE / 2 + 0.35;
+    const keepOut = MAP_SIZE / 2 + RIM + 0.75;
     let placed = 0, attempts = 0;
     while (placed < count && attempts < count * 8) {
       attempts++;

@@ -157,6 +157,22 @@ node dofus-3d/tools/build-sw.mjs
   tonneau qui roule (Karcham), souffle de feu, plumes, griffures,
   tourbillon de vent, spores, bulles, eclats de roche...
 
+## Rendu
+
+- **Post-traitement** (`src/PostFX.js`, sans dependance) : la scene est
+  rendue en HDR, les zones tres lumineuses (sorts, cristaux, lucioles,
+  reflets de l eau) produisent un halo, puis l image est etalonnee par
+  carte (saturation, contraste, teinte des ombres / lumieres, vignette).
+  Option « Effets de lumiere » dans les parametres ; le jeu repasse seul
+  en rendu direct si l appareil descend sous ~24 images / seconde.
+- **Terrain vivant** (`src/Terrain.js`) : plateau en relief (ile aux flancs
+  de terre et de roche), eau animee par shader (reflets, ecume sur les
+  berges, scintillements) qui tombe en cascade au bord du plateau, herbe
+  instanciee et vegetation du decor qui ondulent au vent.
+- **Atmosphere** (`src/Ambience.js`) : lucioles et pollen en foret, embruns
+  a la cascade, brouillard et feux follets au cimetiere, rafales et
+  poussiere sur la falaise, spores et brume au marais.
+
 ## Stack technique
 
 - **Three.js 0.160** embarque dans `vendor/three/` (import map).

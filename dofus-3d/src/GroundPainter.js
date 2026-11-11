@@ -293,6 +293,14 @@ export function paintBoard(grid, style, opts = {}) {
       const dx = px < b0 ? b0 - px : px > b1 ? px - b1 : 0;
       const i = (py * size + px) * 4;
       if (dx || dy) {
+        if (opts.island) {
+          // Plateau en relief : pas de fondu, mais l eau des cases de
+          // lisiere se prolonge jusqu au bord (trou dans la marge).
+          const c = Math.max(0, Math.min(n - 1, Math.floor((px - b0) / ppu)));
+          const r = Math.max(0, Math.min(n - 1, Math.floor((py - b0) / ppu)));
+          if (!(dx && dy) && (grid[r][c] === 2 || grid[r][c] === 3)) d[i + 3] = 0;
+          continue;
+        }
         const dist = Math.hypot(dx, dy) / fade;
         const a = dist >= 1 ? 0 : 1 - dist * dist * (3 - 2 * dist);
         d[i + 3] = Math.round(d[i + 3] * a);
