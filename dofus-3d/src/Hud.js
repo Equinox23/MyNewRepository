@@ -7,6 +7,23 @@ import { statesHtml } from './States.js';
 import { elementIcon, ELEMENT_LABEL, ELEMENT_CSS, damageElementOf, DAMAGE_ELEMENTS } from './Elements.js';
 import { itemIcon, RARITY, statLines } from './Items.js';
 
+// Types de sorts (regroupement dans la barre).
+export const SPELL_GROUPS = {
+  attack: { label: 'Attaque', color: '#e0503a' },
+  move: { label: 'Deplacement', color: '#3fbf6a' },
+  boost: { label: 'Boost', color: '#f0b82a' },
+  support: { label: 'Soutien', color: '#f06aa8' },
+  summon: { label: 'Invocation', color: '#b8824a' },
+};
+const GROUP_ORDER = ['attack', 'summon', 'move', 'boost', 'support'];
+export function spellGroup(spell) {
+  if (spell.category === 'move') return 'move';
+  if (spell.category === 'summon') return 'summon';
+  if (spell.category === 'heal') return 'support';
+  if (spell.category === 'boost') return spell.target === 'ally' ? 'support' : 'boost';
+  return 'attack';
+}
+
 // HUD DOM : panneau bas avec stats + barre de sorts.
 // Chaque slot affiche le numero de touche (haut-gauche), une icone SVG
 // dessinee (centre, en blanc sur l accent de couleur du sort) et le
@@ -699,6 +716,7 @@ export class Hud {
     this.buildHelpPanel();
     this.buildSettingsPanel();
     this.buildMenuButton();
+    this.setupLayout();
     this.makeDraggable(this.statsEl, 'dofus3d.statsPos');
     this.makeDraggable(this.spellsEl, 'dofus3d.spellsPos');
     this.makeDraggable(this.turnOrderEl, 'dofus3d.turnPos');
@@ -1019,6 +1037,7 @@ export class Hud {
     let pinch = null;
 
     const onDown = (e) => {
+      if (document.body.classList.contains('touch-ui')) return; // zones fixes
       if (e.target.closest('button')) return;
       if (e.target.closest('input,textarea,select')) return;
       if (ignoreSelector && e.target.closest(ignoreSelector)) return;
@@ -1125,6 +1144,7 @@ export class Hud {
   }
 
   restorePanelPosition(panel, storageKey) {
+    if (document.body.classList.contains('touch-ui')) return;
     // Restore scale en premier (sans modifier la position par defaut).
     let scaleRaw;
     try { scaleRaw = localStorage.getItem(storageKey + '.scale'); } catch (_) {}
@@ -1188,6 +1208,47 @@ export class Hud {
     center.title = 'Recentrer la camera (angle / zoom par defaut)';
     center.addEventListener('click', () => this.callbacks.onResetCamera && this.callbacks.onResetCamera());
     document.body.appendChild(center);
+
+    // Molette de rotation : on la fait glisser pour tourner la carte au
+    // degre pres ; les fleches font un huitieme de tour.
+    const dial = document.createElement('div');
+    dial.id = 'rot-dial';
+    dial.innerHTML = `
+      <button class="rd-step" data-dir="-1" type="button" title="Tourner a gauche">&#9664;</button>
+      <div class="rd-track" title="Glisse pour tourner la carte"><div class="rd-ticks"></div><div class="rd-needle"></div></div>
+      <button class="rd-step" data-dir="1" type="button" title="Tourner a droite">&#9654;</button>`;
+    document.body.appendChild(dial);
+    this.dialEl = dial;
+    this.dialTicks = dial.querySelector('.rd-ticks');
+    dial.querySelectorAll('.rd-step').forEach(b => b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const cb = b.dataset.dir === '-1' ? this.callbacks.onRotateLeft : this.callbacks.onRotateRight;
+      cb && cb();
+    }));
+    const track = dial.querySelector('.rd-track');
+    let last = null;
+    track.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); e.stopPropagation();
+      track.setPointerCapture(e.pointerId);
+      last = e.clientX;
+      dial.classList.add('active');
+    });
+    track.addEventListener('pointermove', (e) => {
+      if (last === null) return;
+      const dx = e.clientX - last;
+      last = e.clientX;
+      this.callbacks.onRotateFree && this.callbacks.onRotateFree(-dx * 0.011);
+    });
+    const end = () => { last = null; dial.classList.remove('active'); };
+    track.addEventListener('pointerup', end);
+    track.addEventListener('pointercancel', end);
+  }
+
+  // Fait defiler les graduations de la molette avec l angle de la camera.
+  setDialAngle(az) {
+    if (!this.dialTicks || this._dialAz === az) return;
+    this._dialAz = az;
+    this.dialTicks.style.backgroundPosition = `${Math.round(-az / 0.011)}px 0`;
   }
 
   on(eventName, cb) {
@@ -1198,13 +1259,33 @@ export class Hud {
   rebuildSpellBar(fighter) {
     this.spellBar.innerHTML = '';
     this.spellSlots = [];
+    this.slotOrder = [];
     if (!fighter) return;
-    fighter.spells.forEach((spell, idx) => {
+    // Sorts regroupes par type : attaque, deplacement, boost, soutien,
+    // invocation. Chaque groupe a son etiquette et sa couleur.
+    const groups = new Map();
+    const order = fighter.spells.map((sp, i) => i)
+      .sort((a, b) => (GROUP_ORDER.indexOf(spellGroup(fighter.spells[a])) - GROUP_ORDER.indexOf(spellGroup(fighter.spells[b]))) || (a - b));
+    this.slotOrder = order;
+    order.forEach((idx, pos) => {
+      const spell = fighter.spells[idx];
+      const grp = spellGroup(spell);
+      const G = SPELL_GROUPS[grp];
+      if (!groups.has(grp)) {
+        const box = document.createElement('div');
+        box.className = 'spell-group sg-' + grp;
+        box.style.setProperty('--sg', G.color);
+        box.innerHTML = `<div class="sg-label">${G.label}</div><div class="sg-btns"></div>`;
+        this.spellBar.appendChild(box);
+        groups.set(grp, box.querySelector('.sg-btns'));
+      }
+      const shortName = grp === 'summon' ? spell.name.replace(/^Invocation (de la |de |du |d')/i, '') : spell.name;
       const btn = document.createElement('button');
-      btn.className = 'spell';
+      btn.className = 'spell sg-' + grp;
+      btn.style.setProperty('--sg', G.color);
       btn.dataset.slot = String(idx);
       // Numero de touche : 1..9 puis 0, sinon ^N pour les futurs Ctrl+N.
-      const keyLabel = idx < 9 ? String(idx + 1) : (idx === 9 ? '0' : `^${idx - 9}`);
+      const keyLabel = pos < 9 ? String(pos + 1) : (pos === 9 ? '0' : `^${pos - 9}`);
       // Sort d invocation : l icone represente la creature a invoquer
       // (snapshot 3D du modele) plutot qu un pictogramme generique.
       let iconHtml = spell.icon || '';
@@ -1229,6 +1310,7 @@ export class Hud {
         <div class="key">${keyLabel}</div>
         <div class="icon">${iconHtml}</div>
         <div class="cost">${spell.apCost} PA</div>
+        <div class="sp-name${shortName.length > 16 || shortName.split(/[\s-]+/).some(w => w.length > 10) ? ' long' : ''}">${shortName}</div>
         ${fighter && fighter.levelKind === 'hero' ? `<div class="spell-pips">${[1, 2, 3].map(n => `<i class="${n <= (spell.spellLevel || 1) ? 'on' : ''}"></i>`).join('')}</div>` : ''}
         <div class="cd-overlay"></div>
       `;
@@ -1282,9 +1364,125 @@ export class Hud {
       });
       // iOS / Android : l appui long ouvre sinon le menu contextuel.
       btn.addEventListener('contextmenu', (e) => e.preventDefault());
-      this.spellBar.appendChild(btn);
+      groups.get(grp).appendChild(btn);
       this.spellSlots.push({ btn, spell });
     });
+  }
+
+  // Indice de sort (dans fighter.spells) pour la n-ieme case affichee.
+  slotAt(pos) {
+    return this.slotOrder && this.slotOrder[pos] !== undefined ? this.slotOrder[pos] : pos;
+  }
+
+  // Bandeau du sort selectionne : ce que l on s apprete a lancer.
+  renderCastBanner(fighter, spellId) {
+    if (!this.bannerEl) {
+      const el = document.createElement('div');
+      el.id = 'cast-banner';
+      (this.aboveEl || document.body).appendChild(el);
+      el.addEventListener('click', (e) => {
+        if (e.target.closest('.cb-cancel')) this.callbacks.onMove && this.callbacks.onMove();
+      });
+      this.bannerEl = el;
+    }
+    const el = this.bannerEl;
+    const spell = spellId && fighter.spells.find(s => s.id === spellId);
+    if (!spell) { el.classList.remove('show'); this._bannerKey = null; return; }
+    const key = spell.id + ':' + (spell.spellLevel || 1);
+    el.classList.add('show');
+    if (this._bannerKey === key) return;
+    this._bannerKey = key;
+    const G = SPELL_GROUPS[spellGroup(spell)];
+    const slot = this.spellSlots.find(sl => sl.spell === spell);
+    const icon = slot ? slot.btn.querySelector('.icon').innerHTML : '';
+    const range = spell.range.max === 0 ? 'sur soi' : spell.range.min === spell.range.max ? `portee ${spell.range.max}` : `portee ${spell.range.min}-${spell.range.max}`;
+    const touch = document.body.classList.contains('touch-ui');
+    el.style.setProperty('--sg', G.color);
+    el.innerHTML = `
+      <div class="cb-icon">${icon}</div>
+      <div class="cb-txt">
+        <div class="cb-name">${spell.name} <span class="cb-type">${G.label}</span></div>
+        <div class="cb-eff">${spellEffectLines(spell).slice(0, 2).join(' - ')}</div>
+        <div class="cb-meta">${spell.apCost} PA - ${range}${spell.needsLOS ? ' - ligne de vue' : ''} &nbsp;|&nbsp; ${touch ? 'Touche une case pour viser, retouche-la pour lancer' : 'Clique une case pour lancer (clic droit : annuler)'}</div>
+      </div>
+      <button class="cb-cancel" type="button" title="Annuler">&#10005;</button>`;
+  }
+
+  // ----- Disposition tactile : zones fixes (portrait et paysage) -----
+  // Sur telephone / tablette, les panneaux ne sont plus deplacables ni
+  // redimensionnables : barre du haut (ordre du tour, boutons), socle du
+  // bas (stats, fin de tour, sorts), molette de rotation au-dessus.
+  setupLayout() {
+    const above = document.createElement('div');
+    above.id = 'dock-above';
+    this.aboveEl = above;
+    const dock = document.createElement('div');
+    dock.id = 'touch-dock';
+    const row = document.createElement('div');
+    row.className = 'td-row';
+    dock.appendChild(above);
+    dock.appendChild(row);
+    this.dockEl = dock; this.dockRowEl = row;
+    const logBtn = document.createElement('button');
+    logBtn.id = 'log-btn';
+    logBtn.title = 'Journal de combat';
+    logBtn.innerHTML = '<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M8 9 H24 M8 16 H24 M8 23 H18"/></svg>';
+    logBtn.addEventListener('click', (e) => { e.stopPropagation(); document.body.classList.toggle('show-log'); });
+    document.body.appendChild(logBtn);
+    this.logBtnEl = logBtn;
+    const mq = window.matchMedia('(pointer: coarse)');
+    const apply = () => {
+      const touch = mq.matches || window.innerWidth <= 820;
+      if (touch === this._touch) return;
+      this._touch = touch;
+      document.body.classList.toggle('touch-ui', touch);
+      const panels = [this.statsEl, this.spellsEl, this.turnOrderEl, this.combatLogEl, this.fighterInfoEl];
+      if (touch) {
+        // Positions / tailles personnalisees ignorees : zones fixes.
+        for (const p of panels) { if (p) { p.style.left = p.style.top = p.style.right = p.style.bottom = ''; p.style.transform = ''; } }
+        document.body.appendChild(dock);
+        row.appendChild(this.statsEl);
+        row.appendChild(this.btnEndMobile);
+        dock.appendChild(this.spellsEl);
+        if (this.dialEl) above.appendChild(this.dialEl);
+      } else {
+        document.body.appendChild(this.statsEl);
+        document.body.appendChild(this.spellsEl);
+        this.spellsEl.appendChild(this.btnEndMobile);
+        document.body.appendChild(above);
+        if (this.dialEl) document.body.appendChild(this.dialEl);
+        dock.remove();
+        this.restorePanelPosition(this.statsEl, 'dofus3d.statsPos');
+        this.restorePanelPosition(this.spellsEl, 'dofus3d.spellsPos');
+      }
+      this._reportInsets();
+    };
+    this._applyLayout = apply;
+    apply();
+    window.addEventListener('resize', apply);
+    mq.addEventListener && mq.addEventListener('change', apply);
+    new MutationObserver(() => this._reportInsets()).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(() => this._reportInsets());
+      ro.observe(dock);
+      if (this.turnOrderEl) ro.observe(this.turnOrderEl);
+    }
+  }
+
+  // Hauteurs occupees en haut / en bas : la camera recentre le plateau
+  // dans la zone libre.
+  _reportInsets() {
+    let top = 0, bottom = 0;
+    if (this._touch && !document.body.classList.contains('in-menu')) {
+      bottom = this.dockEl ? this.dockEl.getBoundingClientRect().height : 0;
+      if (bottom) bottom += 46; // molette posee au-dessus du socle
+      const t = this.turnOrderEl && this.turnOrderEl.getBoundingClientRect();
+      top = t ? t.bottom : 0;
+
+    }
+    document.documentElement.style.setProperty('--dock-h', Math.round(bottom) + 'px');
+    if (top || !this._touch) document.documentElement.style.setProperty('--top-h', Math.round(top) + 'px');
+    this.callbacks.onInsets && this.callbacks.onInsets(top, bottom);
   }
 
   ensureTooltip() {
@@ -1429,6 +1627,7 @@ export class Hud {
     // Si l infobulle pointe vers un combattant (epingle ou en survol),
     // on rafraichit ses stats en direct (PA / PM / PV mis a jour au fil
     // des sorts et des deplacements, meme si ce n est pas l actif).
+    this.renderCastBanner(fighter, isPlayer && !isAutonomous && mode === 'spell' ? selectedSpellId : null);
     if (this._infoFighter) this.renderFighterInfo();
     // Etats et PV de la timeline suivent les changements.
     if (this._turnOrder) this.refreshTurnOrder();

@@ -126,11 +126,22 @@ export class Scene3D {
     let halfH = this.distance * Math.tan(THREE.MathUtils.degToRad(17));
     // En portrait (mobile), on elargit pour que le plateau tienne en largeur.
     if (aspect < 1) halfH /= Math.max(0.55, aspect);
+    // Zones d interface fixes (haut / bas) : le plateau est recentre dans
+    // la zone libre, et en paysage le cadre est elargi d autant.
+    const it = this.insetTop || 0, ib = this.insetBottom || 0;
+    if (aspect >= 1 && it + ib > 0) halfH *= Math.min(1.3, vh / Math.max(1, vh - it - ib));
+    const shift = ((ib - it) / 2) * (2 * halfH / vh);
     this.camera.left = -halfH * aspect;
     this.camera.right = halfH * aspect;
-    this.camera.top = halfH;
-    this.camera.bottom = -halfH;
+    this.camera.top = halfH - shift;
+    this.camera.bottom = -halfH - shift;
     this.camera.updateProjectionMatrix();
+  }
+
+  setInsets(top, bottom) {
+    if (top === this.insetTop && bottom === this.insetBottom) return;
+    this.insetTop = top; this.insetBottom = bottom;
+    this.updateCamera();
   }
 
   // Taille effective d affichage (celle du canvas plein ecran).
