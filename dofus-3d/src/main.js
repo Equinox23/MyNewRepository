@@ -81,6 +81,9 @@ hud.on('onRotateLeft', () => scene3d.snapRotate(-1));
 hud.on('onRotateRight', () => scene3d.snapRotate(1));
 hud.on('onResetCamera', () => scene3d.resetCamera());
 hud.on('onQuality', (q) => scene3d.setQuality(q));
+hud.on('onRotateFree', (d) => scene3d.rotate(d));
+hud.on('onInsets', (top, bottom) => scene3d.setInsets(top, bottom));
+hud._reportInsets();
 hud.setQualityControl && hud.setQualityControl(scene3d.quality);
 
 // --- MENU PRE-COMBAT ---
@@ -193,7 +196,7 @@ canvas.addEventListener('pointerdown', (e) => {
   });
   if (pointers.size === 2) {
     const [a, b] = pointers.values();
-    pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y) };
+    pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), ang: Math.atan2(b.y - a.y, b.x - a.x), twist: 0, turning: false };
   }
 });
 
@@ -223,6 +226,18 @@ canvas.addEventListener('pointermove', (e) => {
       const worldPoint = scene3d.worldPointAtCursor(mid.x, mid.y);
       scene3d.zoom(pinch.dist / d, worldPoint);
       pinch.dist = d;
+      // Torsion a deux doigts = rotation libre de la carte (apres un
+      // petit seuil, pour ne pas tourner pendant un simple zoom).
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      let da = ang - pinch.ang;
+      if (da > Math.PI) da -= 2 * Math.PI; else if (da < -Math.PI) da += 2 * Math.PI;
+      pinch.ang = ang;
+      if (!pinch.turning) {
+        pinch.twist += da;
+        if (Math.abs(pinch.twist) > 0.14) pinch.turning = true;
+      } else {
+        scene3d.rotate(da);
+      }
     }
     return;
   }
@@ -325,12 +340,12 @@ document.addEventListener('keydown', (e) => {
   if (key >= '1' && key <= '9') {
     e.preventDefault();
     const slot = (parseInt(key, 10) - 1) + (ctrl ? 9 : 0);
-    game.selectSpellSlot(slot);
+    game.selectSpellSlot(hud.slotAt(slot));
     return;
   }
   if (key === '0') {
     e.preventDefault();
-    game.selectSpellSlot(ctrl ? 18 : 9);
+    game.selectSpellSlot(hud.slotAt(ctrl ? 18 : 9));
     return;
   }
   if (key === 'Escape' || key === 'Esc') {
@@ -396,6 +411,7 @@ function loop(now) {
   map3d.update(dt, now / 1000);
   ambience.update(Math.min(dt, 0.1), now / 1000);
   watchPerformance(dt);
+  hud.setDialAngle(scene3d.azimuth);
   // Pendant le menu, la camera tourne lentement autour de la foret.
   if (menu.root && menu.root.style.display !== 'none' && !scene3d._snapping) {
     scene3d.azimuth += dt * 0.06;

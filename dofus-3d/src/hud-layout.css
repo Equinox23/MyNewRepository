@@ -1,0 +1,227 @@
+/* ==========================================================================
+   Barre de sorts groupee, bandeau du sort choisi, molette de rotation et
+   zones fixes sur ecran tactile (portrait / paysage).
+   ========================================================================== */
+
+/* ---- Sorts : grosses cases, nom visible, couleur par type ---- */
+.spell-bar { display: flex !important; align-items: flex-end; gap: 6px 10px !important; }
+.spell-group { display: flex; flex-direction: column; gap: 3px; }
+.spell-group .sg-label {
+  font: 700 10px/12px var(--d-font-title, "Trebuchet MS", sans-serif);
+  letter-spacing: 0.8px; text-transform: uppercase;
+  color: var(--sg); text-shadow: 0 1px 1px #000;
+  border-bottom: 2px solid var(--sg); padding: 0 2px 1px;
+  white-space: nowrap;
+}
+.spell-group .sg-btns { display: flex; gap: 4px; }
+.spell {
+  width: 66px !important; height: 86px !important; flex: 0 0 auto;
+  border-color: color-mix(in srgb, var(--sg, #6d5c42) 55%, #3a2c1a) !important;
+}
+.spell.painted .icon { inset: 2px 2px 26px 2px !important; }
+.spell:not(.painted) .icon { margin-bottom: 18px; width: 62%; height: auto; aspect-ratio: 1; }
+.spell:not(.painted) .accent { bottom: 22px; }
+.spell .sp-name {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 24px; z-index: 3;
+  padding: 0 1px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 9.5px/10px var(--d-font-body, "Trebuchet MS", sans-serif);
+  color: #fff3d6; background: rgba(20, 12, 4, 0.92);
+  border-top: 2px solid var(--sg, #6d5c42);
+  overflow: hidden; text-align: center;
+}
+.spell .sp-name.long { font-size: 8px; line-height: 8px; letter-spacing: -0.3px; }
+.spell .cost, .spell.painted .cost {
+  top: 3px !important; right: 3px !important; bottom: auto !important;
+  font-size: 12px !important; line-height: 16px !important; padding: 0 4px !important;
+  color: #fff !important; background: #1d5fa8 !important; border: 1px solid #0c2336;
+  border-radius: 8px !important; white-space: nowrap;
+}
+.spell .spell-pips { top: auto !important; right: auto !important; left: 3px; bottom: 27px; }
+.spell.selected, .spell.active {
+  border-color: #fff3a0 !important; transform: translateY(-5px);
+  box-shadow: 0 0 0 2px var(--sg, #ffcf5a), 0 0 16px var(--sg, #f0a02a) !important;
+}
+.spell:disabled { opacity: 1 !important; filter: grayscale(0.85) brightness(0.55); }
+.spell.cooldown { opacity: 1 !important; }
+
+/* ---- Bandeau : le sort que l on s apprete a lancer ---- */
+#dock-above {
+  display: flex; flex-direction: column-reverse; align-items: center; gap: 6px;
+  pointer-events: none; z-index: 7;
+}
+body:not(.touch-ui) #dock-above { position: fixed; left: 50%; transform: translateX(-50%); bottom: 166px; }
+#cast-banner {
+  display: none; align-items: center; gap: 8px; pointer-events: auto;
+  max-width: min(560px, 96vw); box-sizing: border-box;
+  padding: 6px 8px; border-radius: 12px;
+  background: linear-gradient(180deg, rgba(48, 34, 18, 0.96), rgba(22, 14, 6, 0.96));
+  border: 2px solid var(--sg, #ffcf5a);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  color: #fff3d6; font-family: var(--d-font-body, "Trebuchet MS", sans-serif);
+}
+#cast-banner.show { display: flex; }
+#cast-banner .cb-icon { position: relative; width: 46px; height: 46px; flex: 0 0 auto; border-radius: 8px; overflow: hidden; border: 2px solid var(--sg); background: #1a120a; }
+#cast-banner .cb-icon svg, #cast-banner .cb-icon img { width: 100% !important; height: 100% !important; margin: 0 !important; display: block; object-fit: contain; }
+#cast-banner .cb-txt { min-width: 0; flex: 1; }
+#cast-banner .cb-name { font: 700 15px/18px var(--d-font-title, "Trebuchet MS", sans-serif); color: #ffcf5a; }
+#cast-banner .cb-type {
+  display: inline-block; vertical-align: 2px; margin-left: 4px; padding: 0 6px; border-radius: 8px;
+  background: var(--sg); color: #1a1206; font: 700 9px/14px var(--d-font-body, sans-serif);
+  letter-spacing: 0.6px; text-transform: uppercase;
+}
+#cast-banner .cb-eff { font-size: 12px; line-height: 15px; }
+#cast-banner .cb-meta { font-size: 10.5px; line-height: 13px; color: #c9b48a; }
+#cast-banner .cb-cancel {
+  flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%;
+  background: #8f2a1c; border: 2px solid #3a0e09; color: #fff; font-size: 15px; cursor: pointer;
+}
+
+/* ---- Molette de rotation ---- */
+.rot-btn { display: none !important; }
+#rot-dial {
+  display: flex; align-items: center; gap: 2px; pointer-events: auto;
+  padding: 2px 4px; border-radius: 22px;
+  background: rgba(20, 12, 4, 0.8); border: 2px solid #6d5c42;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+  user-select: none; -webkit-user-select: none; z-index: 6;
+}
+#rot-dial.active { border-color: #ffcf5a; }
+body:not(.touch-ui) #rot-dial { position: fixed; right: 12px; top: calc(70px + env(safe-area-inset-top, 0px)); }
+#rot-dial .rd-step {
+  width: 36px; height: 36px; border: 0; background: none; color: #ffcf5a;
+  font-size: 16px; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+#rot-dial .rd-step:active { color: #fff; transform: scale(0.9); }
+#rot-dial .rd-track {
+  position: relative; width: 170px; height: 36px; overflow: hidden;
+  cursor: ew-resize; touch-action: none;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 22%, #000 78%, transparent);
+}
+#rot-dial .rd-ticks {
+  position: absolute; inset: 6px 0;
+  background-image:
+    linear-gradient(90deg, #ffcf5a 0 3px, transparent 3px),
+    linear-gradient(90deg, rgba(255, 236, 190, 0.55) 0 2px, transparent 2px);
+  background-size: 71.4px 100%, 14.28px 55%;
+  background-repeat: repeat-x;
+}
+#rot-dial .rd-needle {
+  position: absolute; left: 50%; top: 0; bottom: 0; width: 0; margin-left: -6px;
+  border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 9px solid #fff;
+  filter: drop-shadow(0 1px 1px #000); pointer-events: none;
+}
+#log-btn { display: none; }
+body.in-menu #touch-dock, body.in-menu #dock-above, body.in-menu #rot-dial, body.in-menu #log-btn { display: none !important; }
+
+/* ==========================================================================
+   Ecran tactile : zones fixes
+   ========================================================================== */
+body.touch-ui #touch-dock {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 7;
+  display: flex; flex-direction: column;
+  padding: 0 calc(4px + env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) calc(4px + env(safe-area-inset-left, 0px));
+  background: linear-gradient(180deg, rgba(52, 38, 20, 0.97), rgba(24, 16, 8, 0.98));
+  border-top: 2px solid #8a6f44;
+  box-shadow: 0 -6px 18px rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+body.touch-ui #dock-above { position: absolute; left: 0; right: 0; bottom: 100%; padding-bottom: 6px; }
+body.touch-ui .td-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px 3px; }
+body.touch-ui #hud-stats {
+  position: static !important; transform: none !important; flex: 1; min-width: 0;
+  display: flex; align-items: center; gap: 8px;
+  background: none !important; border: 0 !important; box-shadow: none !important; padding: 0 !important;
+  cursor: default; touch-action: auto;
+}
+body.touch-ui #hud-stats .name {
+  font-size: 15px !important; margin: 0 !important; flex: 1; min-width: 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+body.touch-ui #hud-stats .stat-row { gap: 8px; }
+body.touch-ui #hud-stats .stat-icon { width: auto; height: auto; display: flex; align-items: center; gap: 2px; }
+body.touch-ui #hud-stats .stat-icon svg { width: 22px; height: 22px; flex: 0 0 auto; }
+body.touch-ui #hud-stats .stat-icon .value { position: static; transform: none !important; font-size: 15px; white-space: nowrap; }
+body.touch-ui #hud-stats.empty-name .name { display: none; }
+body.touch-ui #hud-stats .buffs { display: none; }
+body.touch-ui #btn-end-mobile { display: block; flex: 0 0 auto; padding: 11px 14px; font-size: 14px; border-radius: 10px; }
+body.touch-ui #hud-spells {
+  position: static !important; transform: none !important; display: block;
+  background: none !important; border: 0 !important; box-shadow: none !important;
+  padding: 2px 4px 6px !important; cursor: default; touch-action: pan-x;
+  overflow-x: auto; -webkit-overflow-scrolling: touch;
+}
+body.touch-ui .spell .key { display: none; }
+body.touch-ui .spell { width: 58px !important; height: 78px !important; }
+body.touch-ui .spell .sp-name { font-size: 9px; }
+body.touch-ui .spell .sp-name.long { font-size: 7.5px; }
+body.touch-ui .spell.painted .icon { inset: 2px 2px 26px 2px !important; }
+body.touch-ui .spell .spell-pips { bottom: 27px; }
+
+/* Barre du haut : boutons, puis ordre du tour sur une ligne defilante. */
+body.touch-ui #log-btn {
+  display: flex; align-items: center; justify-content: center;
+  position: fixed; left: calc(12px + env(safe-area-inset-left, 0px)); top: calc(12px + env(safe-area-inset-top, 0px));
+  width: 40px; height: 40px; border-radius: 50%; z-index: 8; cursor: pointer;
+  background: rgba(20, 12, 4, 0.85); border: 2px solid #8a6f44; color: #ffcf5a;
+}
+body.touch-ui #log-btn svg { width: 22px; height: 22px; }
+body.touch-ui.show-log #log-btn { background: #ffcf5a; color: #1a1206; }
+body.touch-ui #turn-order {
+  left: 0 !important; right: 0 !important; transform: none !important; max-width: none !important;
+  top: calc(58px + env(safe-area-inset-top, 0px)) !important;
+  flex-wrap: nowrap !important; justify-content: flex-start !important;
+  overflow-x: auto; -webkit-overflow-scrolling: touch; touch-action: pan-x;
+  border-radius: 0 !important; border-left: 0 !important; border-right: 0 !important;
+  padding: 4px 6px !important; gap: 3px !important; cursor: default;
+}
+body.touch-ui #turn-order .to-title { display: none; }
+body.touch-ui #turn-order .to-slot { flex: 0 0 auto; }
+body.touch-ui #fighter-info {
+  top: calc(var(--top-h, 132px) + 6px) !important; left: 6px !important;
+  right: auto !important; bottom: auto !important; transform: none !important;
+  width: 46vw; max-width: 240px; font-size: 11px; padding: 6px 8px; cursor: default;
+}
+body.touch-ui #combat-log {
+  top: calc(var(--top-h, 132px) + 6px) !important; right: 6px !important;
+  left: auto !important; bottom: auto !important; transform: none !important;
+  width: 46vw; max-width: 260px; max-height: 130px; font-size: 11px; cursor: default;
+}
+body.touch-ui:not(.show-log) #combat-log { display: none !important; }
+body.touch-ui #fighter-info.empty { display: none !important; }
+body.touch-ui #placement-ready { bottom: calc(var(--dock-h, 200px) + 58px) !important; }
+
+@media (orientation: portrait) {
+  body.touch-ui .spell-bar { flex-wrap: wrap; justify-content: center; }
+  body.touch-ui #rot-dial .rd-track { width: 46vw; }
+}
+
+/* Paysage : socle sur une seule ligne (stats a gauche, sorts a droite),
+   ordre du tour en haut a cote des boutons. */
+@media (orientation: landscape) {
+  body.touch-ui #touch-dock { flex-direction: row; align-items: flex-end; }
+  body.touch-ui .td-row { flex-direction: column; align-items: stretch; gap: 4px; padding: 4px 6px 6px; flex: 0 0 auto; }
+  body.touch-ui #hud-stats { flex: 0 0 auto; }
+  body.touch-ui #hud-stats .name { display: none; }
+  body.touch-ui #btn-end-mobile { padding: 7px 10px; font-size: 13px; }
+  body.touch-ui #hud-spells { flex: 1; min-width: 0; }
+  body.touch-ui .spell-bar { flex-wrap: nowrap; width: max-content; margin: 0 auto; }
+  body.touch-ui .spell { width: 56px !important; height: 72px !important; }
+  body.touch-ui .spell .sp-name { height: 22px; }
+  body.touch-ui .spell.painted .icon { inset: 2px 2px 24px 2px !important; }
+  body.touch-ui #turn-order {
+    top: calc(6px + env(safe-area-inset-top, 0px)) !important;
+    left: calc(60px + env(safe-area-inset-left, 0px)) !important;
+    right: auto !important; width: max-content;
+    max-width: calc(100vw - 270px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px)) !important;
+    border: 2px solid #6d5c42 !important; border-radius: 10px !important;
+  }
+  body.touch-ui #turn-order .to-slot { transform: scale(0.8); margin: -5px -4px; }
+  body.touch-ui #rot-dial .rd-track { width: 150px; }
+  body.touch-ui #dock-above { flex-direction: row; align-items: flex-end; justify-content: space-between; padding: 0 8px 6px; }
+  body.touch-ui #cast-banner { order: -1; max-width: 56vw; padding: 4px 6px; }
+  body.touch-ui #cast-banner .cb-icon { width: 38px; height: 38px; }
+  body.touch-ui #cast-banner .cb-meta { display: none; }
+  body.touch-ui #rot-dial { margin-left: auto; }
+}

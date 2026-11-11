@@ -282,18 +282,6 @@ html, body { height: 100%; }
     top: calc(150px + env(safe-area-inset-top, 0px)); bottom: auto; right: 6px; width: 44vw; max-height: 110px; font-size: 11px;
   }
   #combat-log .cl-body { max-height: 80px !important; }
-  #hud-stats:not([style*="top:"]) {
-    left: 6px; bottom: calc(116px + env(safe-area-inset-bottom, 0px));
-    transform-origin: bottom left; transform: scale(0.62);
-  }
-  #hud-spells:not([style*="top:"]) {
-    bottom: calc(6px + env(safe-area-inset-bottom, 0px));
-    flex-direction: column-reverse; gap: 6px; padding: 6px 8px;
-  }
-  #hud-spells .spell { width: 40px !important; height: 40px !important; }
-  #hud-spells .spell-bar { display: flex !important; flex-wrap: nowrap; gap: 3px !important; }
-  #hud-spells .spell .cost { font-size: 10px; }
-  #placement-ready { bottom: calc(120px + env(safe-area-inset-bottom, 0px)) !important; }
 }
 
 /* ---- Ecran de fin : experience ---- */
@@ -329,11 +317,6 @@ html, body { height: 100%; }
 .spell .spell-pips { position: absolute; top: 3px; right: 3px; z-index: 3; display: flex; gap: 2px; }
 .spell .spell-pips i { width: 6px; height: 6px; border-radius: 50%; background: rgba(20,12,4,0.8); border: 1px solid #ffcf5a; display: block; }
 .spell .spell-pips i.on { background: #ffcf5a; }
-/* 8 sorts : barre plus compacte sur petit ecran (2 rangees de 4). */
-@media (max-width: 640px) and (orientation: landscape) {
-  .spell { width: 46px !important; height: 46px !important; }
-  .spell-bar { display: grid !important; grid-template-columns: repeat(4, 46px); gap: 4px !important; }
-}
 
 /* ==========================================================================
    Progression : badges de niveau, paliers, Grimoire
