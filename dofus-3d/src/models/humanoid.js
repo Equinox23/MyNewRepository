@@ -350,3 +350,28 @@ export function hairCap(head, hr, mat, o = {}) {
   head.add(back);
   return { top, back };
 }
+
+// Proportions "illustration" pour un heros termine : jambes allongees,
+// tete un peu moins grosse (silhouette moins "jouet"). Tout ce qui n est
+// pas une jambe est remonte d autant ; les ancres d equipement suivent.
+export function restyleHero(group, o = {}) {
+  const rig = group.userData.rig, anchors = group.userData.anchors;
+  if (!rig || !anchors || group.userData.restyled) return group;
+  group.userData.restyled = true;
+  const stretch = o.legs !== undefined ? o.legs : 1.24;
+  const lift = anchors.hipY * (stretch - 1);
+  const upper = new THREE.Group();
+  upper.position.y = lift;
+  for (const c of [...group.children]) {
+    if (c === rig.legL || c === rig.legR) continue;
+    upper.add(c);
+  }
+  group.add(upper);
+  for (const leg of [rig.legL, rig.legR]) {
+    leg.scale.y = stretch;
+    leg.position.y += lift;
+  }
+  rig.head.scale.setScalar(o.head !== undefined ? o.head : 0.88);
+  anchors.body = upper;
+  return group;
+}

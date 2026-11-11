@@ -10,14 +10,21 @@ import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometr
 let _gradient = null;
 export function toonGradient() {
   if (_gradient) return _gradient;
-  const data = new Uint8Array([
-    120, 120, 120, 255,
-    190, 190, 190, 255,
-    255, 255, 255, 255,
-  ]);
-  _gradient = new THREE.DataTexture(data, 3, 1, THREE.RGBAFormat);
-  _gradient.minFilter = THREE.NearestFilter;
-  _gradient.magFilter = THREE.NearestFilter;
+  // Rampe "peinte" : un aplat d ombre, un aplat de lumiere et une
+  // transition courte mais douce entre les deux (plus de bandes dures
+  // facon plastique).
+  const N = 64;
+  const data = new Uint8Array(N * 4);
+  for (let i = 0; i < N; i++) {
+    const x = i / (N - 1);
+    const k = Math.min(1, Math.max(0, (x - 0.36) / 0.2));
+    const e = k * k * (3 - 2 * k);
+    const v = Math.round(132 + 123 * e);
+    data[i * 4] = data[i * 4 + 1] = data[i * 4 + 2] = v; data[i * 4 + 3] = 255;
+  }
+  _gradient = new THREE.DataTexture(data, N, 1, THREE.RGBAFormat);
+  _gradient.minFilter = THREE.LinearFilter;
+  _gradient.magFilter = THREE.LinearFilter;
   _gradient.generateMipmaps = false;
   _gradient.needsUpdate = true;
   return _gradient;
@@ -46,7 +53,31 @@ export function toToonMaterial(m) {
     t.emissiveIntensity = m.emissiveIntensity;
   }
   t.name = m.name;
+  paintedShading(t);
   return t;
+}
+
+// Finition "illustration" : les ombres tirent vers une teinte plus
+// saturee et plus froide (au lieu de simplement s assombrir) et un fin
+// liseré de lumiere souligne les silhouettes.
+function paintedShading(mat) {
+  mat.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <opaque_fragment>',
+      `{
+        float lumB = max(dot(diffuseColor.rgb, vec3(0.3, 0.55, 0.15)), 0.04);
+        float lumL = dot(outgoingLight - totalEmissiveRadiance, vec3(0.3, 0.55, 0.15));
+        float lit = smoothstep(0.55, 1.0, lumL / lumB);
+        vec3 deep = diffuseColor.rgb * diffuseColor.rgb * vec3(0.9, 0.82, 1.08) + diffuseColor.rgb * vec3(0.16, 0.1, 0.2);
+        vec3 shadeCol = mix(deep * 1.15, outgoingLight, 0.45);
+        outgoingLight = mix(shadeCol, outgoingLight, lit);
+        float fres = pow(1.0 - clamp(dot(normalize(vViewPosition), normalize(normal)), 0.0, 1.0), 3.0);
+        outgoingLight += diffuseColor.rgb * fres * 0.35 * smoothstep(-0.2, 0.6, normalize(normal).y + 0.3);
+      }
+      #include <opaque_fragment>`
+    );
+  };
+  mat.customProgramCacheKey = () => 'toon-painted';
 }
 
 // Materiau de contour : on pousse chaque sommet le long de sa normale
@@ -67,6 +98,19 @@ export function makeOutlineMaterial(width = 0.022, color = 0x1c1208) {
   };
   mat.customProgramCacheKey = () => 'toon-outline';
   return mat;
+}
+
+// Couleur du trait pour une piece : sa teinte, tres assombrie, quantifiee
+// pour limiter le nombre de materiaux.
+const _hsl = { h: 0, s: 0, l: 0 };
+export function outlineTint(color) {
+  const c = new THREE.Color(0x1c1208);
+  if (!color) return c;
+  color.getHSL(_hsl);
+  const h = Math.round(_hsl.h * 24) / 24;
+  const s = Math.min(0.75, Math.round(_hsl.s * 4) / 4 * 0.9);
+  const l = 0.06 + Math.round(_hsl.l * 4) / 4 * 0.09;
+  return c.setHSL(h, s, l);
 }
 
 // Normales lissees (sommets fusionnes) : evite que le contour ne se
@@ -99,7 +143,19 @@ export function toonify(root, opts = {}) {
   const minRadius = opts.minRadius !== undefined ? opts.minRadius : 0.07;
   const outline = opts.outline !== false;
   const matCache = new Map();
-  const outlineMat = outline ? makeOutlineMaterial(width, opts.color) : null;
+  // Contour teinte : une version tres sombre de la couleur de la piece
+  // (comme le trait des illustrations Dofus) plutot qu un noir uniforme.
+  const outlineCache = new Map();
+  const outlineFor = (mat) => {
+    if (opts.color !== undefined) {
+      if (!outlineCache.has('fixed')) outlineCache.set('fixed', makeOutlineMaterial(width, opts.color));
+      return outlineCache.get('fixed');
+    }
+    const c = outlineTint(mat.color);
+    const key = c.getHex();
+    if (!outlineCache.has(key)) outlineCache.set(key, makeOutlineMaterial(width, c));
+    return outlineCache.get(key);
+  };
   root.updateMatrixWorld(true);
   const meshes = [];
   root.traverse(o => { if (o.isMesh && !o.userData.isOutline) meshes.push(o); });
@@ -116,7 +172,7 @@ export function toonify(root, opts = {}) {
     if (!outline || conv.isMeshBasicMaterial || conv.transparent || mesh.userData.noOutline) continue;
     if (!mesh.geometry || !mesh.geometry.attributes.position) continue;
     if (worldRadius(mesh) < minRadius) continue;
-    const hull = new THREE.Mesh(smoothedGeometry(mesh.geometry), outlineMat);
+    const hull = new THREE.Mesh(smoothedGeometry(mesh.geometry), outlineFor(conv));
     hull.userData.isOutline = true;
     hull.castShadow = false;
     hull.receiveShadow = false;
