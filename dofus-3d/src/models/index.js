@@ -23,6 +23,7 @@ import { buildChampignon } from './champignon.js';
 import { buildChampignonRoyal } from './champignonRoyal.js';
 import { buildCraqueleurLegendaire, buildCraqueleurSauvage, buildKwakwa, buildMinotoror } from './bosses.js';
 import { VARIANTS, buildVariant } from './variants.js';
+import { restyleHero } from './humanoid.js';
 export { VARIANTS };
 
 // Registre unique des modeles (combat, portraits, timeline).
@@ -56,4 +57,10 @@ export const BUILDERS = {
   kwakwa: buildKwakwa,
   minotoror: buildMinotoror,
 };
+// Heros : proportions elancees appliquees apres la construction.
+const HERO_STYLE = { iop: {}, osamodas: {}, roublard: {}, ecaflip: {}, pandawa: {}, eniripsa: { legs: 1.18 }, xelor: { legs: 1 } };
+for (const [id, style] of Object.entries(HERO_STYLE)) {
+  const build = BUILDERS[id];
+  BUILDERS[id] = () => restyleHero(build(), style);
+}
 for (const id of Object.keys(VARIANTS)) BUILDERS[id] = () => buildVariant(id);
