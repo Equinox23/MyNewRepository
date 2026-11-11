@@ -853,6 +853,9 @@ export class Hud {
       <div class="sp-section">SON</div>
       <label><input type="checkbox" id="sp-audio-on"> Activer le son</label>
       <label class="sp-vol">Volume <input type="range" id="sp-audio-vol" min="0" max="100" value="70"></label>
+      <div class="sp-section">GRAPHISMES</div>
+      <label><input type="checkbox" id="sp-gfx" checked> Effets de lumiere (halo, couleurs)</label>
+      <div class="sp-hint">A decocher si le jeu saccade sur ton appareil.</div>
       <div class="sp-section">DISPOSITION</div>
       <button id="sp-reset-pos" type="button" class="sp-btn">Reinitialiser les positions</button>
       <div class="sp-hint">Astuce : pince a 2 doigts un panneau pour le redimensionner.</div>
@@ -863,6 +866,10 @@ export class Hud {
     this.audioVolEl = panel.querySelector('#sp-audio-vol');
     this.audioOnEl.addEventListener('change', () => {
       if (this.audio) this.audio.setMuted(!this.audioOnEl.checked);
+    });
+    this.gfxEl = panel.querySelector('#sp-gfx');
+    this.gfxEl.addEventListener('change', () => {
+      this.callbacks.onQuality && this.callbacks.onQuality(this.gfxEl.checked ? 'high' : 'low');
     });
     this.audioVolEl.addEventListener('input', () => {
       if (this.audio) this.audio.setVolume(this.audioVolEl.value / 100);
@@ -884,6 +891,10 @@ export class Hud {
         this.resetPanelPositions();
       });
     }
+  }
+
+  setQualityControl(q) {
+    if (this.gfxEl) this.gfxEl.checked = q !== 'low';
   }
 
   // Vide les positions / scales memorisees et remet chaque panneau a

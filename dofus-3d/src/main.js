@@ -7,6 +7,7 @@ import { RangeOverlay } from './RangeOverlay.js';
 import { Menu } from './Menu.js';
 import { VFX } from './VFX.js';
 import { AudioEngine } from './Audio.js';
+import { Ambience } from './Ambience.js';
 import { DUNGEONS, roomComposition, recordDungeonClear, REST_HEAL, REVIVE_HP } from './Adventure.js';
 import { DEFS } from './Fighter.js';
 import { chestLoot, addItems } from './Items.js';
@@ -34,6 +35,16 @@ document.body.style.cursor = POINTER_CURSOR;
 // --- INIT ---
 const scene3d = new Scene3D();
 const map3d = new Map3D(scene3d.scene);
+// Atmosphere (particules) et etalonnage des couleurs suivent la carte.
+const ambience = new Ambience(scene3d.scene, MAP_SIZE);
+map3d.onRebuild = (map, m3d) => {
+  scene3d.setMood(map.style);
+  const mist = (m3d.fallFeet || []).map(f => ({ x: f.x, y: f.y, z: f.z }));
+  if (map.waterfall) mist.push({ x: map.waterfall.c, y: 0, z: map.waterfall.r - 0.3, big: true });
+  ambience.setStyle(map.style, { mist });
+};
+map3d.onRebuild(map3d.config, map3d);
+scene3d.setQuality(scene3d.quality, false);
 const picker = new Picker(scene3d, map3d);
 const rangeOverlay = new RangeOverlay(scene3d.scene, MAP_SIZE);
 // Couche des glyphes / pieges (sous la surbrillance des portees).
@@ -69,6 +80,8 @@ if (loader) loader.remove();
 hud.on('onRotateLeft', () => scene3d.snapRotate(-1));
 hud.on('onRotateRight', () => scene3d.snapRotate(1));
 hud.on('onResetCamera', () => scene3d.resetCamera());
+hud.on('onQuality', (q) => scene3d.setQuality(q));
+hud.setQualityControl && hud.setQualityControl(scene3d.quality);
 
 // --- MENU PRE-COMBAT ---
 // Au demarrage, on affiche le menu de selection. La scene 3D
@@ -347,6 +360,30 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// --- PERFORMANCES ---
+// Si l appareil peine en qualite haute et que le joueur n a rien choisi,
+// on repasse automatiquement en qualite basse (rendu direct).
+let perfT = 0, perfN = 0, perfDone = false;
+let gfxChosen = null;
+try { gfxChosen = localStorage.getItem('dofus3d.gfx'); } catch (_) {}
+function watchPerformance(dt) {
+  if (perfDone || gfxChosen || scene3d.quality !== 'high' || document.hidden) return;
+  if (dt > 0.5) return; // onglet en arriere-plan, chargement...
+  perfT += dt; perfN++;
+  if (perfN < 150) return;
+  const avg = perfT / perfN;
+  perfT = 0; perfN = 0;
+  if (performance.now() < 6000) return; // laisse passer le demarrage
+  if (avg > 0.042) {
+    perfDone = true;
+    scene3d.setQuality('low');
+    hud.setQualityControl && hud.setQualityControl('low');
+    hud.flash('Effets graphiques reduits pour garder le jeu fluide', 2600);
+  } else if (performance.now() > 40000) {
+    perfDone = true;
+  }
+}
+
 // --- LOOP ---
 let last = performance.now();
 function loop(now) {
@@ -357,6 +394,8 @@ function loop(now) {
   }
   vfx.update(dt);
   map3d.update(dt, now / 1000);
+  ambience.update(Math.min(dt, 0.1), now / 1000);
+  watchPerformance(dt);
   // Pendant le menu, la camera tourne lentement autour de la foret.
   if (menu.root && menu.root.style.display !== 'none' && !scene3d._snapping) {
     scene3d.azimuth += dt * 0.06;
@@ -368,4 +407,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // Acces de debogage (console du navigateur / tests automatises).
-window.__dofus = { game, menu, hud, scene3d };
+window.__dofus = { game, menu, hud, scene3d, map3d, ambience };

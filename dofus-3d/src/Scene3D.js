@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MAP_SIZE } from './Map3D.js';
+import { PostFX } from './PostFX.js';
 
 // Conteneur Three.js : scene, camera orbitable, lumieres, renderer.
 // La camera est decrite par un etat spherique (distance, azimuth, polar)
@@ -75,6 +76,26 @@ export class Scene3D {
     this.scene.add(dir.target);
     this.sun = dir;
 
+    // Contre-jour froid : detache les silhouettes du decor.
+    const rim = new THREE.DirectionalLight(0xbcd6ff, 0.55);
+    rim.position.set(this.target.x + 6, 9, this.target.z - 12);
+    rim.target.position.copy(this.target);
+    rim.userData.rim = true;
+    this.scene.add(rim);
+    this.scene.add(rim.target);
+    this.rim = rim;
+
+    // Post-traitement (halo lumineux, etalonnage) : qualite "haute".
+    this.quality = 'high';
+    try { this.quality = localStorage.getItem('dofus3d.gfx') || 'high'; } catch (_) {}
+    this.post = null;
+    try {
+      this.post = new PostFX(this.renderer);
+    } catch (e) {
+      console.warn('PostFX indisponible', e);
+      this.post = null;
+    }
+
     // Reutilisables pour worldPointAtCursor()
     this._tmpRaycaster = new THREE.Raycaster();
     this._tmpNdc = new THREE.Vector2();
@@ -124,7 +145,35 @@ export class Scene3D {
   onResize() {
     const { w, h } = this.viewportSize();
     this.renderer.setSize(w, h, false);
+    if (this.post) this.post.setSize(w, h, this.renderer.getPixelRatio());
     this.updateCamera();
+  }
+
+  // Qualite graphique : 'high' (post-traitement) ou 'low' (rendu direct).
+  setQuality(q, persist = true) {
+    this.quality = q === 'low' ? 'low' : 'high';
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, this.quality === 'low' ? 1.5 : 2));
+    if (persist) { try { localStorage.setItem('dofus3d.gfx', this.quality); } catch (_) {} }
+    this.onResize();
+  }
+
+  // Ambiance colorimetrique du theme de carte courant.
+  setMood(style) {
+    if (this.post) this.post.setGrade(style);
+  }
+
+  _draw() {
+    if (this.post && this.quality === 'high') {
+      try {
+        this.post.render(this.scene, this.camera);
+        return;
+      } catch (e) {
+        console.warn('PostFX desactive', e);
+        this.renderer.setRenderTarget(null);
+        this.post = null;
+      }
+    }
+    this.renderer.render(this.scene, this.camera);
   }
 
   // Zoom in/out. Si worldPoint est passe, la cible glisse partiellement
@@ -242,11 +291,11 @@ export class Scene3D {
         const a = sh.i * (1 - t);
         const ox = (Math.random() - 0.5) * 2 * a, oy = (Math.random() - 0.5) * 2 * a;
         this.camera.position.x += ox; this.camera.position.y += oy;
-        this.renderer.render(this.scene, this.camera);
+        this._draw();
         this.camera.position.x -= ox; this.camera.position.y -= oy;
         return;
       }
     }
-    this.renderer.render(this.scene, this.camera);
+    this._draw();
   }
 }
