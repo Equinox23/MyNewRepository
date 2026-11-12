@@ -49,8 +49,8 @@ export function buildCrapaud(opts = {}) {
     out.set(x, y, z);
     let wart = 0;
     for (const s of [0, 1]) {
-      const b = Math.exp(-(1 - d.dot(eyeDir[s])) / 0.04);
-      out.addScaledVector(eyeDir[s], 0.115 * b);
+      const b = Math.exp(-(1 - d.dot(eyeDir[s])) / 0.05);
+      out.addScaledVector(eyeDir[s], 0.17 * b);
     }
     // Arcade entre les deux yeux.
     out.y += 0.05 * gauss(d.x, 0.3) * smooth(0.45, 0.8, d.y) * smooth(0, 0.4, d.z);
@@ -123,7 +123,7 @@ export function buildCrapaud(opts = {}) {
 
   // ---- Yeux dores globuleux ----
   const eyes = addEyes(group, {
-    x: 0, y: CY + 0.375, z: 0.285, size: 0.105, spacing: 0.4, turn: 0.42,
+    x: 0, y: CY + 0.36, z: 0.335, size: 0.092, spacing: 0.43, turn: 0.45,
     iris: chef ? 0xf07a1a : 0xf2c21a, lid: bodyHex, sleepy: !chef, angry: chef,
   });
   for (const e of eyes) e.traverse(o => { o.userData.noOutline = true; });
