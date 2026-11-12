@@ -146,7 +146,7 @@ export function buildOsamodas() {
       t => 0.021 * Math.pow(1 - t, 0.7) + 0.004, horn, { steps: 18, segs: 8 }));
   }
   staff.position.set(0, -0.055, 0.02);
-  staff.rotation.set(0.52, 0, -0.14);
+  staff.rotation.set(0.38, 0, -0.32);
   H.handR.add(staff);
 
   return group;

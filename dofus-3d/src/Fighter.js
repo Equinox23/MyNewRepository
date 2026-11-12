@@ -8,8 +8,10 @@ export const DEFS = {
   iop: {
     name: 'Iop',
     role: 'Guerrier',
-    hp: 100, pa: 8, pm: 4, initiative: 12,
-    spellIds: ['pression', 'bond', 'concentration', 'intimidation', 'epeeDivine', 'precipitation', 'epeeDuJugement', 'colereDeIop'],
+    hp: 110, pa: 8, pm: 4, initiative: 12,
+    // Puissance : Pression / Bond / Intimidation la chargent, Epee Divine
+    // et Colere de Iop la depensent.
+    spellIds: ['pression', 'bond', 'intimidation', 'epeeDivine', 'concentration', 'precipitation', 'epeeDuJugement', 'colereDeIop'],
   },
   osamodas: {
     name: 'Osamodas',
@@ -20,8 +22,10 @@ export const DEFS = {
   roublard: {
     name: 'Roublard',
     role: 'Artificier',
-    hp: 100, pa: 8, pm: 4, initiative: 13,
-    spellIds: ['poserBombe', 'detonationManuelle', 'kaboom', 'entourloupe', 'pulsar', 'bouclierBombe', 'tromblon', 'fourberie'],
+    hp: 95, pa: 8, pm: 4, initiative: 13,
+    // Bombes : murs de feu entre bombes alignees, combos en chaine,
+    // Pulsar / Aimantation pour amener les ennemis dans l explosion.
+    spellIds: ['poserBombe', 'detonationManuelle', 'kaboom', 'entourloupe', 'pulsar', 'aimantation', 'tromblon', 'fourberie'],
   },
   bombeRoublard: {
     name: 'Bombe',
@@ -100,14 +104,17 @@ export const DEFS = {
   xelor: {
     name: 'Xelor',
     role: 'Maitre du temps',
-    hp: 100, pa: 8, pm: 4, initiative: 10,
-    spellIds: ['aiguille', 'horloge', 'frappeDuXelor', 'ralentissement', 'rembobinage', 'devouement', 'sablier', 'momification'],
+    hp: 95, pa: 8, pm: 4, initiative: 10,
+    // Retrait de PA + echanges de place qui creent l etat Telefrag.
+    spellIds: ['aiguille', 'teleportation', 'ralentissement', 'horloge', 'rembobinage', 'sablier', 'devouement', 'momification'],
   },
   ecaflip: {
     name: 'Ecaflip',
     role: 'Joueur',
     hp: 100, pa: 8, pm: 4, initiative: 12,
-    spellIds: ['griffeFeline', 'pileOuFace', 'bondDuFelin', 'reflexes', 'roueChance', 'invocationChaton', 'trefle', 'toutOuRien'],
+    // Paris : chaque pari perdu donne de la Veine (plus de reussite),
+    // que Rekop depense.
+    spellIds: ['griffeFeline', 'pileOuFace', 'bondDuFelin', 'toutOuRien', 'roueChance', 'invocationChaton', 'trefle', 'rekop'],
   },
   chatonBlanc: {
     name: 'Chaton Blanc',
@@ -119,15 +126,19 @@ export const DEFS = {
   pandawa: {
     name: 'Pandawa',
     role: 'Bambouseur',
-    hp: 110, pa: 8, pm: 4, initiative: 10,
-    spellIds: ['tirPandatak', 'karcham', 'laitDeBambou', 'picole', 'gueuleDeBois', 'vaguePandawa', 'stabilisation', 'souffleAlcoolise'],
+    hp: 120, pa: 8, pm: 4, initiative: 10,
+    // Porter / lancer (Karcham puis Chamrak) a jeun, etat Saoul (Picole)
+    // pour encaisser et cracher le Souffle Alcoolise.
+    spellIds: ['tirPandatak', 'karcham', 'chamrak', 'picole', 'laitDeBambou', 'gueuleDeBois', 'vulnerabilite', 'souffleAlcoolise'],
   },
 
   eniripsa: {
     name: 'Eniripsa',
     role: 'Soigneuse',
     hp: 90, pa: 8, pm: 4, initiative: 11,
-    spellIds: ['motBlessant', 'motSoignant', 'motDEnvol', 'motDeFrayeur', 'motStimulant', 'motDePrevention', 'motInterdit', 'motDeReconstitution'],
+    // Les mots offensifs chargent la Ferveur, que les soins depensent ;
+    // Mot Vampirique change les degats de l equipe en soins.
+    spellIds: ['motBlessant', 'motSoignant', 'motVampirique', 'motDeFrayeur', 'motStimulant', 'motDeRegeneration', 'motInterdit', 'motDeReconstitution'],
   },
 
   // ---------- WABBITS (lapins de l ile des Wabbits) ----------

@@ -149,14 +149,14 @@ export function buildXelor() {
   const brim = sculptSphere((d, out) => {
     const r = Math.hypot(d.x, d.z);
     const a = Math.atan2(d.x, d.z);
-    out.set(d.x * 0.375, d.y * 0.03 + 0.045 * r * r * (0.4 + Math.cos(a * 2) * 0.6) - 0.02 * r * r, d.z * 0.375);
+    out.set(d.x * 0.345, d.y * 0.03 - r * r * (0.055 - 0.014 * Math.cos(a * 2)), d.z * 0.345);
   }, robe, 40, 16);
   hat.add(brim);
   hat.add(band((t) => {
     const a = t * Math.PI * 2;
     const x = Math.sin(a), z = Math.cos(a);
-    const y = 0.045 * (0.4 + Math.cos(a * 2) * 0.6) - 0.02;
-    return { p: new THREE.Vector3(x * 0.375, y, z * 0.375), n: new THREE.Vector3(x, 0, z), w: 0.02, th: 0.014 };
+    const y = -(0.055 - 0.014 * Math.cos(a * 2));
+    return { p: new THREE.Vector3(x * 0.345, y, z * 0.345), n: new THREE.Vector3(x, 0, z), w: 0.02, th: 0.014 };
   }, gold, { steps: 48, segs: 8, closed: true, sq: 0 }));
   const tipPts = [[0, -0.01, 0], [0, 0.2, -0.012], [0, 0.4, -0.07], [0.03, 0.55, -0.19], [0.07, 0.6, -0.33], [0.1, 0.56, -0.43]];
   hat.add(tubeAlong(tipPts, t => 0.224 * Math.pow(1 - t, 0.9) + 0.016, robe, { steps: 40, segs: 22 }));
@@ -169,8 +169,8 @@ export function buildXelor() {
   bob.position.set(0.105, 0.545, -0.455);
   bob.castShadow = true;
   hat.add(bob);
-  hat.position.set(0, hr * 1.36, -hr * 0.06);
-  hat.rotation.x = -0.2;
+  hat.position.set(0, hr * 1.5, -hr * 0.05);
+  hat.rotation.x = -0.13;
   head.add(hat);
 
   // ---- Baton a sablier (main droite) ----
@@ -194,7 +194,7 @@ export function buildXelor() {
   sand2.position.y = 0.885;
   staff.add(sand2);
   staff.position.set(0, -0.055, 0.03);
-  staff.rotation.set(0.56, 0, -0.16);
+  staff.rotation.set(0.42, 0, -0.4);
   H.handR.add(staff);
 
   return group;

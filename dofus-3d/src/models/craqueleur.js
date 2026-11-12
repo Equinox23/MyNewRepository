@@ -25,6 +25,7 @@ export function buildCraqueleur(opts = {}) {
   const glowLt = new THREE.MeshBasicMaterial({ color: new THREE.Color(glowHex).lerp(new THREE.Color(0xffffff), 0.6) });
   const halo = new THREE.MeshBasicMaterial({ color: glowHex, transparent: true, opacity: 0.35 });
   const dark = M(0x1e140e, { r: 1 });
+  const shard = M(opts.stoneDk || 0x6e5e50, { r: 0.95 });
   const mossAmt = opts.moss !== undefined ? opts.moss : 1;
   const moss = M(opts.mossColor || 0x5f9e36, { r: 0.95 });
   const mossLt = M(0x8ccc4e, { r: 0.9 });
@@ -40,14 +41,14 @@ export function buildCraqueleur(opts = {}) {
   // ---- Jambes : deux piliers courts ----
   for (const s of [-1, 1]) {
     const leg = new THREE.Group();
-    leg.add(rock(0.19, stoneDk, [0, 0.185, 0.02], [1, 1.02, 1.2], [0, s * 0.3, 0], { flat: 0.93, planes: 12 }));
+    leg.add(rock(0.19, stoneDk, [0, 0.19, 0.02], [1, 1.02, 1.2], [0, s * 0.3, 0], { flat: 0.93, planes: 12 }));
     leg.position.set(s * 0.21, 0, 0);
     group.add(leg);
   }
 
   // ---- Buste voute ----
   const torso = new THREE.Group();
-  const chest = rock(0.45, stone, [0, 0.68, -0.03], [1.16, 0.98, 0.9], [0.12, 0, 0], { planes: 18, cut: 0.62, ws: 56, hs: 40 });
+  const chest = rock(0.45, stone, [0, 0.68, -0.03], [1.16, 0.98, 0.9], [0.12, 0, 0], { planes: 18, cut: 0.62, ws: 44, hs: 32 });
   torso.add(chest);
   // Plaque ventrale plus claire + bassin sombre.
   torso.add(rock(0.24, stoneLt, [0, 0.5, 0.2], [1.25, 0.95, 0.72], [-0.1, 0, 0], { planes: 10, cut: 0.64 }));
@@ -105,16 +106,16 @@ export function buildCraqueleur(opts = {}) {
     const arm = new THREE.Group();
     arm.add(rock(0.25, stoneLt, [s * 0.47, 0.9, -0.02], [1.12, 0.82, 1.05], [0, 0, s * -0.35], { planes: 12, cut: 0.62 }));
     arm.add(rock(0.15, stoneDk, [s * 0.58, 0.62, 0.04], [0.95, 1.35, 0.95], [0.1, 0, s * 0.18], { planes: 10 }));
-    const fist = rock(0.25, stone, [s * 0.63, 0.29, 0.13], [1, 1.08, 1.12], [0.2, s * 0.4, 0], { planes: 14, cut: 0.62 });
+    const fist = rock(0.25, stone, [s * 0.63, 0.32, 0.13], [1, 1.08, 1.12], [0.2, s * 0.4, 0], { planes: 14, cut: 0.62 });
     arm.add(fist);
     // Phalanges : dalle claire a l avant du poing.
-    arm.add(rock(0.13, stoneLt, [s * 0.6, 0.2, 0.34], [1.45, 0.85, 0.7], [0.25, s * 0.25, 0], { planes: 9, cut: 0.66 }));
+    arm.add(rock(0.13, stoneLt, [s * 0.6, 0.235, 0.34], [1.45, 0.85, 0.7], [0.25, s * 0.25, 0], { planes: 9, cut: 0.66 }));
     arm.add(rockCrack(fist, [[s * -0.3, 0.75, 0.55], [s * -0.1, 0.45, 0.85], [s * -0.35, 0.15, 0.9]], glow, 0.012));
     if (opts.horns) {
       // Eclats de roche dresses sur l epaule.
       for (const [dx, dz, len, a] of [[0.02, 0, 0.3, 0.35], [0.14, -0.1, 0.2, 0.7]]) {
-        const sp = opts.crystals ? crystal(len * 1.25, len * 0.24, opts.crystals) : rockBlob(len * 0.5, stoneDk, { seed: 7 + dx * 100, scale: [0.42, 1.25, 0.42], planes: 7, cut: 0.7 });
-        sp.position.set(s * (0.44 + dx), opts.crystals ? 1.02 : 1.1 + len * 0.3, -0.04 + dz);
+        const sp = opts.crystals ? crystal(len * 1.25, len * 0.24, opts.crystals) : crystal(len * 1.3, len * 0.36, shard);
+        sp.position.set(s * (0.44 + dx), 1.02, -0.04 + dz);
         sp.rotation.z = -s * a;
         arm.add(sp);
       }

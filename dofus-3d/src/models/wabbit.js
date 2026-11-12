@@ -122,7 +122,7 @@ export function buildWabbit(opts = {}) {
   skull.position.set(0, HY, HZ);
   head.add(skull);
   const eyes = addEyes(head, { x: 0, y: HY + 0.035, z: HZ + 0.205, size: 0.082, spacing: 0.25, turn: 0.34, iris: royal ? 0xe8322a : 0xd8403a, lid: royal ? 0xd9d0bf : 0xc3c4d2, angry: true });
-  for (const e of eyes) e.traverse(o => { o.userData.noOutline = true; });
+  for (const e of eyes) e.children.slice(1).forEach(o => { o.userData.noOutline = true; });
   // Nez rose + rictus en coin.
   const nz = blob(0.036, 0.024, 0.02, nose, (d, out) => { out.x *= 1 - 0.5 * Math.max(0, -d.y); }, 14, 10);
   nz.position.set(0, HY - 0.075, HZ + 0.272);

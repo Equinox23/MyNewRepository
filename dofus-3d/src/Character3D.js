@@ -107,6 +107,12 @@ export class Character3D {
     this.hpBar = new HpBar3D(team);
     const vr = VARIANTS[classId];
     this.hpBar.sprite.position.y = HP_BAR_Y[classId] || (vr && HP_BAR_Y[vr.base] ? HP_BAR_Y[vr.base] * (vr.scale || 1) + 0.05 : 1.4);
+    // Hauteur reelle du modele : la barre de vie se pose juste au-dessus.
+    try {
+      this.body.updateMatrixWorld(true);
+      const top = new THREE.Box3().setFromObject(this.body).max.y - this.group.position.y;
+      if (isFinite(top) && top > 0.2) { this.hpBar.sprite.position.y = top + 0.28; this._topY = top; }
+    } catch (_) {}
     this.group.add(this.hpBar.sprite);
   }
 
@@ -363,7 +369,7 @@ export class Character3D {
       const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
       const sprite = new THREE.Sprite(mat);
       sprite.scale.set(0.7, 0.7, 1);
-      sprite.position.set(0, (HP_BAR_Y[this.classId] || 1.4) + 0.35, 0);
+      sprite.position.set(0, (this._topY ? this._topY + 0.28 : (HP_BAR_Y[this.classId] || 1.4)) + 0.35, 0);
       sprite.renderOrder = 1001;
       this.group.add(sprite);
       this._fuseSprite = sprite;

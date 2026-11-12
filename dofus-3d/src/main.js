@@ -519,7 +519,7 @@ function loop(now) {
   watchPerformance(dt);
   hud.setDialAngle(scene3d.azimuth);
   // Pendant le menu, la camera tourne lentement autour de la foret.
-  if (menu.root && menu.root.style.display !== 'none' && !scene3d._snapping && !explore.zone) {
+  if (menu.root && menu.root.style.display !== 'none' && !scene3d._snapping && !explore.inRegion) {
     scene3d.azimuth += dt * 0.06;
     scene3d.updateCamera();
   }

@@ -79,7 +79,7 @@ export function rockBlob(r, mat, o = {}) {
     // Dessous un peu plus sombre (ancre le rocher au sol).
     const g = t * (0.9 + 0.1 * sstep(-0.9, 0.2, d.y));
     return [g, g, g * (1 - (1 - t) * 0.3)];
-  }, mat, o.ws || 44, o.hs || 32);
+  }, mat, o.ws || 30, o.hs || 22);
   m.geometry.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   m.userData.surf = surf;
   return m;

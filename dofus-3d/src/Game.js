@@ -3,7 +3,7 @@ import { Fighter, DEFS } from './Fighter.js';
 import { Character3D } from './Character3D.js';
 import { TurnManager } from './TurnManager.js';
 import { bfs, pathTo, hasLOS } from './Path.js';
-import { SPELLS } from './Spells.js';
+import { SPELLS, CLASS_STACKS, CLASS_STATES } from './Spells.js';
 import { spellElementColor } from './SpellIcons.js';
 import { getHero, addXp, monsterXp, bombBonus, heroStats } from './Leveling.js';
 import { recordTier } from './Progress.js';
@@ -61,7 +61,7 @@ export class Game {
     this.hud.on('onSpellSlot', (slot) => this.selectSpellSlot(slot));
     this.hud.on('onEnd', () => this.endTurn());
     // Permet au HUD de griser un sort d invocation deja "consomme".
-    this.hud.isSpellLocked = (fighter, spell) => this.isSummonBlocked(fighter, spell);
+    this.hud.isSpellLocked = (fighter, spell) => this.isSummonBlocked(fighter, spell) || !!this.stateBlockReason(fighter, spell);
   }
 
   setup(config) {
@@ -310,6 +310,19 @@ export class Game {
   async startTurn() {
     if (this.checkEnd()) return;
     const cur = this.turn.current();
+    // Numero de tour global (un mur de bombes ne blesse qu une fois par tour).
+    this._turnSerial = (this._turnSerial || 0) + 1;
+    cur._carried = null;
+    // Soins sur la duree (Mot de Regeneration) : en debut de tour.
+    let hotTotal = 0;
+    for (const b of cur.buffs) {
+      if (b.hot && cur.alive) hotTotal += cur.heal(b.hot.min + Math.floor(Math.random() * (b.hot.max - b.hot.min + 1)));
+    }
+    if (hotTotal > 0 && cur.character) {
+      cur.character.popHeal(hotTotal);
+      cur.character.hpBar.setHp(cur.hp, cur.maxHp);
+      this.hud.log && this.hud.log(`${cur.name} regagne ${hotTotal} PV (regeneration)`, 'heal');
+    }
     // 1) Appliquer les DoT actifs AVANT que la nouvelle ressource se
     //    rafraichisse (pour pouvoir mourir avant ses actions).
     let dotTotal = 0;
@@ -436,6 +449,11 @@ export class Game {
     // Cloture le tour du combattant courant (nettoie les buffs courts,
     // reinitialise les PA/PM affiches) avant de passer au suivant.
     const prev = this.turn.current();
+    if (prev && prev._carried) {
+      // Karcham sans Chamrak : la cible est reposee a la fin du tour.
+      this.hud.log && this.hud.log(`${prev.name} repose ${prev._carried.name}`, 'cast');
+      prev._carried = null;
+    }
     if (prev && prev.alive && prev.endTurn) prev.endTurn();
     this.turn.advance();
     this.startTurn();
@@ -496,6 +514,8 @@ export class Game {
   castBlockReason(cur, spell) {
     if (cur.isOnCooldown(spell.id)) return `${spell.name} en recharge (${cur.spellCooldowns[spell.id]} tours)`;
     if (spell.apCost > cur.pa) return 'Pas assez de PA pour ' + spell.name;
+    const stateReason = this.stateBlockReason(cur, spell);
+    if (stateReason) return stateReason;
     if (this.isSummonBlocked(cur, spell)) {
       return this.summonCount(cur) >= MAX_SUMMONS ? `Limite de ${MAX_SUMMONS} invocations atteinte` : 'Cette creature est deja invoquee';
     }
@@ -643,6 +663,7 @@ export class Game {
     for (const z of this.zones.slice()) {
       if (z.kind !== 'glyph' || z.team === f.team || !f.alive) continue;
       if (!z.cells.some(cl => cl.c === f.c && cl.r === f.r)) continue;
+      if (z.wall) f._wallHitSerial = this._turnSerial;
       this.vfx && this.vfx.shockwave(f.c, f.r, { color: z.color, radius: 0.9, duration: 0.5 });
       this.hud.log && this.hud.log(`${f.name} commence son tour dans ${z.name}`, 'attack');
       const t = z.onTurn || {};
@@ -679,6 +700,8 @@ export class Game {
 
   // Piege adverse sur la case du combattant : explosion en zone.
   async _checkTraps(f) {
+    await this._checkWalls(f);
+    if (!f.alive || this.ended) return true;
     const z = this.zones.find(t => t.kind === 'trap' && t.team !== f.team && t.c === f.c && t.r === f.r);
     if (!z) return false;
     this.zones = this.zones.filter(t => t !== z);
@@ -779,6 +802,8 @@ export class Game {
     // ciblage de sa case (le joueur ne le voit simplement plus).
     if (spell.target === 'self' && targetFighter !== caster) return 'Cible : soi-meme';
     if (spell.target === 'any' && !targetFighter) return 'Cible : un combattant ou une bombe';
+    const classReason = this.classTargetReason(caster, spell, c, r, targetFighter);
+    if (classReason) return classReason;
     if (spell.target === 'enemy' && (!targetFighter || targetFighter.team === caster.team)) return 'Pas d ennemi';
     // Ralentissement : une seule fois par adversaire et par tour.
     if (spell.id === 'ralentissement' && targetFighter
@@ -798,7 +823,7 @@ export class Game {
     if (spell.target === 'tile') {
       const isPlace = spell.effects.some(e => e.type === 'placeBomb' || e.type === 'moveBomb');
       const needsEmpty = spell.effects.some(e =>
-        e.type === 'teleport' || e.type === 'summon' || e.type === 'placeBomb' || e.type === 'moveBomb'
+        e.type === 'teleport' || e.type === 'summon' || e.type === 'placeBomb' || e.type === 'moveBomb' || e.type === 'throw'
       );
       if (needsEmpty && targetFighter) return 'Case occupee';
       if (spell.effects.some(e => e.type === 'summon')) {
@@ -822,6 +847,183 @@ export class Game {
       }
     }
     return null;
+  }
+
+  // ---------- MECANIQUES DE CLASSE ----------
+  // Etats nommes (buff.state : Saoul, Telefrag, Mot Vampirique) et jauges
+  // (fighter.stacks : Puissance, Veine, Ferveur), cf. Spells.CLASS_*.
+  hasState(f, name) {
+    return !!f && f.buffs.some(b => b.state === name);
+  }
+
+  stackOf(f, key) {
+    return (f && f.stacks && f.stacks[key]) || 0;
+  }
+
+  addStack(f, key, amount, max) {
+    const info = CLASS_STACKS[key] || { label: key, color: '#ffffff', max: 5 };
+    const cap = max || info.max || 5;
+    f.stacks = f.stacks || {};
+    const before = f.stacks[key] || 0;
+    f.stacks[key] = Math.max(0, Math.min(cap, before + amount));
+    const gained = f.stacks[key] - before;
+    if (gained > 0 && f.character) {
+      f.character.popText(`+${gained} ${info.label}`, info.color, { fontSize: 18, yStart: 1.9, yRise: 0.6, scaleX: 1.4, scaleY: 0.42 });
+      this.hud.log && this.hud.log(`${f.name} : ${info.label} ${f.stacks[key]}/${cap}`, 'buff');
+    }
+    this.hud.refreshTurnOrder && this.hud.refreshTurnOrder();
+    return gained;
+  }
+
+  // Sort interdit par l etat du lanceur (Saoul / a jeun, rien a lancer).
+  stateBlockReason(cur, spell) {
+    const lbl = (s) => (CLASS_STATES[s] || { label: s }).label;
+    if (spell.requires && !this.hasState(cur, spell.requires)) return `${spell.name} : il faut etre ${lbl(spell.requires)}`;
+    if (spell.forbids && this.hasState(cur, spell.forbids)) return `${spell.name} : impossible en etant ${lbl(spell.forbids)}`;
+    if (spell.requiresCarry && !(cur._carried && cur._carried.alive)) return `${spell.name} : attrape d abord une cible avec Karcham`;
+    return null;
+  }
+
+  // Effet conditionnel (effect.when) : depend de l etat du lanceur.
+  effectActive(effect, caster) {
+    const w = effect.when;
+    if (!w) return true;
+    if (w.caster && !this.hasState(caster, w.caster)) return false;
+    if (w.casterNot && this.hasState(caster, w.casterNot)) return false;
+    return true;
+  }
+
+  // Multiplicateur de degats lie au sort : meute (Osamodas), jauge
+  // depensee (Puissance, Veine) et Telefrag du Xelor (+50%).
+  spellMultiplier(caster, tf, spell, effect) {
+    let k = this.packMultiplier(caster, tf, spell);
+    const sb = effect && effect.stackBonus;
+    if (sb) k *= 1 + sb.per * this.stackOf(caster, sb.key);
+    if (tf && tf.buffs.some(b => b.state === 'telefrag' && b.owner === caster)) k *= 1.5;
+    return k;
+  }
+
+  // Regles de ciblage propres aux sorts de classe (null = valide).
+  classTargetReason(caster, spell, c, r, tf) {
+    for (const e of spell.effects) {
+      if (e.type === 'teleswap') {
+        if (tf === caster) return 'Case occupee';
+        if (tf && tf.stabilized) return 'Cible stabilisee';
+        if (!tf && this.map3d.isBlockedFor(c, r, caster)) return 'Inaccessible';
+      } else if (e.type === 'rewind') {
+        if (!tf) return 'Cible : un combattant';
+        if (tf.isBomb || !tf._turnStart) return 'La cible n a pas encore joue';
+        if (tf._turnStart.c === tf.c && tf._turnStart.r === tf.r) return 'La cible n a pas bouge ce tour';
+        if (tf.stabilized) return 'Cible stabilisee';
+        const occ = this.fighters.find(f => f.alive && f !== tf && f.c === tf._turnStart.c && f.r === tf._turnStart.r);
+        if (occ && occ.stabilized) return 'Case de depart bloquee';
+      } else if (e.type === 'carry') {
+        if (!tf || tf === caster) return 'Cible : un combattant adjacent';
+        if (tf.stabilized) return 'Cible stabilisee';
+        if (tf.def.isBoss) return 'Trop lourd a porter';
+      } else if (e.type === 'throw') {
+        const carried = caster._carried;
+        if (!carried || !carried.alive) return 'Rien a lancer';
+        if (Math.abs(carried.c - caster.c) + Math.abs(carried.r - caster.r) !== 1) return 'La cible portee est trop loin';
+        if (this.map3d.isBlockedFor(c, r, carried)) return 'Inaccessible';
+      }
+    }
+    return null;
+  }
+
+  // Pose l etat Telefrag sur un ennemi deplace par le Xelor.
+  _applyTelefrag(caster, tf, duration = 2) {
+    if (!tf || !tf.alive || tf.isBomb || tf.team === caster.team) return;
+    tf.buffs = tf.buffs.filter(b => b.state !== 'telefrag');
+    tf.buffs.push({ duration: duration + 1, state: 'telefrag', owner: caster, team: caster.team, source: 'Telefrag' });
+    tf.character.popText('TELEFRAG', '#7a8aff', { fontSize: 20, yStart: 1.7, yRise: 0.6, scaleX: 1.4, scaleY: 0.42 });
+    tf.character.flashGlow(0x7a8aff, 700);
+    this.hud.log && this.hud.log(`${tf.name} est en Telefrag : le prochain sort de ${caster.name} le frappe +50% et rend 2 PA`, 'buff');
+  }
+
+  // Apres un sort : jauges depensees, Telefrag consomme, murs de bombes.
+  _afterSpell(caster, spell) {
+    for (const e of spell.effects) {
+      const sb = e.stackBonus;
+      if (sb && sb.consume && this.stackOf(caster, sb.key) > 0) {
+        const info = CLASS_STACKS[sb.key] || { label: sb.key };
+        this.hud.log && this.hud.log(`${caster.name} depense ${caster.stacks[sb.key]} ${info.label}`, 'buff');
+        caster.stacks[sb.key] = 0;
+      }
+    }
+    let consumed = false;
+    for (const f of this.fighters) {
+      if (!f._telefragHit) continue;
+      f._telefragHit = false;
+      const n = f.buffs.length;
+      f.buffs = f.buffs.filter(b => !(b.state === 'telefrag' && b.owner === caster));
+      if (f.buffs.length !== n) consumed = true;
+    }
+    if (consumed && caster.alive) {
+      caster.pa += 2;
+      caster.character.popText('+2 PA', '#7ec6ff', { fontSize: 22, dx: 0.45, yStart: 1.5, scaleX: 1.1, scaleY: 0.42 });
+      this.hud.log && this.hud.log(`Telefrag consomme : ${caster.name} regagne 2 PA`, 'buff');
+    }
+    this._refreshBombWalls();
+    this.hud.refreshTurnOrder && this.hud.refreshTurnOrder();
+    if (!this.ended && this.turn) this.hud.update(this.turn.current(), this.mode, this.selectedSpellId);
+  }
+
+  // Murs de bombes : deux bombes du meme Roublard alignees a 2-5 cases
+  // tendent un mur de feu entre elles. Il blesse un ennemi qui y entre
+  // ou y commence son tour (une fois par tour), jamais les allies.
+  _refreshBombWalls() {
+    const had = this.zones.some(z => z.wall);
+    this.zones = this.zones.filter(z => !z.wall);
+    const bombs = this.fighters.filter(f => f.alive && f.isBomb && !f._exploding && f.bombOwner && f.bombOwner.alive);
+    for (let i = 0; i < bombs.length; i++) {
+      for (let j = i + 1; j < bombs.length; j++) {
+        const a = bombs[i], b = bombs[j];
+        if (a.bombOwner !== b.bombOwner) continue;
+        if (a.c !== b.c && a.r !== b.r) continue;
+        const d = Math.abs(a.c - b.c) + Math.abs(a.r - b.r);
+        if (d < 2 || d > 5) continue;
+        const sc = Math.sign(b.c - a.c), sr = Math.sign(b.r - a.r);
+        const cells = [];
+        for (let k = 1; k < d; k++) cells.push({ c: a.c + sc * k, r: a.r + sr * k });
+        if (cells.some(cl => this.map3d.isWall(cl.c, cl.r))) continue;
+        const k = Math.min(a.bombLevelMult || 1, b.bombLevelMult || 1);
+        this.zones.push({
+          kind: 'glyph', wall: true, cells, c: cells[0].c, r: cells[0].r, radius: 0,
+          owner: a.bombOwner, team: a.team, turns: Infinity, color: 0xff5a1f,
+          name: 'Mur de bombes', element: 'feu',
+          onTurn: { damage: { min: Math.round(14 * k), max: Math.round(20 * k) } },
+        });
+      }
+    }
+    if (had || this.zones.some(z => z.wall)) this._paintZones();
+  }
+
+  async _checkWalls(f) {
+    if (!f.alive || f.isBomb || this.ended) return;
+    if (f._wallHitSerial === this._turnSerial) return;
+    const z = this.zones.find(w => w.wall && w.team !== f.team && w.cells.some(cl => cl.c === f.c && cl.r === f.r));
+    if (!z) return;
+    f._wallHitSerial = this._turnSerial;
+    this.vfx && this.vfx.flash(f.c, f.r, { color: 0xff8a00, duration: 0.3 });
+    this.hud.log && this.hud.log(`${f.name} traverse un mur de bombes`, 'attack');
+    const d = z.onTurn.damage;
+    await this._zoneDamage(z, f, d.min + Math.floor(Math.random() * (d.max - d.min + 1)));
+  }
+
+  // Nombre de bombes qui exploseront en chaine a partir de `bomb`.
+  _bombChainSize(bomb) {
+    const seen = new Set([bomb]);
+    const queue = [bomb];
+    while (queue.length) {
+      const b = queue.shift();
+      const radius = (b.def.bombArea && b.def.bombArea.radius) || 2;
+      for (const o of this.fighters) {
+        if (!o.alive || !o.isBomb || o._exploding || seen.has(o)) continue;
+        if (Math.abs(o.c - b.c) + Math.abs(o.r - b.r) <= radius) { seen.add(o); queue.push(o); }
+      }
+    }
+    return seen.size;
   }
 
   // Nombre d invocations en vie d un lanceur.
@@ -869,6 +1071,8 @@ export class Game {
   }
 
   async applySpellEffects(caster, spell, target) {
+    // Un combattant mort en cours d action (mur de bombes, renvoi) ne lance plus rien.
+    if (!caster.alive) return;
     this.audio && this.audio.cast(spell.category);
     // Lancement facon Dofus : le lanceur prend la pose et un glyphe
     // runique de la couleur de l element du sort s illumine sous lui.
@@ -882,9 +1086,11 @@ export class Game {
       await this.vfx.castGlyph(caster.c, caster.r, { color: spellElementColor(spell) });
     }
     for (const effect of spell.effects) {
+      if (!this.effectActive(effect, caster)) continue;
       await this.applyEffect(effect, caster, spell, target);
       if (this.ended) return;
     }
+    this._afterSpell(caster, spell);
   }
 
   async applyEffect(effect, caster, spell, target) {
@@ -998,6 +1204,7 @@ export class Game {
           const tf = this.fighters.find(f => f.alive && f.c === cell.c && f.r === cell.r);
           if (!tf) continue;
           if (tf === caster) continue;
+          if (effect.enemiesOnly && tf.team === caster.team) continue;
           // Degats : jet, bonus du lanceur, critique, puis resistance
           // elementaire de la cible et enfin boucliers.
           const hit = this.rollHit(caster, tf, spell, effect);
@@ -1018,6 +1225,17 @@ export class Game {
           tf.character.hpBar.setHp(tf.hp, tf.maxHp);
           if (this.vfx) this.vfx.impact(cell.c, cell.r, { color: elementHex(hit.el), big: actual >= 40 || hit.crit });
           totalDealt += actual;
+          // Mot Vampirique : l attaquant recupere une part des degats.
+          const vamp = actual > 0 && caster.alive && !caster.isBomb && tf.team !== caster.team
+            && tf.buffs.find(b => b.state === 'vampirique' && b.team === caster.team);
+          if (vamp) {
+            const got = caster.heal(Math.round(actual * (vamp.drain || 0.3)));
+            if (got > 0) {
+              caster.character.popHeal(got);
+              caster.character.hpBar.setHp(caster.hp, caster.maxHp);
+              this.hud.log && this.hud.log(`Mot Vampirique : ${caster.name} recupere ${got} PV`, 'heal');
+            }
+          }
           if (tf.alive && actual > 0) this._onHitSpecials(caster, tf, hit);
           const resTxt = hit.res ? ` (res. ${ELEMENT_LABEL[hit.el]} ${hit.res > 0 ? '+' : ''}${hit.res}%)` : '';
           this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} subit ${actual} degats${hit.crit ? ' CRITIQUES' : ''}${resTxt}`, 'attack');
@@ -1074,9 +1292,11 @@ export class Game {
         }
         if (this.vfx) this.vfx.healSparkles({ c: tf.c, r: tf.r });
         this.audio && this.audio.sfx('heal');
-        const amt = effect.type === 'heal'
+        let amt = effect.type === 'heal'
           ? effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1))
           : Math.round(tf.maxHp * (effect.percent || 0));
+        // Ferveur de l Eniripsa : le soin depense la jauge.
+        if (effect.stackBonus) amt = Math.round(amt * (1 + effect.stackBonus.per * this.stackOf(caster, effect.stackBonus.key)));
         const healed = tf.heal(amt);
         tf.character.popHeal(healed);
         tf.character.hpBar.setHp(tf.hp, tf.maxHp);
@@ -1132,8 +1352,19 @@ export class Game {
         }
         for (const tf of buffTargets) {
           if (this.vfx) {
-            if (effect.shield) this.vfx.shieldDome({ c: tf.c, r: tf.r }, { color: buffColorHex });
+            if (tf.team !== caster.team) this.vfx.debuffCloud({ c: tf.c, r: tf.r }, { color: buffColorHex });
+            else if (effect.shield) this.vfx.shieldDome({ c: tf.c, r: tf.r }, { color: buffColorHex });
             else this.vfx.buffAura({ c: tf.c, r: tf.r }, { color: buffColorHex });
+          }
+          // Etat nomme (Saoul, Mot Vampirique) : un seul a la fois.
+          if (effect.state) {
+            tf.buffs = tf.buffs.filter(b => b.state !== effect.state);
+            const st = CLASS_STATES[effect.state];
+            if (st) tf.character.popText(st.label.toUpperCase(), st.color, { fontSize: 20, yStart: 1.7, yRise: 0.6, scaleX: 1.4, scaleY: 0.42 });
+          }
+          if (effect.vuln) {
+            tf.buffs = tf.buffs.filter(b => !b.vuln);
+            tf.character.popText(`VULNERABLE +${effect.vuln}%`, '#b46ae8', { fontSize: 18, yStart: 1.7, yRise: 0.6, scaleX: 1.5, scaleY: 0.42 });
           }
           // Roue de la Fortune : bonus de degats tire au hasard.
           let dmgMult = effect.damageMult;
@@ -1142,6 +1373,8 @@ export class Game {
             dmgMult = +(lo + Math.random() * (hi - lo)).toFixed(2);
             tf.character.popText(`+${Math.round(dmgMult * 100)}% !`, '#ffcf3a', { fontSize: 22, yStart: 1.7, yRise: 0.6, scaleX: 1.2, scaleY: 0.45 });
             this.hud.log && this.hud.log(`${spell.name} : +${Math.round(dmgMult * 100)}% de degats`, 'buff');
+            // Mauvais tirage : la Veine de l Ecaflip monte en consolation.
+            if (effect.veineOnLow && dmgMult < (lo + hi) / 2) this.addStack(caster, 'veine', effect.veineOnLow);
           }
           tf.buffs.push({
             duration: (effect.duration || 1) + 1,
@@ -1155,7 +1388,15 @@ export class Game {
             fuite: effect.fuite,
             tacle: effect.tacle,
             stabilized: effect.stabilized,
-            res: effect.res,
+            // Vulnerabilite : resistance negative a tous les elements.
+            res: effect.vuln
+              ? { feu: -effect.vuln, eau: -effect.vuln, terre: -effect.vuln, air: -effect.vuln, neutre: -effect.vuln }
+              : effect.res,
+            vuln: effect.vuln,
+            hot: effect.hot,
+            drain: effect.drain,
+            state: effect.state,
+            team: caster.team,
             source: spell.name,
           });
           if (effect.bonusPa) tf.pa = Math.max(0, tf.pa + effect.bonusPa);
@@ -1213,6 +1454,12 @@ export class Game {
         // Vol de PA (Horloge) : on ne peut prendre que ce qu il reste
         // reellement a la cible. Si elle est deja a 0 PA effectif, rien.
         if (effect.steal) amount = Math.min(amount, tf.effectiveMaxPa);
+        // Retraits differes (Xelor) : une cible garde toujours au moins
+        // 40% de ses PA, pour ne pas etre bloquee indefiniment.
+        if (effect.currentTurnOnly) {
+          const cap = Math.ceil(tf.maxPa * 0.6);
+          amount = Math.min(amount, Math.max(0, cap - (tf.pendingPaDebuff || 0)));
+        }
         const hasDamage = spell.effects.some(e => e.type === 'damage');
         if (this.vfx && caster !== tf && !hasDamage) {
           caster.character.faceToward(tf.c, tf.r);
@@ -1328,6 +1575,7 @@ export class Game {
         const hs = heroStats(bomb.def, caster.level || 1);
         bomb.maxHp = bomb.hp = Math.round(hs.hp * bb.hp);
         bomb.bombDamageMult = bb.damage * (caster.levelDamageMult || 1);
+        bomb.bombLevelMult = bb.damage;
         if (bb.shield) bomb.buffs.push({ permanent: true, duration: 9999, shield: bb.shield });
         bomb.character = new Character3D(this.scene3d.scene, 'bombeRoublard', caster.team, target.c, target.r);
         bomb.character.hpBar.setHp(bomb.hp, bomb.maxHp);
@@ -1456,6 +1704,7 @@ export class Game {
         if (Math.abs(dc0) >= Math.abs(dr0)) sc = Math.sign(dc0) || 1;
         else sr = Math.sign(dr0) || 1;
         let destC = tf.c, destR = tf.r;
+        let travelled = 0;
         for (let step = 1; step <= (effect.distance || 1); step++) {
           const cc = tf.c + sc * step, cr = tf.r + sr * step;
           if (!this.map3d.inBounds(cc, cr)) break;
@@ -1463,20 +1712,35 @@ export class Game {
           if (this.map3d.isWater(cc, cr) && !this.map3d.isBridge(cc, cr)) break;
           if (this.fighters.some(f => f.alive && f !== tf && f.c === cc && f.r === cr)) break;
           destC = cc; destR = cr;
+          travelled = step;
         }
-        if (destC === tf.c && destR === tf.r) {
+        const blockedCells = (effect.distance || 1) - travelled;
+        if (travelled === 0) {
           this.hud.log && this.hud.log(`${tf.name} ne peut pas etre repousse`, 'cast');
-          return;
+        } else {
+          if (this.vfx) this.vfx.flash(tf.c, tf.r, { color: 0xffd166, duration: 0.25 });
+          this.audio && this.audio.sfx('knockback');
+          let cc = tf.c, cr = tf.r;
+          this.hud.log && this.hud.log(`${caster.name} repousse ${tf.name}`, 'cast');
+          let stopped = false;
+          while (cc !== destC || cr !== destR) {
+            cc += sc; cr += sr;
+            await tf.character.moveTo(cc, cr, 110);
+            tf.c = cc; tf.r = cr;
+            if (await this._checkTraps(tf)) { stopped = true; break; }
+          }
+          if (stopped) return;
         }
-        if (this.vfx) this.vfx.flash(tf.c, tf.r, { color: 0xffd166, duration: 0.25 });
-        this.audio && this.audio.sfx('knockback');
-        let cc = tf.c, cr = tf.r;
-        this.hud.log && this.hud.log(`${caster.name} repousse ${tf.name}`, 'cast');
-        while (cc !== destC || cr !== destR) {
-          cc += sc; cr += sr;
-          await tf.character.moveTo(cc, cr, 110);
-          tf.c = cc; tf.r = cr;
-          if (await this._checkTraps(tf)) break;
+        // Degats de collision : chaque case de recul bloquee par un
+        // obstacle (mur, eau, combattant, bord de carte) fait mal.
+        if (effect.collide && blockedCells > 0 && tf.alive && !this.ended) {
+          let base = 0;
+          for (let i = 0; i < blockedCells; i++) {
+            base += effect.collide.min + Math.floor(Math.random() * (effect.collide.max - effect.collide.min + 1));
+          }
+          if (this.vfx) this.vfx.flash(tf.c, tf.r, { color: 0xff8a3a, duration: 0.3 });
+          tf.character.popText('COLLISION', '#ffb040', { fontSize: 18, yStart: 1.9, yRise: 0.6, scaleX: 1.4, scaleY: 0.42 });
+          await this._zoneDamage({ owner: caster, element: 'neutre', name: 'Collision' }, tf, base);
         }
         return;
       }
@@ -1571,16 +1835,158 @@ export class Game {
         return;
       }
       case 'chanceStrike': {
-        // Coup de Griffe du Chaton : 50% degats, 50% soin de la cible.
-        if (Math.random() < 0.5) {
-          this.hud.log && this.hud.log(`${spell.name} : la griffe mord !`, 'attack');
+        // Pari (Pile ou Face, Tout ou Rien, Coup de Griffe du Chaton) :
+        // reussi = gros degats ; rate = petits degats ou soin de la cible.
+        // La Veine du lanceur ajoute 10% de reussite par point ; un pari
+        // perdu en donne, un pari gagne la remet a zero.
+        const veine = this.stackOf(caster, 'veine');
+        const pWin = this.gambleChance(caster, effect);
+        if (Math.random() < pWin) {
+          this.hud.log && this.hud.log(`${spell.name} : pari gagne ! (${Math.round(pWin * 100)}% de chances)`, 'attack');
+          caster.character.popText('GAGNE !', '#ffcf3a', { fontSize: 20, yStart: 2.0, yRise: 0.6, scaleX: 1.3, scaleY: 0.42 });
+          if (veine > 0) {
+            caster.stacks.veine = 0;
+            this.hud.log && this.hud.log(`${caster.name} : la Veine retombe a 0`, 'buff');
+          }
           await this.applyEffect(
             { type: 'damage', min: effect.dmgMin, max: effect.dmgMax }, caster, spell, target);
         } else {
-          this.hud.log && this.hud.log(`${spell.name} : coup manque, la cible est soignee`, 'heal');
-          await this.applyEffect(
-            { type: 'heal', min: effect.healMin, max: effect.healMax }, caster, spell, target);
+          caster.character.popText('PERDU...', '#b8c0c8', { fontSize: 20, yStart: 2.0, yRise: 0.6, scaleX: 1.3, scaleY: 0.42 });
+          if (effect.failMax) {
+            this.hud.log && this.hud.log(`${spell.name} : pari perdu (${Math.round(pWin * 100)}% de chances), petit coup`, 'attack');
+            await this.applyEffect(
+              { type: 'damage', min: effect.failMin, max: effect.failMax }, caster, spell, target);
+          } else {
+            this.hud.log && this.hud.log(`${spell.name} : pari perdu (${Math.round(pWin * 100)}% de chances), la cible est soignee`, 'heal');
+            await this.applyEffect(
+              { type: 'heal', min: effect.healMin, max: effect.healMax }, caster, spell, target);
+          }
+          if (effect.veine && caster.alive) this.addStack(caster, 'veine', effect.veine);
         }
+        return;
+      }
+      case 'gainStack': {
+        this.addStack(caster, effect.key, effect.amount || 1, effect.max);
+        return;
+      }
+      case 'clearState': {
+        const n = caster.buffs.length;
+        caster.buffs = caster.buffs.filter(b => b.state !== effect.state);
+        if (caster.buffs.length !== n) {
+          const st = CLASS_STATES[effect.state] || { label: effect.state };
+          this.hud.log && this.hud.log(`${caster.name} n est plus ${st.label}`, 'buff');
+        }
+        return;
+      }
+      case 'teleswap': {
+        // Teleportation du Xelor : case libre = teleport ; case occupee =
+        // echange de places (Telefrag sur un ennemi).
+        const tf = this.fighters.find(f => f.alive && f !== caster && f.c === target.c && f.r === target.r);
+        const fromC = caster.c, fromR = caster.r;
+        if (this.vfx) {
+          this.vfx.portal(fromC, fromR, { color: 0x7a8aff });
+          this.vfx.portal(target.c, target.r, { color: 0x7a8aff });
+        }
+        await new Promise(r => setTimeout(r, 120));
+        if (tf) {
+          await Promise.all([
+            caster.character.teleportTo(target.c, target.r),
+            tf.character.teleportTo(fromC, fromR),
+          ]);
+          caster.c = target.c; caster.r = target.r;
+          tf.c = fromC; tf.r = fromR;
+          this.hud.log && this.hud.log(`${caster.name} echange sa place avec ${tf.name} (${spell.name})`, 'cast');
+          this._applyTelefrag(caster, tf, effect.telefrag || 2);
+          await this._checkTraps(tf);
+        } else {
+          await caster.character.teleportTo(target.c, target.r);
+          caster.c = target.c; caster.r = target.r;
+          this.hud.log && this.hud.log(`${caster.name} se teleporte (${spell.name})`, 'cast');
+        }
+        if (!this.ended) await this._checkTraps(caster);
+        return;
+      }
+      case 'rewind': {
+        // Rembobinage : la cible retourne sur sa case de debut de tour.
+        const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
+        if (!tf || !tf._turnStart) return;
+        const dest = { c: tf._turnStart.c, r: tf._turnStart.r };
+        if (dest.c === tf.c && dest.r === tf.r) return;
+        const occ = this.fighters.find(f => f.alive && f !== tf && f.c === dest.c && f.r === dest.r);
+        const fromC = tf.c, fromR = tf.r;
+        if (this.vfx) {
+          this.vfx.portal(fromC, fromR, { color: 0x7a8aff });
+          this.vfx.portal(dest.c, dest.r, { color: 0x7a8aff });
+        }
+        await new Promise(r => setTimeout(r, 120));
+        const moves = [tf.character.teleportTo(dest.c, dest.r)];
+        if (occ) moves.push(occ.character.teleportTo(fromC, fromR));
+        await Promise.all(moves);
+        tf.c = dest.c; tf.r = dest.r;
+        if (occ) { occ.c = fromC; occ.r = fromR; }
+        this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} revient a sa case de depart${occ ? ` et echange sa place avec ${occ.name}` : ''}`, 'cast');
+        this._applyTelefrag(caster, tf, effect.telefrag || 2);
+        if (occ) this._applyTelefrag(caster, occ, effect.telefrag || 2);
+        await this._checkTraps(tf);
+        if (occ && !this.ended) await this._checkTraps(occ);
+        return;
+      }
+      case 'carry': {
+        // Karcham : le Pandawa attrape un combattant adjacent.
+        const tf = this.fighters.find(f => f.alive && f !== caster && f.c === target.c && f.r === target.r);
+        if (!tf) return;
+        caster._carried = tf;
+        tf._carriedBy = caster;
+        tf.character.popText('PORTE', '#ffcf5a', { fontSize: 20, yStart: 1.8, yRise: 0.6, scaleX: 1.3, scaleY: 0.42 });
+        tf.character.flashGlow(0xffcf5a, 700);
+        this.hud.log && this.hud.log(`${caster.name} attrape ${tf.name} : lance-le avec Chamrak`, 'cast');
+        this.hud.flash('Karcham : lance la cible avec Chamrak', 1400);
+        return;
+      }
+      case 'throw': {
+        // Chamrak : lance le combattant porte sur la case visee.
+        const tf = caster._carried;
+        caster._carried = null;
+        if (!tf || !tf.alive) return;
+        if (this.fighters.some(f => f.alive && f.c === target.c && f.r === target.r)) return;
+        if (this.vfx) this.vfx.portal(target.c, target.r, { color: 0xd89a4a, duration: 0.5 });
+        this.audio && this.audio.sfx('knockback');
+        await tf.character.teleportTo(target.c, target.r);
+        tf.c = target.c; tf.r = target.r;
+        this.hud.log && this.hud.log(`${caster.name} lance ${tf.name} (${spell.name})`, 'cast');
+        await this._checkTraps(tf);
+        return;
+      }
+      case 'magnet': {
+        // Aimantation : les ennemis alignes avec la bombe sont attires vers elle.
+        const bomb = this.fighters.find(f => f.alive && f.isBomb && f.bombOwner === caster && f.c === target.c && f.r === target.r);
+        if (!bomb) return;
+        if (this.vfx) this.vfx.shockwave(bomb.c, bomb.r, { color: 0x8ae04a, radius: (effect.reach || 4) * 0.8, duration: 0.6 });
+        let pulled = 0;
+        for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          for (let i = 1; i <= (effect.reach || 4); i++) {
+            const c = bomb.c + dc * i, r = bomb.r + dr * i;
+            if (!this.map3d.inBounds(c, r) || this.map3d.isWall(c, r)) break;
+            const f = this.fighters.find(o => o.alive && o.c === c && o.r === r);
+            if (!f || f.isBomb || f.team === caster.team || f.stabilized) continue;
+            let moved = 0;
+            while (moved < (effect.distance || 2) && f.alive && !this.ended) {
+              const nc = f.c - dc, nr = f.r - dr;
+              if (this.map3d.isWall(nc, nr) || (this.map3d.isWater(nc, nr) && !this.map3d.isBridge(nc, nr))) break;
+              if (this.fighters.some(o => o.alive && o.c === nc && o.r === nr)) break;
+              await f.character.moveTo(nc, nr, 110);
+              f.c = nc; f.r = nr;
+              moved++;
+              if (await this._checkTraps(f)) break;
+            }
+            if (moved) {
+              pulled++;
+              this.hud.log && this.hud.log(`${f.name} est attire de ${moved} case${moved > 1 ? 's' : ''} vers la bombe`, 'cast');
+            }
+            if (this.ended) return;
+          }
+        }
+        if (!pulled) this.hud.log && this.hud.log(`${spell.name} : aucun ennemi aligne avec la bombe`, 'cast');
         return;
       }
     }
@@ -1589,8 +1995,17 @@ export class Game {
   // Fait exploser une bombe : VFX, degats en zone (rayon 2 Manhattan),
   // touche allies ET ennemis, et declenche en chaîne toute bombe
   // touchee dans le rayon de l explosion.
-  async explodeBomb(bomb) {
+  async explodeBomb(bomb, combo) {
     if (!bomb || !bomb.alive || bomb._exploding) return;
+    // Combo : +25% de degats par bombe supplementaire dans la chaine.
+    if (combo === undefined) {
+      const n = this._bombChainSize(bomb);
+      combo = 1 + 0.25 * Math.min(3, n - 1);
+      if (n > 1) {
+        this.hud.log && this.hud.log(`Combo de ${n} bombes : +${Math.round((combo - 1) * 100)}% de degats !`, 'attack');
+        this.hud.flash(`COMBO x${n}`, 1200);
+      }
+    }
     bomb._exploding = true;
     this.audio && this.audio.sfx('explosion');
     // Aire : on supporte 'circle' (par defaut) ou ancien 'cross'.
@@ -1604,7 +2019,7 @@ export class Game {
     const baseDmg = bomb.def.bombDamage || 50;
     const growth = bomb.def.bombDamageGrowth || 0;
     const dmg = Math.round(baseDmg * (1 + growth * bomb.bombAge)
-      * (bomb.bombDamageMult || 1) * (1 + (bomb._detonateBonus || 0)));
+      * (bomb.bombDamageMult || 1) * (1 + (bomb._detonateBonus || 0)) * combo);
     const radiusVfx = (area.type === 'circle') ? ((area.radius || 2) + 0.6) : 2.4;
 
     // VFX : grosse onde de choc dimensionnee au rayon + flash central.
@@ -1650,8 +2065,15 @@ export class Game {
     for (const c of chained) {
       if (this.ended) return;
       await new Promise(r => setTimeout(r, 220));
-      await this.explodeBomb(c);
+      await this.explodeBomb(c, combo);
     }
+    this._refreshBombWalls();
+  }
+
+  // Chance de reussite d un pari : base + 10% par point de Veine.
+  gambleChance(caster, effect) {
+    const base = effect.chance === undefined ? 0.5 : effect.chance;
+    return Math.max(0.05, Math.min(0.95, base + 0.1 * this.stackOf(caster, 'veine')));
   }
 
   // Au debut du tour d un combattant, on vieillit toutes ses bombes
@@ -1761,7 +2183,9 @@ export class Game {
   rollHit(caster, tf, spell, effect) {
     const base = effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1));
     const el = damageElementOf(spell, caster);
-    let dmg = base * caster.damageMultiplier() * this.packMultiplier(caster, tf, spell);
+    let dmg = base * caster.damageMultiplier() * this.spellMultiplier(caster, tf, spell, effect);
+    // Telefrag : consomme a la fin du sort (cf. _afterSpell).
+    if (tf.buffs.some(b => b.state === 'telefrag' && b.owner === caster)) tf._telefragHit = true;
     const crit = !caster.isBomb && Math.random() < caster.critChance;
     if (crit) dmg *= 1.3;
     const res = tf.res[el] || 0;
@@ -1771,9 +2195,9 @@ export class Game {
 
   // Estimation (sans hasard) des degats d un effet apres resistances et
   // boucliers : sert a l apercu avant le lancer.
-  estimateHit(caster, tf, spell, min, max) {
+  estimateHit(caster, tf, spell, min, max, effect) {
     const el = damageElementOf(spell, caster);
-    const k = caster.damageMultiplier() * this.packMultiplier(caster, tf, spell) * (1 - (tf.res[el] || 0) / 100);
+    const k = caster.damageMultiplier() * this.spellMultiplier(caster, tf, spell, effect) * (1 - (tf.res[el] || 0) / 100);
     return { min: tf.computeShielded(Math.round(min * k)), max: tf.computeShielded(Math.round(max * k)), el };
   }
 
@@ -1885,22 +2309,35 @@ export class Game {
       out.get(f).lines.push(line);
     };
     for (const e of spell.effects) {
+      if (!this.effectActive(e, caster)) continue;
       if (e.type === 'damage') {
         for (const f of inArea) {
           if (f === caster) continue;
-          const est = this.estimateHit(caster, f, spell, e.min, e.max);
+          if (e.enemiesOnly && f.team === caster.team) continue;
+          const est = this.estimateHit(caster, f, spell, e.min, e.max, e);
           const entry = out.get(f) || { f, lines: [], min: 0, max: 0 };
           out.set(f, entry);
           entry.min += est.min; entry.max += est.max;
           entry.el = est.el;
         }
       } else if (e.type === 'chanceStrike' && onCell) {
-        const est = this.estimateHit(caster, onCell, spell, e.dmgMin, e.dmgMax);
-        add(onCell, { text: `50% : ${est.min}-${est.max}`, color: '#ff7a5a' });
-        add(onCell, { text: `50% : soin ${e.healMin}-${e.healMax}`, color: '#7ae08a' });
+        const est = this.estimateHit(caster, onCell, spell, e.dmgMin, e.dmgMax, e);
+        const p = Math.round(this.gambleChance(caster, e) * 100);
+        add(onCell, { text: `${p}% : ${est.min}-${est.max}`, color: '#ff7a5a' });
+        if (e.failMax) {
+          const low = this.estimateHit(caster, onCell, spell, e.failMin, e.failMax, e);
+          add(onCell, { text: `${100 - p}% : ${low.min}-${low.max}`, color: '#ffb48a' });
+        } else {
+          add(onCell, { text: `${100 - p}% : soin ${e.healMin}-${e.healMax}`, color: '#7ae08a' });
+        }
+      } else if (e.type === 'buff' && onCell && onCell.team !== caster.team && (e.vuln || e.state)) {
+        add(onCell, { text: e.vuln ? `Vulnerable +${e.vuln}%` : (CLASS_STATES[e.state] || { label: e.state }).label, color: '#d8a8ff' });
+      } else if ((e.type === 'teleswap' || e.type === 'rewind') && onCell && onCell !== caster && onCell.team !== caster.team) {
+        add(onCell, { text: 'Telefrag', color: '#9aa8ff' });
       } else if ((e.type === 'heal' || e.type === 'heal_percent') && onCell) {
-        const lo = e.type === 'heal' ? e.min : Math.round(onCell.maxHp * e.percent);
-        const hi = e.type === 'heal' ? e.max : lo;
+        const kHeal = e.stackBonus ? 1 + e.stackBonus.per * this.stackOf(caster, e.stackBonus.key) : 1;
+        const lo = Math.round((e.type === 'heal' ? e.min : onCell.maxHp * e.percent) * kHeal);
+        const hi = e.type === 'heal' ? Math.round(e.max * kHeal) : lo;
         add(onCell, { text: `+${Math.min(lo, onCell.maxHp - onCell.hp)}${hi !== lo ? '-' + Math.min(hi, onCell.maxHp - onCell.hp) : ''} PV`, color: '#7ae08a' });
       } else if (e.type === 'knockback' && onCell && onCell !== caster) {
         add(onCell, { text: onCell.stabilized ? 'Stabilise' : `Recul ${e.distance}`, color: '#ffd166' });

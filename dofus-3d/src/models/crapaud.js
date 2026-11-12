@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { M, mesh, addEyes, sculptSphere, tubeAlong } from './kit.js';
-import { smooth, gauss, line, decal, blob, webFoot } from './monsterKitA.js';
+import { smooth, gauss, line, decal, blob, webFoot, shell } from './monsterKitA.js';
 
 // Crapaud : gros crapaud ramasse d une seule piece. Dos large et bossu
 // seme de verrues, gorge et ventre clairs (peints), immense bouche
@@ -14,11 +14,12 @@ export function buildCrapaud(opts = {}) {
 
   const bodyHex = chef ? 0x3f7a2e : 0x5fa23c;
   const bodyCol = new THREE.Color(bodyHex);
-  const bellyR = new THREE.Color(chef ? 0xc9cf78 : 0xdfe58e);
   const wartR = new THREE.Color(chef ? 0x275220 : 0x3d7a2a);
-  for (const c of [bellyR, wartR]) { c.r /= bodyCol.r; c.g /= bodyCol.g; c.b /= bodyCol.b; }
+  wartR.r /= bodyCol.r; wartR.g /= bodyCol.g; wartR.b /= bodyCol.b;
+  const bellyMat = M(chef ? 0xc9cf78 : 0xdfe58e, { r: 0.85 });
   const skin = M(bodyHex, { r: 0.85 });
   const limb = M(chef ? 0x33682a : 0x4f8f34, { r: 0.85 });
+  const limbTop = M(bodyHex, { r: 0.85 });
   const dark = M(0x2a160c, { r: 0.6 });
   const cheekMat = M(0xf08a8a, { r: 0.8 });
 
@@ -71,24 +72,22 @@ export function buildCrapaud(opts = {}) {
   };
   const cols = [];
   const body = sculptSphere((d, out) => {
-    const wart = shape(d, out);
-    const a = Math.atan2(d.x, d.z), el = Math.asin(d.y);
-    // Gorge claire sous la bouche, ventre clair sous les flancs.
-    const k = smooth(MW - 0.25, MW + 0.5, Math.abs(a));
-    const edge = mouthEl(a) * (1 - k) + (-0.62) * k;
-    const belly = smooth(edge - 0.005, edge - 0.07 - 0.25 * k, el);
-    const w = smooth(0.25, 0.75, wart) * 0.85;
-    const c = [1, 1, 1];
-    for (let i = 0; i < 3; i++) {
-      const b = [bellyR.r, bellyR.g, bellyR.b][i], wt = [wartR.r, wartR.g, wartR.b][i];
-      c[i] = (1 + (b - 1) * belly) * (1 + (wt - 1) * w);
-    }
-    cols.push(c[0], c[1], c[2]);
+    const w = smooth(0.25, 0.75, shape(d, out)) * 0.85;
+    cols.push(1 + (wartR.r - 1) * w, 1 + (wartR.g - 1) * w, 1 + (wartR.b - 1) * w);
   }, skin, 104, 70);
   body.geometry.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
   skin.vertexColors = true;
   body.position.y = CY;
   group.add(body);
+  // Gorge claire sous la bouche, ventre clair sous les flancs.
+  const belly = shell(shape, (d) => {
+    const a = Math.atan2(d.x, d.z), el = Math.asin(d.y);
+    const k = smooth(MW - 0.25, MW + 0.5, Math.abs(a));
+    const edge = mouthEl(a) * (1 - k) + (-0.62) * k;
+    return smooth(edge + 0.01, edge - 0.05 - 0.25 * k, el);
+  }, bellyMat, 104, 70, 0.004);
+  belly.position.y = CY;
+  group.add(belly);
   // Point de la surface du corps (azimut, elevation), decale de `push`.
   const _d = new THREE.Vector3();
   const at = (a, el, push = 0) => {
@@ -126,7 +125,13 @@ export function buildCrapaud(opts = {}) {
     x: 0, y: CY + 0.36, z: 0.335, size: 0.092, spacing: 0.43, turn: 0.45,
     iris: chef ? 0xf07a1a : 0xf2c21a, lid: bodyHex, sleepy: !chef, angry: chef,
   });
-  for (const e of eyes) e.traverse(o => { o.userData.noOutline = true; });
+  for (const e of eyes) {
+    e.traverse(o => { o.userData.noOutline = true; });
+    // Orbite : bosse verte qui enchasse le globe par l arriere.
+    const socket = blob(0.112, 0.118, 0.1, limbTop);
+    socket.position.copy(e.position).add(new THREE.Vector3(Math.sign(e.position.x) * -0.012, -0.03, -0.075));
+    group.add(socket);
+  }
 
   // ---- Pattes arriere : cuisse repliee + grande palme ----
   for (const s of [-1, 1]) {

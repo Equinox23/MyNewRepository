@@ -47,6 +47,20 @@ export function blob(rx, ry, rz, mat, fn, ws = 28, hs = 20) {
   }, mat, ws, hs);
 }
 
+// Plastron (ventre, gorge) : coque du meme volume que le corps, a peine
+// decollee la ou weight(d, out) vaut 1 et rentree dedans ailleurs. Un
+// materiau a part : les variantes le recolorent comme le reste.
+export function shell(shape, weight, mat, ws = 48, hs = 34, push = 0.005) {
+  const m = sculptSphere((d, out) => {
+    shape(d, out);
+    const w = Math.min(1, Math.max(0, weight(d, out)));
+    out.addScaledVector(d, -0.03 + (0.03 + push) * w);
+  }, mat, ws, hs);
+  m.userData.noOutline = true;
+  m.castShadow = false;
+  return m;
+}
+
 // Trait fin (bouche, sourcil, moustache) : jamais de contour ni d ombre.
 export function line(pts, r, mat, o = {}) {
   const t = tubeAlong(pts, o.taper ? (k => r * (0.35 + 0.65 * Math.sin(Math.PI * k))) : (() => r), mat, { steps: o.steps || 16, segs: 6 });

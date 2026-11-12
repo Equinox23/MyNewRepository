@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { M, mesh, addEyes, loft, sculptSphere } from './kit.js';
-import { paint, ratio, smooth, gauss, line, decal, webFoot, feather } from './monsterKitA.js';
+import { smooth, gauss, line, decal, webFoot, feather, shell } from './monsterKitA.js';
 
 // Tofu : poussin tout rond et effronte. Un seul corps en forme d oeuf
 // dodu (ventre creme peint), enormes yeux rapproches sous des sourcils
@@ -45,7 +45,7 @@ export function buildTofu(opts = {}) {
 
   // ---- Corps : oeuf dodu, joues rebondies, ventre creme peint ----
   const bodyY = 0.5;
-  const body = sculptSphere((d, out) => {
+  const shape = (d, out) => {
     const low = Math.max(0, -d.y), up = Math.max(0, d.y);
     const w = 1 + 0.07 * low - 0.1 * up * up;
     let x = d.x * 0.345 * w;
@@ -58,11 +58,12 @@ export function buildTofu(opts = {}) {
     const rump = gauss(d.y - 0.05, 0.45) * smooth(0.55, 1, -d.z);
     z -= 0.035 * rump; y += 0.02 * rump;
     out.set(x, y, z);
-  }, featherMat, 48, 34);
-  paint(body, [[ratio(bodyHex, bellyHex), (p) => {
-    const k = smooth(0.02, 0.2, p.z - 0.02) * smooth(0.04, -0.1, p.y) * smooth(0.27, 0.12, Math.abs(p.x));
-    return k;
-  }]]);
+  };
+  const body = sculptSphere(shape, featherMat, 48, 34);
+  const belly = shell(shape, (d, p) => smooth(0.1, 0.19, p.z) * smooth(-0.02, -0.1, p.y) * smooth(0.25, 0.14, Math.abs(p.x)) * 1.6,
+    M(bellyHex, { r: 0.85 }), 64, 44);
+  belly.position.y = bodyY;
+  group.add(belly);
   body.position.y = bodyY;
   group.add(body);
 

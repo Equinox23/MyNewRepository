@@ -138,7 +138,7 @@ export function buildChampignon(opts = {}) {
     }
     out.set(Math.cos(a) * rad, y, Math.sin(a) * rad * 0.97);
     return col;
-  }, capMat, 112, 84);
+  }, capMat, 96, 68);
   cap.position.set(0, 0.735, -0.01);
   cap.rotation.x = -0.06;
   group.add(cap);
