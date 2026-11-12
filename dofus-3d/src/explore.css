@@ -33,7 +33,7 @@
   position: absolute; top: -2px; right: 12px; width: 22px; height: 22px; border-radius: 50%;
   background: #c0392b; border: 2px solid #241208; font: 700 14px/20px sans-serif; text-align: center; color: #fff;
 }
-#menu-root .wm-panel .evo-strip { margin: 4px 0 8px; overflow-x: auto; }
+#menu-root .wm-panel .evo-strip { margin: 0 0 6px; padding: 8px 6px 2px; overflow-x: auto; }
 
 /* ---- Exploration ---- */
 body.exploring #info { display: none; }
@@ -71,6 +71,7 @@ body.exploring #info { display: none; }
 #explore-root .ex-label b { color: var(--c, #ffcf5a); margin-right: 4px; font-size: 12px; }
 #explore-root .ex-label s { text-decoration: none; color: #ffcf5a; margin-right: 3px; }
 #explore-root .ex-label.rare { background: rgba(70, 46, 4, 0.92); box-shadow: 0 0 10px rgba(255, 207, 90, 0.8); }
+#explore-root .ex-label.off { opacity: 0.82; border-style: dashed; }
 #explore-root .ex-label.sel { box-shadow: 0 0 0 2px #fff, 0 0 12px var(--c, #ffcf5a); }
 #explore-root .ex-label.obj { --c: #8a6f44; color: #e8d9b4; font-size: 10px; }
 #explore-root .ex-label.obj.open { --c: #ffcf5a; color: #ffcf5a; }

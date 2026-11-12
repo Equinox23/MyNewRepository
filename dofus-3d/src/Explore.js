@@ -208,7 +208,6 @@ export class Explore {
     this.card = null;
     if (!same) { this.hp = {}; this.pos = null; }
     this.map3d.rebuild(this.z.mapId);
-    this.scene3d.resetCamera();
     const all = loadAll();
     this.state = all[this.z.combatId] || { groups: [], seq: 1, wins: 0 };
     this._layout();
@@ -234,6 +233,22 @@ export class Explore {
     this.root.style.display = '';
     this._build3d();
     this._renderUi();
+    this._frameCamera();
+  }
+
+  // Telephone tenu debout : la carte ne tient pas en largeur, la camera
+  // recule un peu et suit le heros. En paysage, toute la carte est visible.
+  _follows() { return window.innerHeight > window.innerWidth; }
+  _frameCamera() {
+    const s = this.scene3d;
+    s.resetCamera();
+    if (this._follows()) {
+      s.distance = 27;
+      s.target.x = this.pos.c;
+      s.target.z = this.pos.r;
+      s._clampTarget();
+    }
+    s.updateCamera();
   }
 
   // Retire tout ce que l exploration a pose dans la scene.
@@ -433,8 +448,8 @@ export class Explore {
     for (const o of this.objects) {
       o.mesh = o.kind === 'gate' ? buildGate(pr.dungeonOpen) : o.kind === 'camp' ? buildCampfire() : buildChest();
       o.mesh.position.set(o.c, 0.05, o.r);
-      // Le portail fait face a l ouest (vers l entree de la region).
-      if (o.kind === 'gate') o.mesh.rotation.y = -Math.PI / 2;
+      // Le portail fait face a la camera.
+      if (o.kind === 'gate') o.mesh.rotation.y = Math.PI / 4;
       if (o.kind === 'chest') o.mesh.rotation.y = -Math.PI / 4;
       scene.add(o.mesh);
     }
@@ -626,6 +641,7 @@ export class Explore {
         l.el.innerHTML = `${t.rare ? '<s>&#9733;</s>' : ''}<b>x${info.comp.length}</b>Niv. ${info.range}`;
         l.el.classList.toggle('sel', !!(this.card && this.card.thing === t));
       }
+      l.w = 0;
     }
   }
 
@@ -857,7 +873,6 @@ export class Explore {
       msgs.push(res && res.fled ? 'Tu as fui : retour au camp, equipe soignee.' : 'Equipe vaincue... Retour au camp, tout le monde est soigne.');
     }
     this._save();
-    this.scene3d.resetCamera();
     this._show();
     if (msgs.length) this.toast(msgs.join('<br>'), 2600 + msgs.length * 1400);
   }
@@ -897,12 +912,27 @@ export class Explore {
       }
     }
     if (this.covered) return;
-    this.scene3d.setInsets(this._insets[0], this._insets[1]);
-    // Etiquettes flottantes au-dessus des groupes et des decors.
+    const s = this.scene3d;
+    s.setInsets(this._insets[0], this._insets[1]);
+    // La camera accompagne le heros pendant qu il marche.
+    if (this._running && this.lead && this._follows()) {
+      const k = Math.min(1, dt * 3.5), p = this.lead.group.position;
+      s.target.x += (p.x - s.target.x) * k;
+      s.target.z += (p.z - s.target.z) * k;
+      s.updateCamera();
+    }
+    // Etiquettes flottantes au-dessus des groupes et des decors. Hors de
+    // l ecran, elles restent collees au bord : on sait ou aller.
+    const w = window.innerWidth, h = window.innerHeight;
+    const y0 = this._insets[0] + 30, y1 = h - this._insets[1] - 6;
     for (const l of this._labels || []) {
       l.v.set(l.thing.c, l.y, l.thing.r);
-      const p = this.scene3d.worldToScreen(l.v);
-      l.el.style.transform = `translate(${Math.round(p.x)}px, ${Math.round(p.y)}px) translate(-50%, -100%)`;
+      const p = s.worldToScreen(l.v);
+      const hw = (l.w || (l.w = l.el.offsetWidth / 2 || 40)) + 4;
+      const x = Math.max(hw, Math.min(w - hw, p.x)), y = Math.max(y0, Math.min(y1, p.y));
+      const off = x !== p.x || y !== p.y;
+      if (off !== l.off) { l.off = off; l.el.classList.toggle('off', off); }
+      l.el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
     }
   }
 }

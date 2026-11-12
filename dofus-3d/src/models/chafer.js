@@ -35,7 +35,7 @@ export function buildChafer(opts = {}) {
   const eyeCore = new THREE.MeshBasicMaterial({ color: new THREE.Color(eyeHex).lerp(new THREE.Color(0xffffff), 0.7) });
   const haloMat = new THREE.MeshBasicMaterial({ color: eyeHex, transparent: true, opacity: 0.3 });
   const cHole = vcol(0x1a1420, BONE);
-  const cTooth = vcol(0xfffaf0, BONE);
+  const cTooth = [1.04, 1.05, 1.08];
   const cShade = vcol(0xc9bc98, BONE);
 
   // Lambeau de tissu : bas dechiquete, leger galbe.
@@ -88,7 +88,7 @@ export function buildChafer(opts = {}) {
     const k = 0.93 + 0.07 * rib;
     out.set(x * k, y + 0.86, z * k - 0.02);
     return mix(cHole, mix(cShade, [1, 1, 1], sstep(-0.6, 0.6, d.y + d.z * 0.5)), rib);
-  }, boneV, 52, 52);
+  }, boneV, 48, 72);
   torso.add(ribs);
   // Capuche / col en lambeaux autour du cou.
   const cowl = sheet((u, v, out) => {
@@ -100,7 +100,7 @@ export function buildChafer(opts = {}) {
   }, 42, 6, 0.014, cloth, { color: (u, v) => { const k = 1 - 0.28 * v * v; return [k, k, k]; } });
   torso.add(cowl);
   // Pagne : ceinture + lambeaux devant et derriere.
-  torso.add(loft([[0.585, 0.15, 0.105], [0.61, 0.16, 0.112], [0.635, 0.15, 0.105]], wood, { segs: 18, sub: 3 }));
+  torso.add(loft([[0.575, 0.165, 0.11], [0.61, 0.185, 0.122], [0.645, 0.165, 0.11]], wood, { segs: 18, sub: 3 }));
   const front = rag(0.2, 0.32, { teeth: 2, phase: 0.25, jag: 0.4, curve: 0.03, flare: 0.03 });
   front.position.set(0, 0.6, 0.095);
   torso.add(front);
@@ -228,7 +228,7 @@ export function buildChafer(opts = {}) {
     if (d.z > 0.25 && y < -0.105) {
       const gap = 1 - sstep(0.08, 0.3, Math.abs(Math.sin(Math.atan2(d.x, d.z) * 5)));
       const edge = sstep(-0.105, -0.12, y);
-      col = mix(col, mix(cTooth, cHole, gap), edge * sstep(0.25, 0.4, d.z));
+      col = mix(col, mix(cTooth, cHole, Math.max(gap, 1 - sstep(0.0, 0.012, -0.112 - y) )), edge * sstep(0.25, 0.4, d.z));
     }
     out.set(x, y, z);
     return col;
@@ -236,27 +236,38 @@ export function buildChafer(opts = {}) {
   head.add(skull);
   // Machoire inferieure (dents peintes).
   const jaw = paintSphere((d, out) => {
-    out.set(d.x * 0.15 * (1 - 0.22 * Math.max(0, d.z)), d.y * 0.052 + 0.012 * d.z, d.z * 0.155);
-    if (d.z > 0.2 && d.y > 0.25) {
+    out.set(d.x * 0.152 * (1 - 0.2 * Math.max(0, d.z)), d.y * 0.075 + 0.01 * d.z, d.z * 0.16);
+    if (d.z > 0.15 && d.y > 0.05 && d.y < 0.75) {
       const gap = 1 - sstep(0.08, 0.3, Math.abs(Math.sin(Math.atan2(d.x, d.z) * 5 + 1.57)));
-      return mix(cTooth, cHole, gap);
+      return mix(cTooth, cHole, Math.max(gap, 1 - sstep(0.05, 0.13, d.y)));
     }
     return mix(cShade, [1, 1, 1], sstep(-0.5, 0.5, d.y));
-  }, boneV, 40, 24);
-  jaw.position.set(0, -0.245, 0.04);
-  jaw.rotation.x = 0.1;
+  }, boneV, 40, 28);
+  jaw.position.set(0, -0.262, 0.045);
+  jaw.rotation.x = 0.12;
   head.add(jaw);
+  // Orbites et nez : fonds sombres nets poses dans les creux peints.
+  const holeMat = M(0x1a1420, { r: 1 });
+  for (const s of [-1, 1]) {
+    head.add(mark(mesh(new THREE.SphereGeometry(1, 18, 12), holeMat, [s * 0.107, 0.006, 0.203], [0.082, 0.066, 0.03], [0, s * 0.42, s * 0.39])));
+  }
+  const noseHole = mark(sculptSphere((d, out) => {
+    const t = (d.y + 1) / 2;
+    out.set(d.x * 0.034 * (1 - 0.75 * t * t) , d.y * 0.036, d.z * 0.014);
+  }, holeMat, 12, 10));
+  noseHole.position.set(0, -0.092, 0.232);
+  head.add(noseHole);
   // Flammes dans les orbites.
   for (const s of [-1, 1]) {
     const e = new THREE.Mesh(new THREE.SphereGeometry(0.036, 12, 10), eyeMat);
-    e.position.set(s * 0.1, 0.0, 0.205);
+    e.position.set(s * 0.104, 0.002, 0.218);
     e.scale.set(1, 1.15, 0.6);
     head.add(e);
     const c = new THREE.Mesh(new THREE.SphereGeometry(0.016, 8, 6), eyeCore);
-    c.position.set(s * 0.097, -0.004, 0.226);
+    c.position.set(s * 0.1, -0.002, 0.238);
     head.add(c);
     const h = new THREE.Mesh(new THREE.SphereGeometry(0.068, 12, 10), haloMat);
-    h.position.set(s * 0.1, 0.0, 0.2);
+    h.position.set(s * 0.104, 0.002, 0.215);
     h.scale.set(1, 1, 0.5);
     head.add(h);
   }

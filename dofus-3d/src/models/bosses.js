@@ -51,7 +51,7 @@ export function buildKwakwa() {
   const darkW = M(DARK, { r: 0.8 });
   const mkTint = () => { const m = M(0xff7a2a, { r: 0.55, emissive: 0x6a2a08, ei: 0.6 }); m.name = 'elementTint'; return m; };
   const mkTintLt = () => { const m = M(0xffc06a, { r: 0.55, emissive: 0x6a3a08, ei: 0.4 }); m.name = 'elementTintLt'; return m; };
-  const tint = mkTint(), tintV = mkTint(), tintLt = mkTintLt(), tintLtW = mkTintLt();
+  const tint = mkTint(), tintV = mkTint(), tintLt = mkTintLt();
   const beak = M(0xf6c02c, { r: 0.4 });
   const legMat = M(0xe0962a, { r: 0.6 });
   const claw = M(0x3a2a20, { r: 0.4 });
@@ -87,9 +87,12 @@ export function buildKwakwa() {
   }, darkV, 48, 40);
   bodyG.add(body);
   // Plastron de plumes clair.
-  const bib = woolBlob(0.25, tintLtW, { lobes: 12, amp: 0.22, scale: [1.02, 1.3, 0.5], seed: 6, shade: 0.22, ws: 44, hs: 32 });
-  bib.position.set(0, 0.64, 0.22);
-  bib.rotation.x = -0.08;
+  const bib = sculptSphere((d, out) => {
+    const up = Math.max(0, d.y);
+    out.set(d.x * 0.26 * (1 - 0.25 * up), d.y * 0.33, d.z * 0.16);
+  }, mkTintLt(), 28, 22);
+  bib.position.set(0, 0.63, 0.215);
+  bib.rotation.x = -0.1;
   bodyG.add(bib);
   // Queue en eventail : rectrices sombres sur plumes teintees.
   const fan = (len, wid, mat, n, zoff) => {
@@ -126,7 +129,7 @@ export function buildKwakwa() {
   }
   // Collerette de plumes-flammes autour du cou.
   const ruff = woolBlob(0.17, tintLt, { lobes: 12, amp: 0.34, scale: [1.45, 0.55, 1.35], seed: 3, shade: 0.2, ws: 44, hs: 26 });
-  ruff.position.set(0, 1.035, -0.02);
+  ruff.position.set(0, 1.04, -0.05);
   ruff.rotation.x = 0.32;
   bodyG.add(ruff);
   // Aura elementaire (anneau flottant).
@@ -247,7 +250,7 @@ export function buildMinotoror() {
   group.add(back);
   // Criniere sombre sur la nuque et les epaules.
   const mane = woolBlob(0.25, furDk, { lobes: 16, amp: 0.34, scale: [1.5, 0.75, 0.95], seed: 12, shade: 0, ws: 48, hs: 30 });
-  mane.position.set(0, 1.13, -0.07);
+  mane.position.set(0, 1.17, -0.07);
   mane.rotation.x = -0.25;
   group.add(mane);
 
@@ -283,7 +286,7 @@ export function buildMinotoror() {
 
   // ---- Tete de taureau (pivot au cou) ----
   const head = new THREE.Group();
-  head.position.set(0, 1.12, 0.07);
+  head.position.set(0, 1.19, 0.1);
   const skull = paintSphere((d, out) => {
     const low = Math.max(0, -d.y);
     let x = d.x * 0.265 * (1 - 0.18 * low), y = d.y * 0.245, z = d.z * 0.23;
@@ -301,14 +304,14 @@ export function buildMinotoror() {
   head.add(skull);
   // Naseaux, anneau d or, moue.
   for (const s of [-1, 1]) {
-    head.add(mark(mesh(new THREE.SphereGeometry(0.032, 10, 8), dark, [s * 0.075, 0.13, 0.372], [1.1, 0.75, 0.5], [0.2, s * 0.35, s * 0.3])));
+    head.add(mark(mesh(new THREE.SphereGeometry(0.032, 10, 8), dark, [s * 0.078, 0.16, 0.378], [1.1, 0.75, 0.5], [0.2, s * 0.35, s * 0.3])));
   }
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.014, 8, 20), gold);
-  ring.position.set(0, 0.055, 0.375);
+  ring.position.set(0, 0.095, 0.395);
   ring.rotation.x = 0.15;
   ring.castShadow = true;
   head.add(ring);
-  head.add(mark(tubeAlong([[-0.14, 0.03, 0.27], [-0.075, 0.04, 0.345], [0, 0.046, 0.365], [0.075, 0.04, 0.345], [0.14, 0.03, 0.27]], t => 0.011 * (0.4 + 0.6 * Math.sin(Math.PI * t)), dark, { steps: 14, segs: 6 })));
+  head.add(mark(tubeAlong([[-0.15, 0.075, 0.275], [-0.08, 0.06, 0.35], [0, 0.066, 0.372], [0.08, 0.06, 0.35], [0.15, 0.075, 0.275]], t => 0.011 * (0.4 + 0.6 * Math.sin(Math.PI * t)), dark, { steps: 14, segs: 6 })));
   // Petits yeux rouges sous l arcade.
   const eyes = addEyes(head, { x: 0, y: 0.31, z: 0.205, size: 0.062, spacing: 0.215, turn: 0.35, iris: 0xe0281e, lid: 0x4a2a16, angry: true });
   for (const e of eyes) e.traverse(o => { o.userData.noOutline = true; });
@@ -316,7 +319,7 @@ export function buildMinotoror() {
     // Sourcils epais.
     head.add(mark(limb([[s * 0.035, 0.365, 0.245], [s * 0.1, 0.4, 0.235], [s * 0.185, 0.41, 0.18]], 0.026, 0.018, furDk, { steps: 10, segs: 8, cap: 0.25 })));
     // Grandes cornes annelees.
-    head.add(spike([[s * 0.19, 0.4, -0.02], [s * 0.36, 0.44, -0.02], [s * 0.47, 0.58, 0.03], [s * 0.45, 0.76, 0.1]], 0.085, hornMat, {
+    head.add(spike([[s * 0.19, 0.4, -0.02], [s * 0.36, 0.44, -0.02], [s * 0.47, 0.57, 0.03], [s * 0.45, 0.72, 0.1]], 0.085, hornMat, {
       steps: 30, segs: 12, pow: 0.65, shade: t => (t > 0.72 ? 0.55 : 1) - 0.14 * Math.max(0, Math.sin(t * 30)) * (1 - t),
     }));
     // Oreilles en feuille.

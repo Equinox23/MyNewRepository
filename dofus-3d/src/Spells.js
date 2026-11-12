@@ -638,10 +638,10 @@ export const SPELLS = {
     apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
     effects: [
-      { type: 'damage', min: 15, max: 55 },
+      { type: 'damage', min: 15, max: 45 },
       { type: 'debuff_pa', value: 1, chance: 0.25, turns: 3 },
     ],
-    desc: 'Coup de griffe tres aleatoire (15-55), 25% de chance de retirer 1 PA pendant 3 tours.',
+    desc: 'Coup de griffe tres aleatoire (15-45), 25% de chance de retirer 1 PA pendant 3 tours.',
   },
   pileOuFace: {
     id: 'pileOuFace', name: 'Pile ou Face', short: 'PF', icon: ICON_COIN,
@@ -657,8 +657,9 @@ export const SPELLS = {
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
     cooldown: 3,
-    effects: [{ type: 'buff', damageMultRoll: [0.2, 0.8], veineOnLow: 1, duration: 2 }],
-    desc: 'La roue tourne : de +20% a +80% de degats pendant 2 tours, au hasard. Un mauvais tirage (moins de la moitie) donne 1 Veine en consolation.',
+    effects: [{ type: 'buff', damageMultRoll: [0.15, 0.65], veineOnLow: 1, duration: 1 }],
+    levels: { 3: { cooldown: 3, effects: [{ duration: 1 }] } },
+    desc: 'La roue tourne : de +15% a +65% de degats ce tour et le suivant, au hasard. Un mauvais tirage (moins de +40%) donne 1 Veine en consolation.',
   },
   bondDuFelin: {
     id: 'bondDuFelin', name: 'Bond du Felin', short: 'BF', icon: ICON_JUMP,
@@ -694,6 +695,8 @@ export const SPELLS = {
     target: 'self', area: { type: 'single' },
     cooldown: 4,
     effects: [{ type: 'buff', state: 'saoul', damageMult: 0.3, shield: 0.25, bonusPm: -1, duration: 2 }],
+    // Le cycle Saoul / a jeun garde le meme rythme a tous les niveaux.
+    levels: { 3: { cooldown: 4, effects: [{ duration: 2 }] } },
     desc: 'Le Pandawa s enivre (etat SAOUL, 2 tours) : +30% degats, -25% degats subis, mais -1 PM. Saoul, il peut cracher son Souffle Alcoolise mais ne peut plus utiliser Karcham ni Vulnerabilite.',
   },
   tirPandatak: {
@@ -870,6 +873,7 @@ export const SPELLS = {
     target: 'enemy', area: { type: 'single' },
     cooldown: 2,
     effects: [{ type: 'buff', state: 'vampirique', drain: 0.3, duration: 2 }],
+    levels: { 3: { cooldown: 2, effects: [{ duration: 2 }] } },
     desc: 'Marque un ennemi pendant 2 tours : chaque allie (et la fee) qui le frappe recupere 30% des degats infliges en PV. Les degats de l equipe deviennent des soins.',
   },
   motDeRegeneration: {
@@ -1120,6 +1124,7 @@ export const SPELLS = {
     target: 'enemy', area: { type: 'single' },
     cooldown: 2, forbids: 'saoul',
     effects: [{ type: 'buff', vuln: 20, duration: 2 }],
+    levels: { 3: { cooldown: 2, effects: [{ duration: 2 }] } },
     desc: 'Souille un ennemi : il subit +20% de degats de toute l equipe pendant 2 tours. Impossible en etant Saoul.',
   },
   stabilisation: {

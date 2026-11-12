@@ -54,7 +54,7 @@ export function fighterStates(f) {
   for (const [key, n] of Object.entries(f.stacks || {})) {
     const st = CLASS_STACKS[key];
     if (!st || !n) continue;
-    out.push({ key: st.icon, label: `${st.label} ${n}/${st.max} : ${st.hint}`, color: st.color, turns: null, count: n });
+    out.push({ key: 'stack_' + key, icon: st.icon, label: `${st.label} ${n}/${st.max} : ${st.hint}`, color: st.color, turns: null, count: n });
   }
   if (f._carriedBy && f._carriedBy.alive && f._carriedBy._carried === f) {
     out.push({ key: 'carried', label: `Porte par ${f._carriedBy.name}`, color: '#ffcf5a', turns: null });
@@ -69,7 +69,7 @@ export function fighterStates(f) {
       if (b.shield) bits.push(`-${Math.round(b.shield * 100)}% degats subis`);
       if (b.bonusPm) bits.push(`${b.bonusPm > 0 ? '+' : ''}${b.bonusPm} PM`);
       if (st.hint) bits.push(st.hint);
-      out.push({ key: st.icon, label: `${st.label}${bits.length ? ' : ' + bits.join(', ') : ''}`, color: st.color, turns: turnsOf(b) });
+      out.push({ key: 'state_' + b.state, icon: st.icon, label: `${st.label}${bits.length ? ' : ' + bits.join(', ') : ''}`, color: st.color, turns: turnsOf(b) });
       continue;
     }
     if (b.vuln) push('vuln', `Vulnerable : +${b.vuln}% degats subis`, '#b46ae8', b);
@@ -95,6 +95,6 @@ export function fighterStates(f) {
 
 export function statesHtml(f, size = 13, max = 8) {
   return fighterStates(f).slice(0, max).map(st =>
-    `<span class="st" title="${st.label}${st.turns !== null ? ` (${st.turns}t)` : ''}">${stateIcon(st.key, st.color, size)}${st.count || st.turns ? `<b>${st.count || st.turns}</b>` : ''}</span>`
+    `<span class="st" title="${st.label}${st.turns !== null ? ` (${st.turns}t)` : ''}">${stateIcon(st.icon || st.key, st.color, size)}${st.count || st.turns ? `<b>${st.count || st.turns}</b>` : ''}</span>`
   ).join('');
 }
