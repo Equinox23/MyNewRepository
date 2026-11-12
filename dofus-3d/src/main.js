@@ -1,3 +1,4 @@
+import { showTutorial } from './Tutorial.js';
 import { Scene3D } from './Scene3D.js';
 import { Map3D, MAP_SIZE } from './Map3D.js';
 import { Picker } from './Picker.js';
@@ -95,6 +96,16 @@ const menu = new Menu(selection => {
   document.body.style.cursor = POINTER_CURSOR;
   if (selection.adventure) {
     startAdventure(selection);
+  } else if (selection.practice) {
+    run = null;
+    game.setup({
+      playerClasses: selection.playerClasses,
+      enemyComposition: ['bouftou', 'bouftou', 'boufton'],
+      mapId: 'foret',
+      monsterLevel: 1,
+      practice: true,
+    });
+    showTutorial(selection.playerClasses[0]);
   } else {
     run = null;
     game.setup({
