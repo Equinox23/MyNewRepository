@@ -756,7 +756,7 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 16, max: 22 }],
+    effects: [{ type: 'damage', min: 20, max: 28 }],
     desc: 'Coup de lance discipline au corps a corps.',
   },
   coupDeLanceRoyal: {
@@ -1192,6 +1192,15 @@ export const SPELLS = {
     effects: [{ type: 'damage', min: 10, max: 16 }, { type: 'state', rooted: true, duration: 2 }],
     desc: 'Des racines de pierre jaillissent (rayon 1) : degats et les ennemis touches sont ENRACINES 2 tours (ni marche ni deplacement).',
   },
+  etreinteDePierre: {
+    id: 'etreinteDePierre', name: 'Etreinte de Pierre', short: 'EP', icon: ICON_FIST,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 5 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'damage', min: 8, max: 12 }, { type: 'state', rooted: true, duration: 1 }],
+    desc: 'Des mains de roche jaillissent du sol : 8-12 degats et la cible est enracinee 1 tour.',
+  },
   eboulement: {
     id: 'eboulement', name: 'Eboulement', short: 'EB', icon: ICON_ROCK_THROW,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
@@ -1235,6 +1244,15 @@ export const SPELLS = {
     cooldown: 2,
     effects: [{ type: 'charge' }, { type: 'damage', min: 34, max: 46 }, { type: 'knockback', distance: 2 }],
     desc: 'Le Minotoror charge en ligne droite jusqu a sa cible, la percute et la repousse.',
+  },
+  rueeMominotor: {
+    id: 'rueeMominotor', name: 'Ruee', short: 'RU', icon: ICON_HASTE,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 2, max: 4 }, needsLOS: true, lineOnly: true,
+    target: 'enemy', area: { type: 'single' },
+    cooldown: 2,
+    effects: [{ type: 'charge' }, { type: 'damage', min: 12, max: 18 }],
+    desc: 'Le Mominotor se rue en ligne droite sur sa cible et la percute.',
   },
   coupDeCorne: {
     id: 'coupDeCorne', name: 'Coup de Corne', short: 'CC', icon: ICON_BITE_ROYAL,

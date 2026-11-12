@@ -41,7 +41,7 @@ export const SPELL_ELEMENT = {
   motDEnvol: 'air', motDePrevention: 'boost', motInterdit: 'feu',
   frappeRocheuse: 'terre', poingLegendaire: 'terre', enracinement: 'terre', eboulement: 'terre',
   kwakElementaire: 'air', plumesTranchantes: 'air', souffleKwakwa: 'air',
-  chargeMinotoror: 'terre', coupDeCorne: 'terre', fureurMinotoror: 'boost', piegeSournois: 'terre',
+  chargeMinotoror: 'terre', rueeMominotor: 'terre', etreinteDePierre: 'terre', coupDeCorne: 'terre', fureurMinotoror: 'boost', piegeSournois: 'terre',
   criDeGuerre: 'boost', bulleDEau: 'eau', flecheOsseuse: 'neutre',
   bondBouftou: 'air', toisonRoyale: 'boost', bondDuWabbit: 'air', carotteMaudite: 'terre', terrierWabbit: 'boost',
   croassement: 'eau', soinDeLaMare: 'soin', deluge: 'eau', bondAquatique: 'air', envolTofu: 'boost',

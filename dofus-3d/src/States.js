@@ -60,6 +60,16 @@ export function fighterStates(f) {
     out.push({ key: 'carried', label: `Porte par ${f._carriedBy.name}`, color: '#ffcf5a', turns: null });
   }
   for (const b of f.buffs || []) {
+    // Phase 2 d un boss (cf. Game.aiCheckEnrage).
+    if (b.enrage) {
+      const bits = [];
+      if (b.damageMult) bits.push(`+${Math.round(b.damageMult * 100)}% degats`);
+      if (b.shield) bits.push(`-${Math.round(b.shield * 100)}% degats subis`);
+      if (b.bonusPa) bits.push(`+${b.bonusPa} PA`);
+      if (b.bonusPm) bits.push(`+${b.bonusPm} PM`);
+      out.push({ key: 'dmgUp', label: `${b.source}${bits.length ? ' : ' + bits.join(', ') : ''}`, color: '#ff4a2a', turns: null });
+      continue;
+    }
     if (b.permanent) continue;
     if (b.state && CLASS_STATES[b.state]) {
       const st = CLASS_STATES[b.state];
