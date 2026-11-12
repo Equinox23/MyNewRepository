@@ -2,7 +2,7 @@
 // Met tout le jeu en cache a la premiere visite : ensuite il se lance
 // meme sans connexion. A chaque nouvelle version (empreinte VERSION),
 // le nouveau cache remplace l ancien.
-const VERSION = 'a0e1987083';
+const VERSION = 'f59f1fe1a4';
 const CACHE = 'dofus3d-' + VERSION;
 const FILES = [
   "./",

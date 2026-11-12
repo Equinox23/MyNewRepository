@@ -1279,7 +1279,7 @@ export class Hud {
         this.spellBar.appendChild(box);
         groups.set(grp, box.querySelector('.sg-btns'));
       }
-      const shortName = grp === 'summon' ? spell.name.replace(/^Invocation (de la |de |du |d')/i, '') : spell.name;
+      const shortName = spell.name;
       const btn = document.createElement('button');
       btn.className = 'spell sg-' + grp;
       btn.style.setProperty('--sg', G.color);

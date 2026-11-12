@@ -17,6 +17,7 @@ const ICONS = {
   pmDown: (c) => `<path d="M8 2 L14 13 H2 Z" fill="${c}"/><path d="M5.5 9 H10.5" stroke="#fff" stroke-width="1.7"/>`,
   reflect: (c) => `<circle cx="8" cy="8" r="5.5" fill="none" stroke="${c}" stroke-width="2"/><path d="M5 8 H11 M9 6 L11 8 L9 10" stroke="${c}" stroke-width="1.5" fill="none"/>`,
   crit: (c) => `<circle cx="5.5" cy="5.5" r="3" fill="${c}"/><circle cx="10.5" cy="5.5" r="3" fill="${c}"/><circle cx="5.5" cy="10.5" r="3" fill="${c}"/><circle cx="10.5" cy="10.5" r="3" fill="${c}"/>`,
+  prey: (c) => `<circle cx="8" cy="8" r="5" fill="none" stroke="${c}" stroke-width="2"/><path d="M8 1 V5 M8 11 V15 M1 8 H5 M11 8 H15" stroke="${c}" stroke-width="2"/><circle cx="8" cy="8" r="1.6" fill="${c}"/>`,
   agile: (c) => `<path d="M2 11 Q6 3 14 4 M9 2 L14 4 L11 8.5" stroke="${c}" stroke-width="2" fill="none" stroke-linecap="round"/>`,
   element: (c) => `<circle cx="8" cy="8" r="5.5" fill="${c}" stroke="#222" stroke-width="1"/><circle cx="6.5" cy="6.5" r="1.8" fill="#fff" opacity="0.6"/>`,
 };
@@ -48,6 +49,7 @@ export function fighterStates(f) {
     if (b.dot) push('poison', `Poison ${b.dot.min}-${b.dot.max}`, '#b46ae8', b);
     if (b.rooted) push('rooted', 'Enracine', '#c8a060', b);
     else if (b.stabilized) push('stabilized', 'Stabilise', '#d8c8a0', b);
+    if (b.prey) push('prey', 'Proie : ciblee par les invocations (+25% degats)', '#ff5a3a', b);
     if (b.invisible) push('invisible', 'Invisible', '#c8d8ff', b);
     if (b.shield) push('shield', `-${Math.round(b.shield * 100)}% degats subis`, '#5ab8ff', b);
     if (b.damageMult > 0) push('dmgUp', `+${Math.round(b.damageMult * 100)}% degats`, '#ff7a3a', b);

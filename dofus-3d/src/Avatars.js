@@ -11,6 +11,7 @@ const FRAME = {
   pandawa: { y: 1.0, dist: 2.5, height: 1.25 },
   eniripsa: { y: 0.95, dist: 2.4, height: 1.15 },
   bouftouInvoc: { y: 0.5, dist: 1.9, height: 0.75 },
+  tofuInvoc: { y: 0.4, dist: 1.8, height: 0.65 },
   wabbit: { y: 0.75, dist: 2.4, height: 1.0 },
   waWabbit: { y: 1.05, dist: 3.3, height: 1.4 },
   bombeRoublard: { y: 0.35, dist: 1.6, height: 0.6 },
