@@ -301,14 +301,14 @@ export function buildMinotoror() {
   head.add(skull);
   // Naseaux, anneau d or, moue.
   for (const s of [-1, 1]) {
-    head.add(mark(mesh(new THREE.SphereGeometry(0.032, 10, 8), dark, [s * 0.075, 0.125, 0.405], [1.1, 0.75, 0.5], [0.2, s * 0.35, s * 0.3])));
+    head.add(mark(mesh(new THREE.SphereGeometry(0.032, 10, 8), dark, [s * 0.075, 0.13, 0.372], [1.1, 0.75, 0.5], [0.2, s * 0.35, s * 0.3])));
   }
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.055, 0.014, 8, 20), gold);
-  ring.position.set(0, 0.06, 0.415);
+  ring.position.set(0, 0.055, 0.375);
   ring.rotation.x = 0.15;
   ring.castShadow = true;
   head.add(ring);
-  head.add(mark(tubeAlong([[-0.13, 0.035, 0.31], [-0.07, 0.05, 0.385], [0, 0.058, 0.4], [0.07, 0.05, 0.385], [0.13, 0.035, 0.31]], t => 0.011 * (0.4 + 0.6 * Math.sin(Math.PI * t)), dark, { steps: 14, segs: 6 })));
+  head.add(mark(tubeAlong([[-0.14, 0.03, 0.27], [-0.075, 0.04, 0.345], [0, 0.046, 0.365], [0.075, 0.04, 0.345], [0.14, 0.03, 0.27]], t => 0.011 * (0.4 + 0.6 * Math.sin(Math.PI * t)), dark, { steps: 14, segs: 6 })));
   // Petits yeux rouges sous l arcade.
   const eyes = addEyes(head, { x: 0, y: 0.31, z: 0.205, size: 0.062, spacing: 0.215, turn: 0.35, iris: 0xe0281e, lid: 0x4a2a16, angry: true });
   for (const e of eyes) e.traverse(o => { o.userData.noOutline = true; });
