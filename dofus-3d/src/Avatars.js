@@ -94,9 +94,29 @@ export function getAvatar(classId, size = 64, frameOverride = null, items = null
   const { renderer, scene, camera } = ensureShared(size);
   const vr = VARIANTS[classId];
   const vf = vr && FRAME[vr.base] && { y: FRAME[vr.base].y * vr.scale, dist: FRAME[vr.base].dist * vr.scale, height: FRAME[vr.base].height * vr.scale };
-  const frame = frameOverride || FRAME[classId] || vf || { y: 0.7, dist: 2.4, height: 0.9 };
-
   const model = builder();
+  // Cadrage automatique d apres la taille reelle du modele (les tables
+  // FRAME / BUST ne servent plus que de repli).
+  let frame = frameOverride || FRAME[classId] || vf || { y: 0.7, dist: 2.4, height: 0.9 };
+  try {
+    model.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(model);
+    const H = box.max.y - Math.max(0, box.min.y);
+    const W = Math.max(box.max.x - box.min.x, box.max.z - box.min.z);
+    const anchors = model.userData && model.userData.anchors;
+    if (isFinite(H) && H > 0.1) {
+      if (frameOverride && anchors && anchors.head) {
+        const hp = new THREE.Vector3();
+        anchors.head.getWorldPosition(hp);
+        const hr = anchors.hr || 0.25;
+        const top = Math.max(0, box.max.y - (hp.y + hr * 2.3));
+        frame = { y: hp.y + hr * 0.95 + top * 0.3, dist: 1.38 + top * 0.75, height: 0.3 };
+      } else if (!frameOverride) {
+        frame = { y: Math.max(0, box.min.y) + H * 0.5, dist: Math.max(H, W * 1.05) * 1.42, height: H * 0.62 };
+      }
+    }
+  } catch (_) {}
+
   if (items && items.length) attachWearables(model, items);
   toonify(model, { width: 0.02, minRadius: 0.06 });
   // La camera est a 45 deg (axe +X+Z) : on tourne le modele (qui regarde

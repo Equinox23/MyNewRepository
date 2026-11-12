@@ -276,3 +276,22 @@ body.touch-ui #placement-ready { bottom: calc(var(--dock-h, 200px) + 14px) !impo
   body.touch-ui #cast-banner { max-width: 60vw; }
 }
 body.touch-ui .spell .sp-name.xlong { font-size: 6.3px; line-height: 6.4px; letter-spacing: -0.2px; }
+
+/* Jauge de classe (Puissance, Veine, Ferveur) a cote des PV / PA / PM. */
+.hud-gauge { display: flex; align-items: center; gap: 8px; }
+.hud-gauge:empty { display: none; }
+.hud-gauge .hg { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+.hud-gauge .hg b { font: 700 11px var(--d-font-title, sans-serif); color: var(--gc); margin-right: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+.hud-gauge .hg i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--gc); background: rgba(0, 0, 0, 0.45); box-sizing: border-box; display: block; }
+.hud-gauge .hg i.on { background: var(--gc); box-shadow: 0 0 5px var(--gc); }
+body.touch-ui .hud-gauge .hg b { display: none; }
+body.touch-ui .hud-gauge .hg i { width: 8px; height: 8px; }
+body.touch-ui #hud-stats .stat-row { flex-wrap: wrap; row-gap: 2px; }
+body.touch-ui .hud-gauge { flex-basis: 100%; }
+body.touch-ui .hud-gauge .hg b { display: inline; font-size: 9px; }
+@media (orientation: portrait) {
+  body.touch-ui .td-row { display: grid; grid-template-columns: auto minmax(48px, 1fr) auto; align-items: center; }
+  body.touch-ui #hud-stats { min-width: 0; max-width: 62vw; }
+  body.touch-ui #hud-stats .stat-row { max-width: 100%; }
+  body.touch-ui .hud-gauge { flex: 0 0 100%; min-width: 0; overflow: hidden; }
+}

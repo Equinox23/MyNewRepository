@@ -13,6 +13,7 @@ import { DUNGEONS, roomComposition, recordDungeonClear, REST_HEAL, REVIVE_HP } f
 import { DEFS } from './Fighter.js';
 import { chestLoot, addItems } from './Items.js';
 import { addXp } from './Leveling.js';
+import { Explore } from './Explore.js';
 
 // --- CURSEURS PERSONNALISES ---
 // Curseur de base : fleche doree style RPG (hotspot a la pointe = 3,2).
@@ -48,6 +49,8 @@ map3d.onRebuild(map3d.config, map3d);
 scene3d.setQuality(scene3d.quality, false);
 const picker = new Picker(scene3d, map3d);
 const rangeOverlay = new RangeOverlay(scene3d.scene, MAP_SIZE);
+// Teinte des cases adaptee au sol (eau / type de carte).
+rangeOverlay.ground = (c, r) => (map3d.isWater(c, r) ? 'water' : map3d.currentMapId);
 // Couche des glyphes / pieges (sous la surbrillance des portees).
 const zoneOverlay = new RangeOverlay(scene3d.scene, MAP_SIZE, 0.062);
 const hud = new Hud();
@@ -94,6 +97,13 @@ const menu = new Menu(selection => {
   menu.hide();
   scene3d.resetCamera();
   document.body.style.cursor = POINTER_CURSOR;
+  if (selection.explore) {
+    // Aventure : on entre dans la region, le heros s y promene librement.
+    run = null;
+    explore.enter(selection.explore.zone, selection.playerClasses);
+    audio.music('menu');
+    return;
+  }
   if (selection.adventure) {
     startAdventure(selection);
   } else if (selection.practice) {
@@ -119,11 +129,45 @@ const menu = new Menu(selection => {
   audio.music('combat');
 }, audio);
 
+// --- EXPLORATION D UNE REGION (monde ouvert) ---
+// Le joueur se promene sur la carte de la region et choisit ses combats.
+const explore = new Explore({
+  scene3d, map3d, picker, audio,
+  // Combat contre un groupe croise dans la region, sur la meme carte.
+  onFight: (cfg) => {
+    run = null;
+    scene3d.resetCamera();
+    game.setup({
+      playerClasses: cfg.playerClasses,
+      enemyComposition: cfg.enemyComposition,
+      combatId: cfg.combatId,
+      mapId: cfg.mapId,
+      carryHp: cfg.hp,
+      endLabel: 'CONTINUER',
+    });
+    audio.music('combat');
+  },
+  // Portail du donjon de la region.
+  onDungeon: (dungeonId, classes, zone) => {
+    startAdventure({ playerClasses: classes, adventure: { dungeonId }, zone });
+    audio.music('combat');
+  },
+  // Bouton "Carte" : retour a la carte du monde.
+  onLeave: () => { menu.mode = 'aventure'; menu.show(); audio.music('menu'); },
+  // Inventaire / grimoire par-dessus l exploration.
+  onOverlay: (view, done) => menu.openOverlay(view, done),
+});
+// Apres un donjon lance depuis une region, on y revient.
+function backToRegion(zone, classes) {
+  explore.enter(zone, classes, { keep: true });
+  audio.music('menu');
+}
+
 // --- MODE AVENTURE : enchainement des salles d un donjon ---
 let run = null;
 function startAdventure(selection) {
   const dungeon = DUNGEONS.find(d => d.id === selection.adventure.dungeonId) || DUNGEONS[0];
-  run = { dungeon, classes: selection.playerClasses.slice(), room: 0, hp: {} };
+  run = { dungeon, classes: selection.playerClasses.slice(), room: 0, hp: {}, zone: selection.zone };
   startRoom();
 }
 function startRoom() {
@@ -146,6 +190,13 @@ function startRoom() {
 // Fin de combat : salle suivante, coffre du donjon ou retour au menu.
 game.onEnd = () => {
   const res = game.lastResult;
+  // Combat d exploration : retour dans la region (groupe battu retire).
+  if (explore.fight) {
+    game.cleanup();
+    explore.endFight(res);
+    audio.music('menu');
+    return;
+  }
   if (run && res && res.winner === 'player') {
     const d = run.dungeon;
     if (run.room < d.rooms.length - 1) {
@@ -162,19 +213,33 @@ game.onEnd = () => {
     for (const cls of run.classes) addXp(cls, bonus, DEFS[cls].spellIds);
     game.cleanup();
     const title = d.name;
+    const back = run.zone != null ? { zone: run.zone, classes: run.classes } : null;
     run = null;
-    hud.showChest(title, items, bonus, () => { menu.show(); audio.music('menu'); });
+    hud.showChest(title, items, bonus, () => {
+      if (back) backToRegion(back.zone, back.classes);
+      else { menu.show(); audio.music('menu'); }
+    });
+    if (back) {
+      const b = document.querySelector('#end-overlay #btn-replay');
+      if (b) b.textContent = 'CONTINUER';
+    }
     return;
   }
+  const back = run && run.zone != null ? { zone: run.zone, classes: run.classes } : null;
   run = null;
   game.cleanup();
+  if (back) { backToRegion(back.zone, back.classes); return; }
   menu.show();
   audio.music('menu');
 };
 // Bouton "retour au menu" du HUD : abandonne le combat en cours.
 hud.on('onAbandon', () => {
+  const back = run && run.zone != null ? { zone: run.zone, classes: run.classes } : null;
   run = null;
   game.abandon();
+  // Fuite d un combat d exploration ou d un donjon : retour dans la region.
+  if (explore.fight) { explore.endFight({ winner: 'enemy', fled: true, heroes: [] }); audio.music('menu'); return; }
+  if (back) { backToRegion(back.zone, back.classes); return; }
   menu.show();
   audio.music('menu');
 });
@@ -212,7 +277,7 @@ canvas.addEventListener('pointerdown', (e) => {
     const id = e.pointerId, x = e.clientX, y = e.clientY;
     longPressTimer = setTimeout(() => {
       const p = pointers.get(id);
-      if (!p || p.moved || pointers.size !== 1) return;
+      if (!p || p.moved || pointers.size !== 1 || explore.active) return;
       const hit = picker.pick(x, y);
       const f = hit && game.fighters.find(ff => ff.alive && ff.c === hit.c && ff.r === hit.r && !(ff.invisible && ff.team !== 'player'));
       if (!f) return;
@@ -282,6 +347,7 @@ canvas.addEventListener('pointerup', (e) => {
     // Clic droit (sans drag) = annule la selection courante et revient
     // en mode "Deplacer". Le drag clic droit reste reserve a la rotation.
     if (p.button === 2 && p.pointerType === 'mouse') {
+      if (explore.active) { explore.closeCard(); return; }
       game.setMode('move');
       return;
     }
@@ -300,6 +366,10 @@ canvas.addEventListener('pointerleave', () => {
 });
 
 function handleHover(x, y) {
+  if (explore.active) {
+    canvas.style.cursor = explore.onHover(x, y) ? SWORD_CURSOR : POINTER_CURSOR;
+    return;
+  }
   if (game.busy) {
     picker.setHover(null);
     canvas.style.cursor = POINTER_CURSOR;
@@ -329,6 +399,7 @@ function handleHover(x, y) {
 }
 
 function handleTap(x, y, pointerType = 'mouse') {
+  if (explore.active) { explore.onTap(x, y); return; }
   if (game.busy || game.ended) return;
   const hit = picker.pick(x, y);
   const isTouch = pointerType && pointerType !== 'mouse';
@@ -365,6 +436,11 @@ document.addEventListener('keydown', (e) => {
 
   const key = e.key;
   const ctrl = e.ctrlKey || e.metaKey;
+  // En exploration, seul Echap sert (ferme la carte ouverte).
+  if (explore.active) {
+    if (key === 'Escape' || key === 'Esc') explore.closeCard();
+    return;
+  }
 
   if (key >= '1' && key <= '9') {
     e.preventDefault();
@@ -439,10 +515,11 @@ function loop(now) {
   vfx.update(dt);
   map3d.update(dt, now / 1000);
   ambience.update(Math.min(dt, 0.1), now / 1000);
+  explore.update(dt, now / 1000);
   watchPerformance(dt);
   hud.setDialAngle(scene3d.azimuth);
   // Pendant le menu, la camera tourne lentement autour de la foret.
-  if (menu.root && menu.root.style.display !== 'none' && !scene3d._snapping) {
+  if (menu.root && menu.root.style.display !== 'none' && !scene3d._snapping && !explore.inRegion) {
     scene3d.azimuth += dt * 0.06;
     scene3d.updateCamera();
   }
@@ -452,4 +529,4 @@ function loop(now) {
 requestAnimationFrame(loop);
 
 // Acces de debogage (console du navigateur / tests automatises).
-window.__dofus = { game, menu, hud, scene3d, map3d, ambience };
+window.__dofus = { game, menu, hud, scene3d, map3d, ambience, explore };

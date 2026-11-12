@@ -1,69 +1,43 @@
 import * as THREE from 'three';
+import { M, loft } from './kit.js';
 import { buildCrapaud } from './crapaud.js';
 
-// Crapaud Chef : un crapaud plus gros, vert plus sombre, avec un chapeau
-// haut-de-forme noir cercle d un ruban rouge.
+// Crapaud Chef : crapaud plus gros, vert sombre et couvert de verrues,
+// regard mauvais aux yeux orange, coiffe d un haut-de-forme cabosse a
+// ruban rouge et boucle doree pose de travers entre les yeux.
 export function buildCrapaudChef() {
   const group = new THREE.Group();
 
-  // Base : crapaud scale 1.4, teinte plus sombre.
-  const body = buildCrapaud();
+  const body = buildCrapaud({ chef: true });
   body.scale.setScalar(1.4);
-  body.traverse(o => {
-    if (!o.isMesh || !o.material || !o.material.color) return;
-    const c = o.material.color;
-    // Repere les verts du corps et les fonce.
-    if (c.r > 0.25 && c.g > 0.5 && c.b < 0.4) {
-      o.material = o.material.clone();
-      // Couleur courante = 0x4a8a3a ou 0x2f5a24 ou 0xccd66a (belly clair)
-      if (c.b < 0.30) {
-        // Vert principal -> plus sombre
-        o.material.color.setHex(0x356a26);
-      }
-    }
-  });
   group.add(body);
 
-  // Chapeau haut de forme : cylindre fin noir + bord large + ruban rouge.
   const hat = buildTopHat();
-  hat.position.y = 1.20;
+  hat.position.set(-0.03, 0.93, 0.16);
+  hat.rotation.set(-0.1, 0, 0.16);
   group.add(hat);
 
   return group;
 }
 
+// Haut-de-forme d une seule piece : bord releve, tube evase vers le haut.
 function buildTopHat() {
   const g = new THREE.Group();
-  const black = new THREE.MeshStandardMaterial({ color: 0x141416, roughness: 0.4, metalness: 0.1 });
-  const ribbon = new THREE.MeshStandardMaterial({ color: 0xc0392b, roughness: 0.5 });
-  const gold = new THREE.MeshStandardMaterial({ color: 0xd4a017, metalness: 0.55, roughness: 0.3 });
-
-  // Bord du chapeau (disque aplati)
-  const brim = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.04, 24), black);
-  brim.position.y = 0;
-  brim.castShadow = true;
+  const black = M(0x1c1a22, { r: 0.5 });
+  const brim = loft([
+    [0.0, 0.2, 0.2], [0.012, 0.31, 0.31], [0.035, 0.335, 0.335], [0.06, 0.325, 0.325], [0.065, 0.2, 0.2],
+  ], black, { segs: 28, sub: 3 });
   g.add(brim);
-
-  // Cylindre principal
-  const tube = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.36, 24), black);
-  tube.position.y = 0.20;
-  tube.castShadow = true;
+  const tube = loft([
+    [0.03, 0.2], [0.14, 0.195], [0.3, 0.215], [0.42, 0.25], [0.445, 0.245], [0.455, 0.18],
+  ], black, { segs: 28, sub: 4 });
   g.add(tube);
-
-  // Sommet (legerement bombe)
-  const top = new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.225, 0.04, 24), black);
-  top.position.y = 0.40;
-  g.add(top);
-
-  // Ruban rouge a la base
-  const rib = new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.225, 0.07, 24), ribbon);
-  rib.position.y = 0.06;
+  const rib = loft([[0.062, 0.207], [0.1, 0.205], [0.15, 0.203]], M(0xc0392b, { r: 0.6 }), { segs: 28, sub: 2 });
+  rib.userData.noOutline = true;
   g.add(rib);
-
-  // Boucle doree devant
-  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.03), gold);
-  buckle.position.set(0, 0.06, 0.22);
+  const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.085, 0.03), M(0xf2c230, { r: 0.3, m: 0.6 }));
+  buckle.position.set(0, 0.106, 0.2);
+  buckle.userData.noOutline = true;
   g.add(buckle);
-
   return g;
 }

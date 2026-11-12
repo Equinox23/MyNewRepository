@@ -1,16 +1,16 @@
 // ===========================================================================
 // Carte du monde (mode Aventure) : chaque region abrite une famille de
-// monstres, avec sa tranche de niveaux, ses rencontres (du groupe de
-// sbires au repaire des chefs) et son donjon. Le joueur compose son
-// equipe puis choisit librement ou aller combattre.
+// monstres, avec ses evolutions (une tranche de niveau chacune) et son
+// donjon. Le joueur compose son equipe, choisit une region et part
+// l explorer (Explore.js) : il s y promene et choisit ses combats.
 // But du jeu : vaincre les gardiens des 9 donjons.
 // ===========================================================================
 
-import { MONSTER_FAMILIES, COMBAT_FAMILY } from './Bestiary.js';
-import { DUNGEONS, dungeonClears, dungeonUnlocked } from './Adventure.js';
+import { MONSTER_FAMILIES, COMBAT_FAMILY, familyEvolutions, bandTierThresholds } from './Bestiary.js';
+import { DUNGEONS, dungeonClears } from './Adventure.js';
 import { DEFS } from './Fighter.js';
 import { getHero } from './Leveling.js';
-import { getBestTier } from './Progress.js';
+import { getBestBand } from './Progress.js';
 
 // Position des regions sur la carte, en % : [paysage x, y, portrait x, y].
 const ZONES = [
@@ -31,6 +31,16 @@ for (const z of ZONES) {
   z.dungeonIndex = DUNGEONS.indexOf(z.dungeon);
   z.minLevel = DEFS[z.members[0]].level;
   z.maxLevel = DEFS[z.members[3]].level;
+  z.mapId = MONSTER_FAMILIES[z.family].map;
+  // Tranches de niveau : une par evolution. La tranche k va du niveau de
+  // l evolution k a celui de la suivante (exclu).
+  const evo = familyEvolutions(z.family);
+  z.bands = evo.map((id, i) => {
+    const lv = DEFS[id].level, next = evo[i + 1] ? DEFS[evo[i + 1]].level - 1 : null;
+    return { index: i + 1, id, name: DEFS[id].name, level: lv,
+      range: next === null ? `${lv}+` : next > lv ? `${lv}-${next}` : `${lv}` };
+  });
+  z.tierThresholds = bandTierThresholds(z.family);
 }
 export const WORLD_ZONES = ZONES;
 
@@ -38,7 +48,26 @@ export function dungeonsCleared() {
   return DUNGEONS.filter(d => dungeonClears(d.id) > 0).length;
 }
 
-function diffInfo(diff) {
+// Avancement d une region : tranches vaincues, donjon ouvert / termine.
+// Le donjon s ouvre quand l avant-derniere tranche (les chefs) est battue.
+export function zoneProgress(z) {
+  const total = z.bands.length;
+  const best = getBestBand(z.combatId, z.tierThresholds);
+  const dungeonDone = dungeonClears(z.dungeon.id) > 0;
+  const dungeonOpen = dungeonDone || best >= total - 1;
+  return { total, best, dungeonOpen, dungeonDone, complete: dungeonDone && best >= total };
+}
+
+// Bandeau des evolutions : portrait + tranche de niveau, la tranche
+// atteinte est mise en avant, les suivantes sont grisees.
+export function bandStripHtml(z, monsterIcon, best = zoneProgress(z).best) {
+  return z.bands.map(b => {
+    const st = b.index <= best ? 'done' : b.index === best + 1 ? 'cur' : 'lock';
+    return `<span class="evo-i ${st}" title="${b.name}">${monsterIcon(b.id)}<i>Niv. ${b.range}</i>${st === 'done' ? '<u>&#10003;</u>' : ''}</span>`;
+  }).join('<span class="evo-arrow">&#9654;</span>');
+}
+
+export function diffInfo(diff) {
   if (diff <= -3) return { label: 'Facile', color: '#8fd0ff' };
   if (diff <= 1) return { label: 'Adapte', color: '#9ad85a' };
   if (diff <= 4) return { label: 'Difficile', color: '#ffcf5a' };
@@ -83,43 +112,37 @@ export function renderWorld(menu, h) {
 
   const nodes = ZONES.map((z, i) => {
     const d = diffInfo(z.minLevel - lv);
-    const done = dungeonClears(z.dungeon.id) > 0;
+    const pr = zoneProgress(z);
+    const done = pr.complete;
+    const pips = z.bands.map(b => `<i class="${b.index <= pr.best ? 'on' : ''}"></i>`).join('')
+      + `<i class="dg ${pr.dungeonDone ? 'on' : pr.dungeonOpen ? 'open' : ''}"></i>`;
     const x = portrait ? z.pos[2] : z.pos[0], y = portrait ? z.pos[3] : z.pos[1];
     return `<button class="wm-node${sel.zone === i ? ' sel' : ''}" data-zone="${i}" style="left:${x}%;top:${y}%;--ring:${d.color}">
       <span class="wm-face">${h.monsterIcon(z.members[0])}</span>
-      ${done ? '<span class="wm-done">&#10003;</span>' : ''}
+      ${done ? '<span class="wm-done">&#10003;</span>' : d.label === 'Tres dur' ? '<span class="wm-danger">!</span>' : ''}
       <span class="wm-name">${z.name.replace(/^.* (des|aux|du) /, '')}</span>
       <span class="wm-range">Niv. ${z.minLevel}-${z.maxLevel}</span>
+      <span class="wm-pips" title="Evolutions vaincues et donjon">${pips}</span>
     </button>`;
   }).join('');
 
-  let panel = '<div class="wm-hint">Compose ton equipe (1 a 3 heros), puis touche une region de la carte.</div>';
+  let panel = '<div class="wm-hint">Compose ton equipe (1 a 3 heros), puis touche une region de la carte pour partir l explorer.</div>';
   if (sel.zone !== null) {
     const z = ZONES[sel.zone];
     menu.selection.combatId = z.combatId;
-    const tiers = team.length ? menu.tierOptions() : [];
-    const best = getBestTier(z.combatId);
-    const dOpen = dungeonUnlocked(z.dungeonIndex);
-    const dd = diffInfo(z.dungeon.level - lv);
-    const tierBtns = tiers.map((t, i) => {
-      const n = i + 1;
-      const cls = [n <= best ? 'won' : '', !t.available ? 'locked' : '', sel.kind === 'tier' && sel.tier === n ? 'sel' : '', t.recommended ? 'rec' : ''].join(' ');
-      return `<button class="wm-tier ${cls}" data-tier="${n}" ${t.available ? '' : 'disabled'}>${n}</button>`;
-    }).join('');
-    let detail = '';
-    if (sel.kind === 'tier' && tiers[sel.tier - 1]) {
-      const t = tiers[sel.tier - 1];
-      detail = `<div class="wm-detail"><div class="wm-faces">${t.faces.map(id => h.monsterIcon(id)).join('')}</div><div><b>Rencontre ${sel.tier}</b><br>${t.desc}</div></div>`;
-    } else if (sel.kind === 'dungeon') {
-      detail = `<div class="wm-detail"><div class="wm-faces">${h.monsterIcon(z.dungeon.boss)}</div><div><b>${z.dungeon.name}</b><br>${z.dungeon.rooms.length} salles sans soin complet, boss ${DEFS[z.dungeon.boss].name} niv. ${z.dungeon.level} <span style="color:${dd.color}">(${dd.label})</span>. Un coffre attend au bout. ${z.dungeon.desc}</div></div>`;
-    }
+    const pr = zoneProgress(z);
+    const d = diffInfo(z.bands[Math.min(pr.best, pr.total - 1)].level - lv);
+    const boss = DEFS[z.dungeon.boss].name;
+    const dTxt = pr.dungeonDone ? `Donjon termine : ${boss} vaincu`
+      : pr.dungeonOpen ? `Donjon ouvert : va defier ${boss} (niv. ${z.dungeon.level})`
+      : `Donjon ferme : bats un groupe mene par ${z.bands[pr.total - 2].name} pour l ouvrir`;
     panel = `
       <div class="wm-ptitle">${z.name} <span>Niv. ${z.minLevel} a ${z.maxLevel}</span></div>
-      <div class="wm-evo">${z.members.filter((m, i, a) => a.indexOf(m) === i).map(id => `<span class="wm-evo-i">${h.monsterIcon(id)}<i>${DEFS[id].name}<br>niv. ${DEFS[id].level}</i></span>`).join('<span class="wm-arrow">&#9654;</span>')}</div>
-      <div class="wm-row"><span class="wm-rl">Rencontres</span><div class="wm-tiers">${tierBtns || '<i>Choisis au moins un heros</i>'}</div></div>
-      <div class="wm-row"><button class="wm-dungeon${sel.kind === 'dungeon' ? ' sel' : ''}" ${dOpen && team.length ? '' : 'disabled'}>
-        ${dOpen ? `Donjon : ${DEFS[z.dungeon.boss].name}${dungeonClears(z.dungeon.id) ? ' (vaincu)' : ''}` : 'Donjon verrouille : termine le donjon precedent'}</button></div>
-      ${detail}`;
+      <div class="wm-rl">Evolutions vaincues ${pr.best} / ${pr.total}</div>
+      <div class="wm-evo evo-strip">${bandStripHtml(z, h.monsterIcon, pr.best)}</div>
+      <div class="wm-detail"><div class="wm-faces">${h.monsterIcon(z.dungeon.boss)}</div><div><b>${dTxt}</b><br>
+        Promene-toi dans la region et choisis tes combats. Chaque evolution vaincue fait apparaitre la suivante.
+        <span style="color:${d.color}">Prochains groupes : ${d.label.toLowerCase()} pour ton equipe.</span></div></div>`;
   }
 
   menu.stageEl.innerHTML = `
@@ -137,27 +160,20 @@ export function renderWorld(menu, h) {
     sel.kind = null;
   });
   click('.wm-node', (b) => { sel.zone = +b.dataset.zone; sel.kind = null; });
-  click('.wm-tier', (b) => { sel.kind = 'tier'; sel.tier = +b.dataset.tier; });
-  click('.wm-dungeon', () => { sel.kind = 'dungeon'; });
 
   menu.backBtn.style.visibility = 'visible';
   menu.grimoireBtn.style.display = '';
-  const ready = team.length > 0 && sel.zone !== null && sel.kind;
+  const ready = team.length > 0 && sel.zone !== null;
   menu.nextBtn.style.display = ready ? '' : 'none';
-  menu.nextBtn.textContent = sel.kind === 'dungeon' ? 'ENTRER' : 'COMBATTRE';
+  menu.nextBtn.textContent = 'EXPLORER';
   menu.nextBtn.classList.add('fight');
   menu.nextBtn.classList.remove('primary');
 }
 
-// Lance le combat choisi sur la carte.
+// Entre dans la region choisie sur la carte (exploration libre).
 export function startFromWorld(menu) {
   const sel = menu.worldSel;
-  if (!sel || sel.zone === null || !sel.kind || !menu.selection.classIds.length) return false;
-  const z = ZONES[sel.zone];
-  if (sel.kind === 'dungeon') {
-    menu.onStart({ playerClasses: menu.selection.classIds.slice(), adventure: { dungeonId: z.dungeon.id } });
-  } else {
-    menu.onStart({ playerClasses: menu.selection.classIds.slice(), combatId: z.combatId, tier: sel.tier });
-  }
+  if (!sel || sel.zone === null || !menu.selection.classIds.length) return false;
+  menu.onStart({ playerClasses: menu.selection.classIds.slice(), explore: { zone: sel.zone } });
   return true;
 }

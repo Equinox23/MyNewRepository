@@ -954,6 +954,14 @@ export class Menu {
   }
 
   goBack() {
+    // Inventaire / grimoire ouverts depuis l exploration : on y retourne.
+    if (this.overlayClose && this.grimoireReturn === 'explore') {
+      const cb = this.overlayClose;
+      this.overlayClose = null;
+      this.hide();
+      cb();
+      return;
+    }
     if (this.view === 'grimoire' || this.view === 'inventory') {
       this.view = this.grimoireReturn || 'home';
       this.render();
@@ -1560,7 +1568,22 @@ export class Menu {
     // rafraichit les etoiles (la progression a pu changer apres un combat).
     // Apres un combat d aventure, on retrouve la carte du monde.
     this.view = this.mode === 'aventure' ? 'world' : 'home';
+    this.overlayClose = null;
     this.step = 0;
+    document.body.classList.add('in-menu');
+    this.render();
+    this.root.style.display = 'flex';
+  }
+
+  // Ouvre directement l inventaire ou le grimoire par-dessus l exploration
+  // d une region ; `onClose` est appele au retour.
+  openOverlay(view, onClose) {
+    if (!this.root) return;
+    this.overlayClose = onClose;
+    this.grimoireReturn = 'explore';
+    const cls = this.selection.classIds[0];
+    if (cls) { this.invClass = cls; this.grimoireClass = cls; }
+    this.view = view === 'grimoire' ? 'grimoire' : 'inventory';
     document.body.classList.add('in-menu');
     this.render();
     this.root.style.display = 'flex';

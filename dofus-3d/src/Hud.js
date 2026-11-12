@@ -4,6 +4,7 @@ import { spellIconFrame } from './SpellIcons.js';
 import { xpToNext, MAX_LEVEL, scaledSpell } from './Leveling.js';
 import { SPELLS } from './Spells.js';
 import { statesHtml } from './States.js';
+import { CLASS_STACKS } from './Spells.js';
 import { elementIcon, ELEMENT_LABEL, ELEMENT_CSS, damageElementOf, DAMAGE_ELEMENTS } from './Elements.js';
 import { itemIcon, RARITY, statLines } from './Items.js';
 
@@ -678,6 +679,7 @@ export class Hud {
         <div class="stat-icon stat-hp" title="Points de Vie">${heartSvg}<span class="value" id="hud-hp">-</span></div>
         <div class="stat-icon stat-pa" title="Points d Action">${starSvg}<span class="value" id="hud-pa">-</span></div>
         <div class="stat-icon stat-pm" title="Points de Mouvement">${arrowSvg}<span class="value" id="hud-pm">-</span></div>
+        <div class="hud-gauge" id="hud-gauge"></div>
       </div>
       <div class="buffs" id="hud-buffs"></div>
     `;
@@ -1617,6 +1619,17 @@ export class Hud {
       this.buffsEl.innerHTML = lines.join('  ');
     } else {
       this.buffsEl.innerHTML = '';
+    }
+
+    // Jauge de classe (Puissance, Veine, Ferveur...) : pastilles pleines / vides.
+    if (!this.gaugeEl) this.gaugeEl = document.getElementById('hud-gauge');
+    if (this.gaugeEl) {
+      const html = Object.entries(fighter.stacks || {}).filter(([k]) => CLASS_STACKS[k]).map(([k, n]) => {
+        const st = CLASS_STACKS[k];
+        const max = st.max || 5;
+        return `<span class="hg" style="--gc:${st.color || '#ffcf5a'}" title="${st.label} ${n}/${max}${st.hint ? ' : ' + st.hint : ''}"><b>${st.label}</b>${Array.from({ length: max }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
+      }).join('');
+      if (this._gaugeHtml !== html) { this._gaugeHtml = html; this.gaugeEl.innerHTML = html; }
     }
 
     const isPlayer = fighter.team === 'player';

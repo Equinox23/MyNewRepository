@@ -41,13 +41,15 @@ export const SPELL_ELEMENT = {
   motDEnvol: 'air', motDePrevention: 'boost', motInterdit: 'feu',
   frappeRocheuse: 'terre', poingLegendaire: 'terre', enracinement: 'terre', eboulement: 'terre',
   kwakElementaire: 'air', plumesTranchantes: 'air', souffleKwakwa: 'air',
-  chargeMinotoror: 'terre', coupDeCorne: 'terre', fureurMinotoror: 'boost', piegeSournois: 'terre',
+  chargeMinotoror: 'terre', rueeMominotor: 'terre', etreinteDePierre: 'terre', coupDeCorne: 'terre', fureurMinotoror: 'boost', piegeSournois: 'terre',
   criDeGuerre: 'boost', bulleDEau: 'eau', flecheOsseuse: 'neutre',
   bondBouftou: 'air', toisonRoyale: 'boost', bondDuWabbit: 'air', carotteMaudite: 'terre', terrierWabbit: 'boost',
   croassement: 'eau', soinDeLaMare: 'soin', deluge: 'eau', bondAquatique: 'air', envolTofu: 'boost',
   becMaudit: 'air', plongeon: 'air', plumageRoyal: 'boost', flecheClouante: 'neutre', bouclierOsseux: 'boost',
   ordreDuRoi: 'boost', sporeCollante: 'neutre', mycose: 'neutre', regenerationFongique: 'soin', racinesFongiques: 'terre',
   carapace: 'boost', givre: 'eau', rafaleKwak: 'air', peauDePierre: 'boost',
+  aimantation: 'air', teleportation: 'air', rekop: 'terre', chamrak: 'terre', vulnerabilite: 'eau',
+  motVampirique: 'poison', motDeRegeneration: 'soin',
 };
 
 export function spellElement(spell) {
@@ -543,6 +545,13 @@ const SPELL_ART = {
   motDEnvol: (p) => ART.jump(p),
   motDePrevention: (p) => ART.shield(p),
   motInterdit: (p) => ART.forbidden(p),
+  aimantation: (p) => ART.bomb(p),
+  teleportation: (p) => ART.jump(p),
+  rekop: (p) => ART.paw(p),
+  chamrak: (p) => ART.boulder(p),
+  vulnerabilite: (p) => ART.poison(p),
+  motVampirique: (p) => ART.fangs(p, false),
+  motDeRegeneration: (p) => ART.heart(p),
 };
 
 // Renvoie l icone peinte d un sort (null si aucune illustration dediee,

@@ -199,7 +199,8 @@ export function scaledSpell(spell, level = 1, extraMult = 1) {
         break;
       case 'chanceStrike':
         x.dmgMin = mul(e.dmgMin); x.dmgMax = mul(e.dmgMax);
-        x.healMin = mul(e.healMin); x.healMax = mul(e.healMax);
+        if (e.healMax) { x.healMin = mul(e.healMin); x.healMax = mul(e.healMax); }
+        if (e.failMax) { x.failMin = mul(e.failMin); x.failMax = mul(e.failMax); }
         break;
       case 'buff':
         if (e.damageMult) x.damageMult = +(e.damageMult * (1 + (lv - 1) * 0.25)).toFixed(2);
@@ -208,11 +209,18 @@ export function scaledSpell(spell, level = 1, extraMult = 1) {
         if (e.fuite) x.fuite = e.fuite + (lv - 1) * 3;
         if (e.tacle) x.tacle = e.tacle + (lv - 1) * 3;
         if (e.shield) x.shield = Math.min(0.75, +(e.shield + (lv - 1) * 0.08).toFixed(2));
+        if (e.vuln) x.vuln = e.vuln + (lv - 1) * 5;
+        if (e.drain) x.drain = +(e.drain + (lv - 1) * 0.05).toFixed(2);
+        if (e.hot) x.hot = { min: mul(e.hot.min), max: mul(e.hot.max) };
         if (lv >= 3 && e.bonusPa) x.bonusPa = e.bonusPa + 1;
-        if (lv >= 3 && e.bonusPm) x.bonusPm = e.bonusPm + 1;
+        if (lv >= 3 && e.bonusPm > 0) x.bonusPm = e.bonusPm + 1;
         if (lv >= 3 && e.duration) x.duration = e.duration + 1;
         break;
       case 'knockback':
+        if (lv >= 3) x.distance = e.distance + 1;
+        if (e.collide) x.collide = { min: mul(e.collide.min), max: mul(e.collide.max) };
+        break;
+      case 'magnet':
         if (lv >= 3) x.distance = e.distance + 1;
         break;
       case 'debuff_pm':

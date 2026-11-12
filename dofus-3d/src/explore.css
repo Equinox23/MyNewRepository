@@ -1,0 +1,181 @@
+/* ==========================================================================
+   Exploration d une region (monde ouvert) + avancement sur la carte du monde
+   ========================================================================== */
+
+/* ---- Bandeau des evolutions (carte du monde et exploration) ---- */
+.evo-strip { display: flex; align-items: flex-start; gap: 2px; }
+.evo-strip .evo-i { position: relative; flex: 0 0 auto; width: 52px; text-align: center; }
+.evo-strip .evo-i img {
+  width: 40px; height: 40px; border-radius: 50%; display: block; margin: 0 auto; object-fit: cover; box-sizing: border-box;
+  background: radial-gradient(circle, #fff3d6, #c9b48a); border: 3px solid #6d5c42;
+}
+.evo-strip .evo-i i { display: block; margin-top: 1px; font: 700 10px/12px var(--d-font-title, sans-serif); font-style: normal; color: #fff3d6; white-space: nowrap; }
+.evo-strip .evo-i.done img { border-color: #9ad85a; }
+.evo-strip .evo-i.cur img { border-color: #ffcf5a; box-shadow: 0 0 0 2px rgba(255, 207, 90, 0.35), 0 0 12px #f0a02a; }
+.evo-strip .evo-i.cur i { color: #ffcf5a; }
+.evo-strip .evo-i.lock { opacity: 0.45; }
+.evo-strip .evo-i.lock img { filter: grayscale(1) brightness(0.75); }
+.evo-strip .evo-i.dg img { border-radius: 10px; }
+.evo-strip .evo-i u {
+  position: absolute; top: -3px; right: 2px; width: 16px; height: 16px; border-radius: 50%; text-decoration: none;
+  background: #6aa533; border: 1.5px solid #241208; color: #fff; font: 700 10px/15px sans-serif;
+}
+.evo-strip .evo-arrow { color: #8a6f44; margin-top: 13px; font-size: 9px; flex: 0 0 auto; }
+
+/* ---- Carte du monde : avancement des regions ---- */
+/* Petite echelle a gauche du portrait : tranches vaincues (bas) puis donjon (haut). */
+#menu-root .wm-pips { position: absolute; left: 3px; top: 5px; display: flex; flex-direction: column-reverse; gap: 2px; padding: 3px; border-radius: 7px; background: rgba(20, 12, 4, 0.78); }
+#menu-root .wm-pips i { width: 6px; height: 6px; border-radius: 50%; background: #4a3d2a; border: 1px solid #241208; box-sizing: border-box; }
+#menu-root .wm-pips i.on { background: #9ad85a; }
+#menu-root .wm-pips i.dg { border-radius: 2px; margin-bottom: 1px; }
+#menu-root .wm-pips i.dg.open { background: #b46aff; }
+#menu-root .wm-pips i.dg.on { background: #ffcf5a; }
+#menu-root .wm-danger {
+  position: absolute; top: -2px; right: 12px; width: 22px; height: 22px; border-radius: 50%;
+  background: #c0392b; border: 2px solid #241208; font: 700 14px/20px sans-serif; text-align: center; color: #fff;
+}
+#menu-root .wm-panel .evo-strip { margin: 0 0 6px; padding: 8px 6px 2px; overflow-x: auto; }
+
+/* ---- Exploration ---- */
+body.exploring #info { display: none; }
+#explore-root {
+  position: fixed; inset: 0; z-index: 30; pointer-events: none;
+  font-family: var(--d-font-body, "Trebuchet MS", sans-serif); color: #fff3d6;
+  --sl: env(safe-area-inset-left, 0px); --sr: env(safe-area-inset-right, 0px);
+  --st: env(safe-area-inset-top, 0px); --sb: env(safe-area-inset-bottom, 0px);
+}
+#explore-root button { font-family: inherit; -webkit-tap-highlight-color: transparent; }
+#explore-root .ex-top, #explore-root .ex-bar, #explore-root .ex-card, #explore-root .ex-label { pointer-events: auto; }
+
+/* Bandeau : nom de la region, but, evolutions */
+#explore-root .ex-top {
+  position: absolute; left: 0; right: 0; top: 0; box-sizing: border-box;
+  padding: calc(6px + var(--st)) calc(10px + var(--sr)) 6px calc(10px + var(--sl));
+  background: linear-gradient(180deg, rgba(20, 13, 5, 0.92), rgba(20, 13, 5, 0.72) 75%, rgba(20, 13, 5, 0));
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+}
+#explore-root .ex-head { text-align: center; line-height: 1.2; }
+#explore-root .ex-head b { display: block; font: 700 18px var(--d-font-title, sans-serif); color: #ffcf5a; text-shadow: 0 2px 3px #000; }
+#explore-root .ex-head span { font-size: 12px; color: #fff3d6; text-shadow: 0 1px 2px #000; }
+#explore-root .ex-bands { justify-content: center; }
+
+/* Etiquettes flottantes */
+#explore-root .ex-labels { position: absolute; inset: 0; overflow: hidden; }
+#explore-root .ex-label {
+  position: absolute; left: 0; top: 0; margin: 0; padding: 2px 8px; border-radius: 11px; white-space: nowrap; cursor: pointer;
+  font: 700 11px/16px var(--d-font-title, sans-serif); color: #fff;
+  background: rgba(20, 12, 4, 0.86); border: 2px solid var(--c, #c9a24a); box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+  will-change: transform;
+}
+/* Zone tactile elargie (44px mini) sans grossir l etiquette. */
+#explore-root .ex-label::after { content: ""; position: absolute; left: -6px; right: -6px; top: -12px; bottom: -12px; }
+#explore-root .ex-label b { color: var(--c, #ffcf5a); margin-right: 4px; font-size: 12px; }
+#explore-root .ex-label s { text-decoration: none; color: #ffcf5a; margin-right: 3px; }
+#explore-root .ex-label.rare { background: rgba(70, 46, 4, 0.92); box-shadow: 0 0 10px rgba(255, 207, 90, 0.8); }
+#explore-root .ex-label.off { opacity: 0.82; border-style: dashed; }
+#explore-root .ex-label.sel { box-shadow: 0 0 0 2px #fff, 0 0 12px var(--c, #ffcf5a); }
+#explore-root .ex-label.obj { --c: #8a6f44; color: #e8d9b4; font-size: 10px; }
+#explore-root .ex-label.obj.open { --c: #ffcf5a; color: #ffcf5a; }
+#explore-root .ex-label.gate.open { --c: #b46aff; color: #e2c4ff; }
+#explore-root .ex-label.camp { --c: #f08a1a; color: #ffd9a0; }
+
+/* Message bref */
+#explore-root .ex-toast {
+  position: absolute; left: 50%; bottom: calc(84px + var(--sb)); transform: translate(-50%, 8px);
+  width: max-content; max-width: min(92vw, 420px); box-sizing: border-box; padding: 8px 14px; border-radius: 12px; text-align: center;
+  background: rgba(20, 12, 4, 0.92); border: 2px solid #c9a24a; font-size: 13px; line-height: 1.35;
+  opacity: 0; transition: opacity 0.25s, transform 0.25s;
+}
+#explore-root .ex-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* Carte d information (une seule a la fois) */
+#explore-root .ex-card {
+  position: absolute; left: 50%; bottom: calc(80px + var(--sb)); transform: translateX(-50%);
+  width: min(380px, calc(100vw - 20px)); box-sizing: border-box; padding: 10px 12px 12px; border-radius: 16px; display: none;
+  background: linear-gradient(180deg, rgba(72, 52, 26, 0.98), rgba(30, 20, 8, 0.98));
+  border: 3px solid #c9a24a; box-shadow: 0 10px 26px rgba(0, 0, 0, 0.65);
+}
+#explore-root .ex-card.show { display: block; }
+#explore-root .ex-x {
+  position: absolute; top: -4px; right: -4px; width: 44px; height: 44px; border: 0; background: none; cursor: pointer;
+  color: #e8d9b4; font-size: 17px;
+}
+#explore-root .ex-ctxt { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding-right: 30px; font-size: 12.5px; line-height: 1.3; }
+#explore-root .ex-ctxt b { font: 700 16px var(--d-font-title, sans-serif); color: #ffcf5a; }
+#explore-root .ex-ctxt em { font-style: normal; font-weight: 700; }
+#explore-root .ex-crow { display: flex; gap: 10px; align-items: center; }
+#explore-root .ex-faces img, #explore-root .ex-face img {
+  width: 48px; height: 48px; border-radius: 50%; display: block; object-fit: cover; box-sizing: border-box;
+  background: radial-gradient(circle, #fff3d6, #c9b48a); border: 2px solid #6d5c42;
+}
+#explore-root .ex-faces img { width: 58px; height: 58px; border-color: #b46aff; }
+#explore-root .ex-item { flex: 0 0 auto; }
+#explore-root .ex-facerow { display: flex; gap: 6px; margin: 8px 0 2px; flex-wrap: wrap; }
+#explore-root .ex-face { position: relative; }
+#explore-root .ex-face i, #explore-root .ex-hero i {
+  position: absolute; right: -3px; bottom: -2px; min-width: 18px; height: 18px; padding: 0 3px; box-sizing: border-box;
+  border-radius: 9px; background: #1a120a; border: 1px solid #c9a24a; color: #ffcf5a;
+  font: 700 11px/16px var(--d-font-title, sans-serif); font-style: normal; text-align: center;
+}
+#explore-root .ex-lock { margin-top: 8px; padding: 7px 9px; border-radius: 9px; background: rgba(0, 0, 0, 0.35); font-size: 12px; color: #ffd9a0; }
+#explore-root .ex-go {
+  display: block; width: 100%; min-height: 48px; margin-top: 10px; border-radius: 12px; cursor: pointer;
+  font: 700 17px var(--d-font-title, sans-serif); letter-spacing: 1px; color: #fff8e0;
+  background: linear-gradient(180deg, #ff8a4a 0%, #d8401a 55%, #9a2408 100%); border: 2px solid #4a1204;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 3px 0 #3a0e02;
+}
+#explore-root .ex-go.dungeon { background: linear-gradient(180deg, #c48aff 0%, #8a3fd8 55%, #5a1f9a 100%); border-color: #2a0a4a; box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35), 0 3px 0 #22083a; }
+
+/* Barre du bas : equipe + boutons */
+#explore-root .ex-bar {
+  position: absolute; left: 0; right: 0; bottom: 0; box-sizing: border-box;
+  padding: 8px calc(10px + var(--sr)) calc(8px + var(--sb)) calc(10px + var(--sl));
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: linear-gradient(180deg, rgba(20, 13, 5, 0), rgba(20, 13, 5, 0.8) 35%, rgba(20, 13, 5, 0.95));
+}
+#explore-root .ex-team { display: flex; gap: 8px; }
+#explore-root .ex-hero { position: relative; width: 48px; height: 56px; }
+#explore-root .ex-hero img {
+  width: 48px; height: 48px; border-radius: 50%; display: block; object-fit: cover; box-sizing: border-box;
+  background: radial-gradient(circle at 50% 40%, #5a6a8a, #232838 75%); border: 3px solid #c9a24a;
+}
+#explore-root .ex-hero i { bottom: 6px; }
+#explore-root .ex-hero em { position: absolute; left: 3px; right: 3px; bottom: 0; height: 6px; border-radius: 3px; background: #1a120a; border: 1px solid #5a4a32; overflow: hidden; }
+#explore-root .ex-hero em b { display: block; height: 100%; }
+#explore-root .ex-btns { display: flex; gap: 6px; }
+#explore-root .ex-btn {
+  min-width: 58px; height: 52px; padding: 3px 6px; border-radius: 12px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  background: linear-gradient(180deg, #5a4628, #2e2110); border: 2px solid #c9a24a; color: #fff3d6;
+  font: 700 11px var(--d-font-title, sans-serif);
+}
+#explore-root .ex-btn svg { width: 24px; height: 24px; display: block; }
+#explore-root .ex-btn:active { transform: translateY(1px); filter: brightness(1.2); }
+
+/* Paysage (telephone couche, ordinateur) : bandeau dans un coin, carte a droite */
+@media (orientation: landscape) {
+  #explore-root .ex-top {
+    right: auto; align-items: flex-start; padding-right: 26px; border-bottom-right-radius: 18px;
+    background: linear-gradient(90deg, rgba(20, 13, 5, 0.9), rgba(20, 13, 5, 0.78) 80%, rgba(20, 13, 5, 0));
+  }
+  #explore-root .ex-head { text-align: left; }
+  #explore-root .ex-bands { justify-content: flex-start; }
+  #explore-root .ex-card { left: auto; right: calc(10px + var(--sr)); transform: none; width: min(330px, 42vw); }
+  #explore-root .ex-toast { bottom: calc(76px + var(--sb)); }
+  #explore-root .ex-bar { background: none; pointer-events: none; }
+  #explore-root .ex-bar > * { pointer-events: auto; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  #explore-root .ex-top { flex-direction: row; align-items: center; gap: 10px; padding-top: calc(4px + var(--st)); padding-bottom: 4px; }
+  #explore-root .ex-head { max-width: 210px; }
+  #explore-root .ex-head b { font-size: 15px; }
+  #explore-root .ex-head span { font-size: 11px; }
+  #explore-root .ex-bands .evo-i { width: 44px; }
+  #explore-root .ex-bands .evo-i img { width: 32px; height: 32px; }
+  #explore-root .ex-card { bottom: calc(10px + var(--sb)); top: auto; max-height: calc(100vh - 20px); overflow: auto; }
+  #explore-root .ex-btns { margin-right: min(340px, 44vw); }
+  #explore-root .ex-card:not(.show) ~ .ex-bar .ex-btns { margin-right: 0; }
+  #explore-root .ex-toast { left: calc(10px + var(--sl)); transform: translate(0, 8px); bottom: calc(72px + var(--sb)); max-width: 44vw; }
+  #explore-root .ex-toast.show { transform: none; }
+  #explore-root .ex-facerow .ex-face img { width: 40px; height: 40px; }
+}

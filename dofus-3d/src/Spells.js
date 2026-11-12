@@ -17,6 +17,18 @@ import { ELEMENT_LABEL, damageElementOf } from './Elements.js';
 //  - 'chanceStrike'   { dmgMin,dmgMax, healMin,healMax }  -> 50% degats / 50% soin
 //  - 'gainPa'         { amount, nextTurnPenalty? }  -> +PA ce tour, -PA au suivant
 //
+// Mecaniques de classe (cf. Game.js "MECANIQUES DE CLASSE") :
+//  - 'gainStack'      { key, amount, max }  -> jauge du lanceur (CLASS_STACKS)
+//  - stackBonus       { key, per, consume } sur 'damage' / 'heal' : +per par point
+//  - 'buff' accepte aussi : state (CLASS_STATES), vuln (% degats subis en
+//    plus), hot { min, max } (soin en debut de tour), drain, veineOnLow
+//  - 'clearState'     { state }  -> retire un etat du lanceur
+//  - when             { caster | casterNot: etat }  -> effet conditionnel
+//  - 'chanceStrike'   accepte chance, failMin/failMax (degats si rate), veine
+//  - 'knockback'      accepte collide { min, max } (degats par case bloquee)
+//  - 'teleswap' / 'rewind' (Xelor), 'carry' / 'throw' (Pandawa), 'magnet' (Roublard)
+//  - sort : requires / forbids (etat du lanceur), requiresCarry
+//
 // Aire : { type: 'single' } | { type: 'line', length } | { type: 'cross', size }.
 // Cooldown : nombre de tours entre deux casts (decremente au debut du
 // tour du caster).
@@ -288,6 +300,18 @@ const ICON_KITTEN = `
     <line x1="26" y1="19" x2="21" y2="20" stroke="#fff"/>
   </svg>`;
 
+// Jauges de classe (fighter.stacks[key]) et etats nommes (buff.state).
+export const CLASS_STACKS = {
+  puissance: { label: 'Puissance', color: '#ff7a3a', icon: 'dmgUp', max: 5, hint: 'depensee par Epee Divine et Colere de Iop' },
+  veine: { label: 'Veine', color: '#6ad05a', icon: 'crit', max: 5, hint: '+10% de reussite aux paris par point, depensee par Rekop' },
+  ferveur: { label: 'Ferveur', color: '#ff7ab8', icon: 'heart', max: 4, hint: '+20% au prochain soin par point' },
+};
+export const CLASS_STATES = {
+  saoul: { label: 'Saoul', color: '#e8a81a', icon: 'drunk' },
+  telefrag: { label: 'Telefrag', color: '#7a8aff', icon: 'telefrag', hint: 'prochain sort du Xelor : +50% degats, +2 PA' },
+  vampirique: { label: 'Mot Vampirique', color: '#e8589a', icon: 'heart', hint: 'ses attaquants recuperent 30% des degats' },
+};
+
 // Couleurs canoniques par categorie.
 export const SPELL_CATEGORY_COLOR = {
   attack: '#c0392b',
@@ -304,35 +328,38 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 2 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 28, max: 42 }],
-    desc: 'Le coup de base du Iop : frappe rapide a 1 ou 2 cases.',
+    effects: [{ type: 'damage', min: 24, max: 34 }, { type: 'gainStack', key: 'puissance', amount: 1, max: 5 }],
+    desc: 'Le coup de base du Iop : frappe rapide a 1 ou 2 cases. Chaque coup donne 1 Puissance (max 5), a depenser avec Epee Divine ou Colere de Iop.',
   },
   bond: {
     id: 'bond', name: 'Bond', short: 'BD', icon: ICON_JUMP,
     category: 'move', color: SPELL_CATEGORY_COLOR.move,
     apCost: 4, range: { min: 1, max: 5 }, needsLOS: false,
-    target: 'tile', area: { type: 'single' },
-    effects: [{ type: 'teleport' }],
+    target: 'tile', area: { type: 'single' }, maxCastsPerTurn: 2,
+    effects: [{ type: 'teleport' }, { type: 'gainStack', key: 'puissance', amount: 1, max: 5 }],
     levels: { 3: { apCost: 3 } },
-    desc: 'Bondit sur une case libre, meme sans ligne de vue (ignore le tacle). 3 PA au niveau 3.',
+    desc: 'Bondit sur une case libre, meme sans ligne de vue (ignore le tacle), et gagne 1 Puissance. 2 fois par tour. 3 PA au niveau 3.',
   },
   epeeDivine: {
     id: 'epeeDivine', name: 'Epee Divine', short: 'ED', icon: ICON_LINE,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 5, range: { min: 1, max: 1 }, needsLOS: false,
-    // length: -1 = jusqu au bord de la carte. piercing = traverse murs et combattants.
-    target: 'tile', area: { type: 'line', length: -1, piercing: true },
+    apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
+    // piercing = traverse murs et combattants.
+    target: 'tile', area: { type: 'line', length: 4, piercing: true },
     cooldown: 2,
-    effects: [{ type: 'damage', min: 38, max: 58 }],
-    desc: 'Lance sur la case devant soi : la lame divine fonce tout droit jusqu au bord de la carte et traverse murs et ennemis.',
+    effects: [{ type: 'damage', min: 28, max: 40, stackBonus: { key: 'puissance', per: 0.15, consume: true } }],
+    levels: { 3: { area: { length: 5 } } },
+    desc: 'Lance sur la case devant soi : la lame divine traverse 4 cases en ligne (murs et ennemis compris). Depense toute la Puissance : +15% de degats par point.',
   },
   concentration: {
     id: 'concentration', name: 'Concentration', short: 'CO', icon: ICON_FIST,
     category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
-    target: 'self', area: { type: 'single' }, maxCastsPerTurn: 1,
-    effects: [{ type: 'buff', damageMult: 0.3, duration: 2 }],
-    desc: '+30% degats pendant 2 tours. Une fois par tour, cumulable d un tour a l autre.',
+    target: 'self', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'gainStack', key: 'puissance', amount: 2, max: 5 }, { type: 'buff', damageMult: 0.15, duration: 1 }],
+    levels: { 3: { effects: [{ amount: 3 }] } },
+    desc: 'Le Iop se concentre : +2 Puissance tout de suite (+3 au niveau 3) et +15% de degats jusqu a la fin du prochain tour.',
   },
   precipitation: {
     id: 'precipitation', name: 'Precipitation', short: 'PE', icon: ICON_HASTE,
@@ -353,7 +380,7 @@ export const SPELLS = {
     target: 'tile', area: { type: 'single' },
     effects: [{ type: 'placeBomb' }],
     levels: { 3: { apCost: 3 } },
-    desc: 'Pose une bombe sur une case libre (bloque la vue). Explose dans 3 tours en zone rayon 2, +75% de degats par tour ecoule. Max 3 bombes, 2 posees par tour. Ameliorer le sort rend les bombes plus solides et plus puissantes.',
+    desc: 'Pose une bombe sur une case libre (bloque la vue). Explose dans 3 tours en zone rayon 2, +75% de degats par tour ecoule. Deux bombes alignees (2 a 5 cases) tendent un MUR DE FEU entre elles, et les bombes qui explosent en chaine font un COMBO (+25% par bombe). Max 3 bombes, 2 posees par tour.',
   },
   entourloupe: {
     id: 'entourloupe', name: 'Entourloupe', short: 'ET', icon: ICON_BOMB_SWAP,
@@ -387,6 +414,16 @@ export const SPELLS = {
     levels: { 3: { apCost: 2 } },
     desc: 'Pose un bouclier (-50% degats reçus) sur une de vos bombes pendant 3 tours.',
   },
+  aimantation: {
+    id: 'aimantation', name: 'Aimantation', short: 'AM', icon: ICON_BOMB_MOVE,
+    category: 'move', color: SPELL_CATEGORY_COLOR.move,
+    apCost: 3, range: { min: 1, max: 6 }, needsLOS: false,
+    target: 'ally', area: { type: 'single' },
+    targetFilter: 'bomb',
+    cooldown: 2,
+    effects: [{ type: 'magnet', reach: 4, distance: 2 }],
+    desc: 'Aimante une de tes bombes : les ennemis alignes avec elle (jusqu a 4 cases) sont attires de 2 cases vers la bombe. Parfait pour les trainer dans un mur de feu ou dans l explosion.',
+  },
   pulsar: {
     id: 'pulsar', name: 'Pulsar', short: 'PU', icon: ICON_PULSAR,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
@@ -394,10 +431,10 @@ export const SPELLS = {
     target: 'enemy', area: { type: 'single' },
     cooldown: 1,
     effects: [
-      { type: 'damage', min: 38, max: 55 },
-      { type: 'knockback', distance: 2 },
+      { type: 'damage', min: 34, max: 48 },
+      { type: 'knockback', distance: 2, collide: { min: 8, max: 12 } },
     ],
-    desc: 'Onde de choc : 38-55 degats et repousse la cible de 2 cases. Portee 6.',
+    desc: 'Onde de choc : degats et repousse la cible de 2 cases (degats de collision contre un obstacle). Pousse un ennemi dans un mur de feu ou vers tes bombes.',
   },
 
   // ---------- OSAMODAS ----------
@@ -556,7 +593,7 @@ export const SPELLS = {
       { type: 'damage', min: 30, max: 40 },
       { type: 'debuff_pa', min: 1, max: 2, steal: true, currentTurnOnly: true },
     ],
-    desc: 'Lancee en ligne (portee 3) : 30-40 degats et vole 1 a 2 PA (rendus au Xelor pour le tour).',
+    desc: 'Lancee en ligne (portee 3) : degats et vole 1 a 2 PA (rendus au Xelor pour le tour). Sur une cible en Telefrag : +50% de degats et 2 PA de plus.',
   },
   ralentissement: {
     id: 'ralentissement', name: 'Ralentissement', short: 'RA', icon: ICON_GEAR,
@@ -565,7 +602,7 @@ export const SPELLS = {
     target: 'enemy', area: { type: 'single' },
     effects: [{ type: 'debuff_pa', value: 2, currentTurnOnly: true }],
     levels: { 3: { apCost: 1 } },
-    desc: 'Retire 2 PA a un adversaire pour son prochain tour (une fois par cible et par tour). 1 PA au niveau 3.',
+    desc: 'Retire 2 PA a un adversaire pour son prochain tour (une fois par cible et par tour). Une cible ne peut pas perdre plus de 60% de ses PA par tour. 1 PA au niveau 3.',
   },
   devouement: {
     id: 'devouement', name: 'Devouement', short: 'DV', icon: ICON_BOOST,
@@ -582,7 +619,7 @@ export const SPELLS = {
     apCost: 3, range: { min: 1, max: 7 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
     effects: [{ type: 'damage', min: 18, max: 26 }, { type: 'debuff_pa', value: 1, currentTurnOnly: true }],
-    desc: 'Plante une aiguille du cadran : degats et -1 PA au prochain tour de la cible (-2 au niveau 3).',
+    desc: 'Plante une aiguille du cadran : degats et -1 PA au prochain tour de la cible (-2 au niveau 3). Sur une cible en Telefrag : +50% de degats et le Xelor regagne 2 PA.',
   },
   momification: {
     id: 'momification', name: 'Momification', short: 'MO', icon: ICON_SHIELD,
@@ -601,18 +638,18 @@ export const SPELLS = {
     apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
     effects: [
-      { type: 'damage', min: 15, max: 55 },
+      { type: 'damage', min: 15, max: 45 },
       { type: 'debuff_pa', value: 1, chance: 0.25, turns: 3 },
     ],
-    desc: 'Coup de griffe tres aleatoire (15-55), 25% de chance de retirer 1 PA pendant 3 tours.',
+    desc: 'Coup de griffe tres aleatoire (15-45), 25% de chance de retirer 1 PA pendant 3 tours.',
   },
   pileOuFace: {
     id: 'pileOuFace', name: 'Pile ou Face', short: 'PF', icon: ICON_COIN,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 10, max: 50 }],
-    desc: 'Lance une piece : degats totalement aleatoires a distance.',
+    effects: [{ type: 'chanceStrike', chance: 0.5, dmgMin: 34, dmgMax: 48, failMin: 10, failMax: 16, veine: 1 }],
+    desc: 'Lance une piece a distance. Pile : gros degats. Face : petits degats, mais l Ecaflip gagne 1 Veine (+10% de reussite a ses paris par point, max 5).',
   },
   roueChance: {
     id: 'roueChance', name: 'Roue de la Fortune', short: 'RF', icon: ICON_BOOST,
@@ -620,8 +657,9 @@ export const SPELLS = {
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
     cooldown: 3,
-    effects: [{ type: 'buff', damageMultRoll: [0.2, 0.8], duration: 2 }],
-    desc: 'La roue tourne : de +20% a +80% de degats pendant 2 tours, au hasard.',
+    effects: [{ type: 'buff', damageMultRoll: [0.15, 0.65], veineOnLow: 1, duration: 1 }],
+    levels: { 3: { cooldown: 3, effects: [{ duration: 1 }] } },
+    desc: 'La roue tourne : de +15% a +65% de degats ce tour et le suivant, au hasard. Un mauvais tirage (moins de +40%) donne 1 Veine en consolation.',
   },
   bondDuFelin: {
     id: 'bondDuFelin', name: 'Bond du Felin', short: 'BF', icon: ICON_JUMP,
@@ -655,28 +693,40 @@ export const SPELLS = {
     category: 'boost', color: SPELL_CATEGORY_COLOR.boost,
     apCost: 2, range: { min: 0, max: 0 }, needsLOS: false,
     target: 'self', area: { type: 'single' },
-    cooldown: 3,
-    effects: [{ type: 'buff', damageMult: 0.35, bonusPm: -1, duration: 2 }],
-    desc: 'Le Pandawa s enivre : +35% degats mais -1 PM pendant 2 tours (etat Saoul).',
+    cooldown: 4,
+    effects: [{ type: 'buff', state: 'saoul', damageMult: 0.3, shield: 0.25, bonusPm: -1, duration: 2 }],
+    // Le cycle Saoul / a jeun garde le meme rythme a tous les niveaux.
+    levels: { 3: { cooldown: 4, effects: [{ duration: 2 }] } },
+    desc: 'Le Pandawa s enivre (etat SAOUL, 2 tours) : +30% degats, -25% degats subis, mais -1 PM. Saoul, il peut cracher son Souffle Alcoolise mais ne peut plus utiliser Karcham ni Vulnerabilite.',
   },
   tirPandatak: {
     id: 'tirPandatak', name: 'Tir Pandatak', short: 'TP', icon: ICON_FIST,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 4, range: { min: 1, max: 1 }, needsLOS: false,
+    apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
     effects: [
-      { type: 'damage', min: 30, max: 42 },
-      { type: 'knockback', distance: 2 },
+      { type: 'damage', min: 24, max: 34 },
+      { type: 'knockback', distance: 2, collide: { min: 8, max: 12 } },
     ],
-    desc: 'Un grand coup de pied : degats et repousse la cible de 2 cases.',
+    desc: 'Un grand coup de pied : degats et repousse la cible de 2 cases. Si elle percute un obstacle ou un autre combattant, elle subit des degats de collision.',
   },
   karcham: {
     id: 'karcham', name: 'Karcham', short: 'KA', icon: ICON_BARREL,
-    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 3, range: { min: 1, max: 5 }, needsLOS: true,
-    target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 22, max: 32 }],
-    desc: 'Lance son tonneau sur un ennemi (portee 5).',
+    category: 'move', color: SPELL_CATEGORY_COLOR.move,
+    apCost: 2, range: { min: 1, max: 1 }, needsLOS: false,
+    target: 'any', area: { type: 'single' }, maxCastsPerTurn: 1,
+    forbids: 'saoul',
+    effects: [{ type: 'carry' }],
+    desc: 'Attrape un combattant adjacent, allie ou ennemi (sauf les boss et les cibles stabilisees), et le porte jusqu a la fin du tour. Lance-le ensuite avec Chamrak. Impossible en etant Saoul.',
+  },
+  chamrak: {
+    id: 'chamrak', name: 'Chamrak', short: 'CK', icon: ICON_ROCK_THROW,
+    category: 'move', color: SPELL_CATEGORY_COLOR.move,
+    apCost: 2, range: { min: 1, max: 4 }, needsLOS: false,
+    target: 'tile', area: { type: 'circle', radius: 1 },
+    requiresCarry: true,
+    effects: [{ type: 'throw' }, { type: 'damage', min: 16, max: 24, enemiesOnly: true }],
+    desc: 'Lance le combattant porte (Karcham) sur une case libre. A l atterrissage, les ennemis sur la case et autour (rayon 1) subissent des degats : jette un ennemi dans son groupe, ou un allie au contact.',
   },
   vaguePandawa: {
     id: 'vaguePandawa', name: 'Vague', short: 'VG', icon: ICON_WAVE,
@@ -689,11 +739,15 @@ export const SPELLS = {
   laitDeBambou: {
     id: 'laitDeBambou', name: 'Lait de Bambou', short: 'LB', icon: ICON_HEAL_CROSS,
     category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
-    apCost: 4, range: { min: 0, max: 4 }, needsLOS: true,
+    apCost: 3, range: { min: 0, max: 4 }, needsLOS: true,
     target: 'ally', area: { type: 'single' },
     cooldown: 2,
-    effects: [{ type: 'heal_percent', percent: 0.2 }],
-    desc: 'Un lait de bambou apaisant : soigne 20% des PV max (allie ou soi-meme).',
+    effects: [
+      { type: 'heal_percent', percent: 0.18 },
+      { type: 'heal_percent', percent: 0.12, when: { caster: 'saoul' } },
+      { type: 'clearState', state: 'saoul', when: { caster: 'saoul' } },
+    ],
+    desc: 'Un lait de bambou apaisant : soigne 18% des PV max (allie ou soi-meme). Si le Pandawa est Saoul, il dessaoule et le soin est plus fort (+12%).',
   },
 
   // ---------- CHAFER (squelette) ----------
@@ -702,7 +756,7 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 16, max: 22 }],
+    effects: [{ type: 'damage', min: 20, max: 28 }],
     desc: 'Coup de lance discipline au corps a corps.',
   },
   coupDeLanceRoyal: {
@@ -771,16 +825,16 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 6 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 20, max: 28, lifesteal: 0.3 }],
-    desc: 'Un mot cinglant lance a distance. La fee recupere 30% des degats infliges.',
+    effects: [{ type: 'damage', min: 18, max: 26 }, { type: 'gainStack', key: 'ferveur', amount: 1, max: 4 }],
+    desc: 'Un mot cinglant lance a distance. Donne 1 Ferveur (max 4) : chaque point renforce de 20% le prochain Mot Soignant ou Mot de Reconstitution.',
   },
   motSoignant: {
     id: 'motSoignant', name: 'Mot Soignant', short: 'MS', icon: ICON_HEAL_CROSS,
     category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
     apCost: 3, range: { min: 0, max: 5 }, needsLOS: true,
     target: 'ally', area: { type: 'single' },
-    effects: [{ type: 'heal', min: 28, max: 40 }],
-    desc: 'Un mot doux qui referme les plaies : soigne 28-40 PV (allie ou soi-meme).',
+    effects: [{ type: 'heal', min: 24, max: 34, stackBonus: { key: 'ferveur', per: 0.2, consume: true } }],
+    desc: 'Un mot doux qui referme les plaies (allie ou soi-meme). Depense toute la Ferveur : +20% de soin par point.',
   },
   motDeFrayeur: {
     id: 'motDeFrayeur', name: 'Mot de Frayeur', short: 'MF', icon: ICON_GHOST,
@@ -790,9 +844,9 @@ export const SPELLS = {
     cooldown: 2,
     effects: [
       { type: 'damage', min: 8, max: 14 },
-      { type: 'knockback', distance: 3 },
+      { type: 'knockback', distance: 3, collide: { min: 6, max: 10 } },
     ],
-    desc: 'Terrifie la cible : 8-14 degats et la repousse de 3 cases.',
+    desc: 'Terrifie la cible : petits degats et la repousse de 3 cases (degats de collision contre un obstacle). La seule defense de la fee.',
   },
   motStimulant: {
     id: 'motStimulant', name: 'Mot Stimulant', short: 'MT', icon: ICON_BOOST,
@@ -809,8 +863,27 @@ export const SPELLS = {
     apCost: 5, range: { min: 0, max: 3 }, needsLOS: true,
     target: 'ally', area: { type: 'single' },
     cooldown: 4,
-    effects: [{ type: 'heal_percent', percent: 0.5 }],
-    desc: 'Le grand mot de soin : rend 50% des PV max d un allie (recharge 4 tours).',
+    effects: [{ type: 'heal_percent', percent: 0.4, stackBonus: { key: 'ferveur', per: 0.2, consume: true } }],
+    desc: 'Le grand mot de soin : rend 40% des PV max d un allie, +20% par point de Ferveur depense (recharge 4 tours).',
+  },
+  motVampirique: {
+    id: 'motVampirique', name: 'Mot Vampirique', short: 'MV', icon: ICON_POISON_SPIT,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 2, range: { min: 1, max: 6 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    cooldown: 2,
+    effects: [{ type: 'buff', state: 'vampirique', drain: 0.3, duration: 2 }],
+    levels: { 3: { cooldown: 2, effects: [{ duration: 2 }] } },
+    desc: 'Marque un ennemi pendant 2 tours : chaque allie (et la fee) qui le frappe recupere 30% des degats infliges en PV. Les degats de l equipe deviennent des soins.',
+  },
+  motDeRegeneration: {
+    id: 'motDeRegeneration', name: 'Mot de Regeneration', short: 'MG', icon: ICON_HEAL_CROSS,
+    category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
+    apCost: 3, range: { min: 0, max: 5 }, needsLOS: true,
+    target: 'ally', area: { type: 'single' },
+    cooldown: 2,
+    effects: [{ type: 'buff', hot: { min: 12, max: 16 }, duration: 3 }],
+    desc: 'Un mot qui soigne dans la duree : l allie regagne des PV au debut de ses 3 prochains tours.',
   },
 
   // ---------- WABBITS (lapins) ----------
@@ -844,18 +917,22 @@ export const SPELLS = {
     id: 'intimidation', name: 'Intimidation', short: 'IN', icon: ICON_FIST,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 2, range: { min: 1, max: 1 }, needsLOS: false,
-    target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 12, max: 18 }, { type: 'knockback', distance: 2 }],
-    desc: 'Un coup d epaule qui repousse de 2 cases : ideal pour se liberer d un tacleur.',
+    target: 'enemy', area: { type: 'single' }, maxCastsPerTurn: 2,
+    effects: [
+      { type: 'damage', min: 12, max: 18 },
+      { type: 'knockback', distance: 2, collide: { min: 8, max: 12 } },
+      { type: 'gainStack', key: 'puissance', amount: 1, max: 5 },
+    ],
+    desc: 'Un coup d epaule qui repousse de 2 cases et donne 1 Puissance. Si la cible percute un obstacle, elle subit des degats de collision. Ideal pour se liberer d un tacleur. 2 fois par tour.',
   },
   epeeDuJugement: {
     id: 'epeeDuJugement', name: 'Epee du Jugement', short: 'EJ', icon: ICON_SWORD,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 4, range: { min: 2, max: 5 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 26, max: 36 }],
+    effects: [{ type: 'damage', min: 20, max: 28, lifesteal: 0.3 }],
     levels: { 3: { effects: [null, { type: 'debuff_pm', value: 1 }] } },
-    desc: 'Une epee de lumiere frappe a distance (air). Retire 1 PM au niveau 3.',
+    desc: 'La seule attaque a distance du Iop (air) : degats modestes, mais il recupere 30% des degats en PV. Ne donne pas de Puissance. Retire 1 PM au niveau 3.',
   },
   colereDeIop: {
     id: 'colereDeIop', name: 'Colere de Iop', short: 'CI', icon: ICON_SWORD,
@@ -863,8 +940,8 @@ export const SPELLS = {
     apCost: 7, range: { min: 1, max: 1 }, needsLOS: false,
     target: 'enemy', area: { type: 'single' },
     cooldown: 3,
-    effects: [{ type: 'damage', min: 85, max: 105 }],
-    desc: 'Le coup ultime du Iop : enorme frappe au corps a corps (recharge 3 tours).',
+    effects: [{ type: 'damage', min: 52, max: 66, stackBonus: { key: 'puissance', per: 0.3, consume: true } }],
+    desc: 'Le coup ultime du Iop, a charger sur plusieurs tours : depense toute la Puissance pour +30% de degats par point (jusqu a +150%). Recharge 3 tours.',
   },
 
   // ---------- OSAMODAS ----------
@@ -947,11 +1024,20 @@ export const SPELLS = {
   rembobinage: {
     id: 'rembobinage', name: 'Rembobinage', short: 'RB', icon: ICON_HOURGLASS,
     category: 'move', color: SPELL_CATEGORY_COLOR.move,
-    apCost: 2, range: { min: 1, max: 4 }, needsLOS: false,
+    apCost: 3, range: { min: 0, max: 6 }, needsLOS: false,
+    target: 'any', area: { type: 'single' },
+    cooldown: 2,
+    effects: [{ type: 'rewind', telefrag: 2 }],
+    desc: 'Remonte le temps : renvoie la cible (ennemi, allie ou soi-meme) sur la case ou elle a commence son dernier tour. Un ennemi ainsi deplace passe en Telefrag. Si la case est occupee, les deux echangent leurs places.',
+  },
+  teleportation: {
+    id: 'teleportation', name: 'Teleportation', short: 'TP', icon: ICON_JUMP,
+    category: 'move', color: SPELL_CATEGORY_COLOR.move,
+    apCost: 3, range: { min: 1, max: 5 }, needsLOS: false,
     target: 'tile', area: { type: 'single' },
     cooldown: 2,
-    effects: [{ type: 'teleport' }],
-    desc: 'Le Xelor remonte le temps et se teleporte sur une case libre (portee 4).',
+    effects: [{ type: 'teleswap', telefrag: 2 }],
+    desc: 'Le Xelor se teleporte sur une case libre... ou sur un combattant, avec qui il ECHANGE sa place. Un ennemi echange passe en Telefrag 2 tours : le prochain sort de degats du Xelor sur lui frappe +50% et rend 2 PA.',
   },
   frappeDuXelor: {
     id: 'frappeDuXelor', name: 'Frappe du Xelor', short: 'FX', icon: ICON_HOURGLASS,
@@ -972,7 +1058,7 @@ export const SPELLS = {
       { type: 'glyph', radius: 1, duration: 2, color: 0x4ab0ff, name: 'Glyphe du Sablier',
         onTurn: { damage: { min: 8, max: 12 }, debuffPm: 2 } },
     ],
-    desc: 'Le sable du temps se repand (zone rayon 1) : degats, puis un glyphe reste 2 tours. Un ennemi qui commence son tour dessus perd 2 PM et subit des degats.',
+    desc: 'Le sable du temps se repand (zone rayon 1) : degats, puis un glyphe reste 2 tours. Un ennemi qui commence son tour dessus perd 2 PM et subit des degats : renvoie-le dedans avec Rembobinage ou Teleportation.',
   },
 
   // ---------- ECAFLIP ----------
@@ -982,8 +1068,8 @@ export const SPELLS = {
     apCost: 4, range: { min: 1, max: 4 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
     cooldown: 1,
-    effects: [{ type: 'chanceStrike', dmgMin: 45, dmgMax: 110, healMin: 10, healMax: 25 }],
-    desc: 'Pari risque : 50% de chances de 45-110 degats... ou de soigner la cible.',
+    effects: [{ type: 'chanceStrike', chance: 0.5, dmgMin: 62, dmgMax: 100, healMin: 12, healMax: 22, veine: 2 }],
+    desc: 'Le grand pari : 50% de chances d enormes degats... ou de soigner la cible. Un pari perdu donne 2 Veine ; un pari gagne remet la Veine a zero.',
   },
   reflexes: {
     id: 'reflexes', name: 'Reflexes', short: 'RF', icon: ICON_SHIELD,
@@ -1000,26 +1086,46 @@ export const SPELLS = {
     apCost: 3, range: { min: 0, max: 4 }, needsLOS: true,
     target: 'ally', area: { type: 'single' },
     cooldown: 3,
-    effects: [{ type: 'buff', damageMult: 0.2, crit: 0.25, duration: 2 }],
-    desc: 'Un trefle porte-bonheur : +20% degats et +25% de coups critiques pendant 2 tours (allie ou soi-meme).',
+    effects: [{ type: 'buff', damageMult: 0.2, crit: 0.25, duration: 2 }, { type: 'gainStack', key: 'veine', amount: 2, max: 5 }],
+    desc: 'Un trefle porte-bonheur : +20% degats et +25% de coups critiques pendant 2 tours (allie ou soi-meme), et l Ecaflip gagne 2 Veine.',
+  },
+  rekop: {
+    id: 'rekop', name: 'Rekop', short: 'RK', icon: ICON_CLAW,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 5, range: { min: 1, max: 5 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    cooldown: 2,
+    effects: [{ type: 'damage', min: 30, max: 42, stackBonus: { key: 'veine', per: 0.25, consume: true } }],
+    desc: 'La revanche du malchanceux : depense toute la Veine pour +25% de degats par point (jusqu a +125%). Plus tu as perdu de paris, plus Rekop fait mal.',
   },
 
   // ---------- PANDAWA ----------
   souffleAlcoolise: {
     id: 'souffleAlcoolise', name: 'Souffle Alcoolise', short: 'SA', icon: ICON_WAVE,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 4, range: { min: 1, max: 2 }, needsLOS: true,
+    apCost: 4, range: { min: 1, max: 3 }, needsLOS: true,
     target: 'tile', area: { type: 'circle', radius: 1 },
-    effects: [{ type: 'damage', min: 16, max: 24 }],
-    desc: 'Un souffle enflamme : 16-24 degats en zone (rayon 1).',
+    requires: 'saoul',
+    effects: [{ type: 'damage', min: 32, max: 44 }],
+    desc: 'Un souffle enflamme en zone (rayon 1) : la grosse attaque du Pandawa, utilisable seulement en etant Saoul. Attention, il brule aussi les allies.',
   },
   gueuleDeBois: {
     id: 'gueuleDeBois', name: 'Gueule de Bois', short: 'GB', icon: ICON_FLASK,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 5 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 12, max: 18 }, { type: 'debuff_pm', value: 2 }],
-    desc: 'Une bouteille lancee a la tete : degats et -2 PM.',
+    effects: [{ type: 'damage', min: 14, max: 20 }, { type: 'debuff_pm', value: 2 }],
+    desc: 'Une bouteille lancee a la tete : la seule attaque a distance du Pandawa, degats et -2 PM.',
+  },
+  vulnerabilite: {
+    id: 'vulnerabilite', name: 'Vulnerabilite', short: 'VU', icon: ICON_SPIT,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 2, range: { min: 1, max: 5 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    cooldown: 2, forbids: 'saoul',
+    effects: [{ type: 'buff', vuln: 20, duration: 2 }],
+    levels: { 3: { cooldown: 2, effects: [{ duration: 2 }] } },
+    desc: 'Souille un ennemi : il subit +20% de degats de toute l equipe pendant 2 tours. Impossible en etant Saoul.',
   },
   stabilisation: {
     id: 'stabilisation', name: 'Stabilisation', short: 'ST', icon: ICON_SHIELD,
@@ -1053,11 +1159,11 @@ export const SPELLS = {
   motInterdit: {
     id: 'motInterdit', name: 'Mot Interdit', short: 'MI', icon: ICON_FEATHER,
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
-    apCost: 5, range: { min: 1, max: 3 }, needsLOS: true,
+    apCost: 4, range: { min: 1, max: 5 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
     cooldown: 2,
-    effects: [{ type: 'damage', min: 40, max: 55 }],
-    desc: 'Le mot que nul ne doit prononcer : 40-55 degats (recharge 2 tours).',
+    effects: [{ type: 'damage', min: 30, max: 40 }, { type: 'gainStack', key: 'ferveur', amount: 2, max: 4 }],
+    desc: 'Le mot que nul ne doit prononcer : gros degats a distance et 2 Ferveur d un coup (recharge 2 tours).',
   },
 
   // ---------- BOSS & MONSTRES (glyphes, pieges, etats) ----------
@@ -1085,6 +1191,15 @@ export const SPELLS = {
     cooldown: 3,
     effects: [{ type: 'damage', min: 10, max: 16 }, { type: 'state', rooted: true, duration: 2 }],
     desc: 'Des racines de pierre jaillissent (rayon 1) : degats et les ennemis touches sont ENRACINES 2 tours (ni marche ni deplacement).',
+  },
+  etreinteDePierre: {
+    id: 'etreinteDePierre', name: 'Etreinte de Pierre', short: 'EP', icon: ICON_FIST,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 1, max: 5 }, needsLOS: true,
+    target: 'enemy', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'damage', min: 8, max: 12 }, { type: 'state', rooted: true, duration: 1 }],
+    desc: 'Des mains de roche jaillissent du sol : 8-12 degats et la cible est enracinee 1 tour.',
   },
   eboulement: {
     id: 'eboulement', name: 'Eboulement', short: 'EB', icon: ICON_ROCK_THROW,
@@ -1129,6 +1244,15 @@ export const SPELLS = {
     cooldown: 2,
     effects: [{ type: 'charge' }, { type: 'damage', min: 34, max: 46 }, { type: 'knockback', distance: 2 }],
     desc: 'Le Minotoror charge en ligne droite jusqu a sa cible, la percute et la repousse.',
+  },
+  rueeMominotor: {
+    id: 'rueeMominotor', name: 'Ruee', short: 'RU', icon: ICON_HASTE,
+    category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
+    apCost: 3, range: { min: 2, max: 4 }, needsLOS: true, lineOnly: true,
+    target: 'enemy', area: { type: 'single' },
+    cooldown: 2,
+    effects: [{ type: 'charge' }, { type: 'damage', min: 12, max: 18 }],
+    desc: 'Le Mominotor se rue en ligne droite sur sa cible et la percute.',
   },
   coupDeCorne: {
     id: 'coupDeCorne', name: 'Coup de Corne', short: 'CC', icon: ICON_BITE_ROYAL,
@@ -1388,15 +1512,29 @@ const SUMMON_NAMES = {
   craqueleur: 'Craqueleur', dragounetRouge: 'Dragounet Rouge', chatonBlanc: 'Chaton Blanc', bouftouInvoc: 'Bouftou apprivoise', tofuInvoc: 'Tofu apprivoise',
 };
 
+function stackBonusLine(sb, what) {
+  const st = CLASS_STACKS[sb.key] || { label: sb.key };
+  return `+${Math.round(sb.per * 100)}% de ${what} par point de ${st.label}${sb.consume ? ' (depense tout)' : ''}`;
+}
+function whenLabel(w) {
+  const st = CLASS_STATES[w.caster || w.casterNot] || { label: w.caster || w.casterNot };
+  return w.caster ? `Si ${st.label} : ` : `Si pas ${st.label} : `;
+}
+
 // Helpers pour fabriquer le contenu du tooltip a partir d un spell.
 export function spellEffectLines(spell) {
   const lines = [];
+  if (spell.requires && CLASS_STATES[spell.requires]) lines.push(`Utilisable seulement en etant ${CLASS_STATES[spell.requires].label}`);
+  if (spell.forbids && CLASS_STATES[spell.forbids]) lines.push(`Impossible en etant ${CLASS_STATES[spell.forbids].label}`);
+  if (spell.requiresCarry) lines.push('Il faut porter une cible (Karcham)');
   for (const eff of spell.effects) {
     switch (eff.type) {
       case 'damage':
         lines.push(`Degats ${ELEMENT_LABEL[damageElementOf(spell)] || ''} : ${eff.min}-${eff.max}`.replace('  ', ' '));
         if (eff.lifesteal) lines.push(`Vole ${Math.round(eff.lifesteal * 100)}% des degats en PV`);
         if (eff.packBonus) lines.push(`+${Math.round(eff.packBonus * 100)}% degats par invocation en vie`);
+        if (eff.stackBonus) lines.push(stackBonusLine(eff.stackBonus, 'degats'));
+        if (eff.enemiesOnly) lines.push('(ne touche que les ennemis)');
         if (spell.area && spell.area.type === 'line') {
           const lenTxt = spell.area.length < 0
             ? 'jusqu au bord de la carte'
@@ -1412,9 +1550,36 @@ export function spellEffectLines(spell) {
         break;
       case 'heal':
         lines.push(`Soins : ${eff.min}-${eff.max}`);
+        if (eff.stackBonus) lines.push(stackBonusLine(eff.stackBonus, 'soin'));
         break;
       case 'heal_percent':
-        lines.push(`Soins : ${Math.round(eff.percent * 100)}% des PV max`);
+        lines.push(`${eff.when ? whenLabel(eff.when) : ''}Soins : ${eff.when ? '+' : ''}${Math.round(eff.percent * 100)}% des PV max`);
+        if (eff.stackBonus) lines.push(stackBonusLine(eff.stackBonus, 'soin'));
+        break;
+      case 'gainStack': {
+        const st = CLASS_STACKS[eff.key] || { label: eff.key };
+        lines.push(`+${eff.amount} ${st.label} (max ${eff.max || st.max || 5})`);
+        break;
+      }
+      case 'clearState':
+        lines.push(`${eff.when ? whenLabel(eff.when) : ''}le lanceur n est plus ${(CLASS_STATES[eff.state] || { label: eff.state }).label}`);
+        break;
+      case 'teleswap':
+        lines.push('Teleporte le lanceur, ou echange sa place avec la cible');
+        lines.push(`Ennemi echange : Telefrag ${eff.telefrag || 2} tours (+50% degats, +2 PA)`);
+        break;
+      case 'rewind':
+        lines.push('Renvoie la cible a sa case de debut de tour');
+        lines.push(`Ennemi deplace : Telefrag ${eff.telefrag || 2} tours`);
+        break;
+      case 'carry':
+        lines.push('Porte un combattant adjacent jusqu a la fin du tour');
+        break;
+      case 'throw':
+        lines.push('Lance le combattant porte sur la case visee');
+        break;
+      case 'magnet':
+        lines.push(`Attire de ${eff.distance} cases les ennemis alignes avec la bombe (portee ${eff.reach})`);
         break;
       case 'teleport':
         lines.push('Teleporte le lanceur');
@@ -1423,7 +1588,12 @@ export function spellEffectLines(spell) {
         const parts = [];
         if (eff.damageMult) parts.push(`+${Math.round(eff.damageMult * 100)}% degats`);
         if (eff.bonusPa) parts.push(`+${eff.bonusPa} PA`);
-        if (eff.bonusPm) parts.push(`+${eff.bonusPm} PM`);
+        if (eff.bonusPm > 0) parts.push(`+${eff.bonusPm} PM`);
+        if (eff.bonusPm < 0) parts.push(`${eff.bonusPm} PM`);
+        if (eff.state && CLASS_STATES[eff.state]) parts.unshift(`Etat ${CLASS_STATES[eff.state].label}`);
+        if (eff.vuln) parts.push(`la cible subit +${eff.vuln}% de degats`);
+        if (eff.drain) parts.push(`ses attaquants recuperent ${Math.round(eff.drain * 100)}% des degats en PV`);
+        if (eff.hot) parts.push(`soigne ${eff.hot.min}-${eff.hot.max} PV au debut de chaque tour`);
         if (eff.shield) parts.push(`-${Math.round(eff.shield * 100)}% degats reçus`);
         if (eff.reflect) parts.push(`renvoie ${Math.round(eff.reflect * 100)}% des degats`);
         if (eff.invisible) parts.push('invisible');
@@ -1432,7 +1602,8 @@ export function spellEffectLines(spell) {
         if (eff.fuite) parts.push(`+${eff.fuite} fuite`);
         if (eff.tacle) parts.push(`+${eff.tacle} tacle`);
         if (eff.stabilized) parts.push('stabilise');
-        lines.push(`${parts.join(', ')} pendant ${eff.duration} tours${eff.damageMult ? ' (cumulable)' : ''}`);
+        lines.push(`${parts.join(', ')} pendant ${eff.duration} tour${eff.duration > 1 ? 's' : ''}${eff.damageMult && !eff.state ? ' (cumulable)' : ''}`);
+        if (eff.veineOnLow) lines.push(`Mauvais tirage : +${eff.veineOnLow} Veine`);
         break;
       }
       case 'summon': {
@@ -1458,15 +1629,20 @@ export function spellEffectLines(spell) {
       }
       case 'knockback':
         lines.push(`Repousse la cible de ${eff.distance || 1} cases`);
+        if (eff.collide) lines.push(`Collision : ${eff.collide.min}-${eff.collide.max} degats par case bloquee`);
         break;
       case 'gainPa':
         lines.push(`+${eff.amount} PA ce tour`);
         if (eff.nextTurnPenalty) lines.push(`-${eff.nextTurnPenalty} PA au tour suivant`);
         break;
-      case 'chanceStrike':
-        lines.push(`50% : degats ${eff.dmgMin}-${eff.dmgMax}`);
-        lines.push(`50% : soigne ${eff.healMin}-${eff.healMax}`);
+      case 'chanceStrike': {
+        const p = Math.round((eff.chance === undefined ? 0.5 : eff.chance) * 100);
+        lines.push(`${p}% : degats ${eff.dmgMin}-${eff.dmgMax}`);
+        if (eff.failMax) lines.push(`${100 - p}% : degats ${eff.failMin}-${eff.failMax}`);
+        else lines.push(`${100 - p}% : soigne la cible de ${eff.healMin}-${eff.healMax}`);
+        if (eff.veine) lines.push(`Pari perdu : +${eff.veine} Veine (+10% de reussite par point)`);
         break;
+      }
       case 'dot':
         lines.push(`Poison : ${eff.min}-${eff.max} degats pendant ${eff.duration} tours`);
         break;
@@ -1475,6 +1651,8 @@ export function spellEffectLines(spell) {
         const b = BOMB_LEVELS[lv - 1];
         lines.push(`Bombe : ${b.hp} PV${b.res ? `, resistance ${b.res}%` : ''}`);
         lines.push(`Explosion : ${b.dmg} degats (+75% par tour), rayon 2, dans 3 tours`);
+        lines.push(`Mur de feu entre 2 bombes alignees : ${Math.round(14 * b.dmg / 50)}-${Math.round(20 * b.dmg / 50)} degats`);
+        lines.push('Combo : +25% de degats par bombe en chaine');
         break;
       }
       case 'moveBomb':

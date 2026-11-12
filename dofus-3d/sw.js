@@ -2,7 +2,7 @@
 // Met tout le jeu en cache a la premiere visite : ensuite il se lance
 // meme sans connexion. A chaque nouvelle version (empreinte VERSION),
 // le nouveau cache remplace l ancien.
-const VERSION = 'b24b0457bd';
+const VERSION = '1733648169';
 const CACHE = 'dofus3d-' + VERSION;
 const FILES = [
   "./",
@@ -15,6 +15,7 @@ const FILES = [
   "./src/Bestiary.js",
   "./src/Character3D.js",
   "./src/Elements.js",
+  "./src/Explore.js",
   "./src/Fighter.js",
   "./src/Game.js",
   "./src/GroundPainter.js",
@@ -42,6 +43,7 @@ const FILES = [
   "./src/VFX.js",
   "./src/WorldMap.js",
   "./src/dofus-theme.css",
+  "./src/explore.css",
   "./src/hud-layout.css",
   "./src/main.js",
   "./src/menu-world.css",
@@ -61,10 +63,14 @@ const FILES = [
   "./src/models/ecaflip.js",
   "./src/models/eniripsa.js",
   "./src/models/foliage.js",
+  "./src/models/heroKitA.js",
+  "./src/models/heroKitB.js",
   "./src/models/humanoid.js",
   "./src/models/index.js",
   "./src/models/iop.js",
   "./src/models/kit.js",
+  "./src/models/monsterKitA.js",
+  "./src/models/monsterKitB.js",
   "./src/models/osamodas.js",
   "./src/models/pandawa.js",
   "./src/models/rock.js",

@@ -78,3 +78,35 @@ export function recordTier(combatId, tier) {
   }
   return false;
 }
+
+// ---------------------------------------------------------------------------
+// Tranches d evolution (exploration) : pour chaque region, plus haute
+// tranche vaincue (1 = sbires ... n = groupe royal). Les anciennes
+// sauvegardes ne connaissent que les paliers : `thresholds[k-1]` est le
+// palier qui vaut la tranche k, on prend le meilleur des deux.
+// ---------------------------------------------------------------------------
+const BAND_KEY = 'dofus3d.bands';
+
+function loadBands() {
+  try { return JSON.parse(localStorage.getItem(BAND_KEY) || '{}') || {}; } catch (_) { return {}; }
+}
+
+export function getBestBand(combatId, thresholds = [1, 3, 5, 6]) {
+  const tier = getBestTier(combatId);
+  let fromTier = 0;
+  thresholds.forEach((t, i) => { if (tier >= t) fromTier = i + 1; });
+  return Math.min(thresholds.length, Math.max(loadBands()[combatId] || 0, fromTier));
+}
+
+// Enregistre une tranche vaincue. Renvoie true si c est un nouveau record.
+export function recordBand(combatId, band, thresholds = [1, 3, 5, 6]) {
+  const before = getBestBand(combatId, thresholds);
+  const b = loadBands();
+  if ((b[combatId] || 0) < band) {
+    b[combatId] = band;
+    try { localStorage.setItem(BAND_KEY, JSON.stringify(b)); } catch (_) {}
+  }
+  // Garde l ancien compteur de paliers coherent.
+  if (thresholds[band - 1]) recordTier(combatId, thresholds[band - 1]);
+  return band > before;
+}

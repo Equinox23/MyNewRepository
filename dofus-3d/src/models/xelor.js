@@ -1,162 +1,201 @@
 import * as THREE from 'three';
-import { M, buildHumanoid, lathe, taper, bentCone, roundBox, cloth, strand, place } from './humanoid.js';
+import { M, buildHero, loft, sculptSphere, tubeAlong, lathe } from './humanoid.js';
+import { band, surfaceOf, headBand, profile, detail } from './heroKitA.js';
 
-// Xelor facon Dofus : maitre du temps momifie. Longue robe bleu nuit
-// evasee a ourlet dore dentele, epaulettes en forme d engrenage, cadran
-// d horloge sur la poitrine, tete et mains enroulees de bandelettes,
-// regard cyan au fond d une fente d ombre, chapeau pointu courbe a large
-// bord, baton surmonte d un sablier.
+// Xelor : petit mage du temps momifie. Tete et mains enroulees de
+// bandelettes, deux yeux cyan qui luisent au fond d une fente d ombre,
+// grand chapeau bleu pointu a la pointe recourbee, robe bleu nuit a
+// galons dores qui tombe jusqu au sol, pelerine, manches evasees, cadran
+// d horloge sur le ventre, baton surmonte d un sablier.
 export function buildXelor() {
-  const bandage = M(0xefe4c6, { r: 0.85 });
-  const bandageDk = M(0xc8b48a, { r: 0.85 });
-  const robe = M(0x24306a, { r: 0.8 });
-  const robeDk = M(0x141a3e, { r: 0.85 });
-  const robeLt = M(0x3e52a6, { r: 0.75 });
-  const gold = M(0xe8c14a, { r: 0.35, m: 0.6 });
-  const goldDk = M(0x9a7d28, { r: 0.45, m: 0.5 });
-  const glow = new THREE.MeshBasicMaterial({ color: 0xc8f6ff });
-  const glowSoft = new THREE.MeshBasicMaterial({ color: 0x73e0ff, transparent: true, opacity: 0.35 });
-  const dark = M(0x0a0a14, { r: 0.9 });
+  const bandage = M(0xf2e8cc, { r: 0.85 });
+  const bandageDk = M(0xcdb98c, { r: 0.85 });
+  const robe = M(0x2c3c8c, { r: 0.75 });
+  const robeDk = M(0x1c2458, { r: 0.85 });
+  const robeLt = M(0x4660c0, { r: 0.7 });
+  const gold = M(0xf0c444, { r: 0.35, m: 0.5 });
+  const wood = M(0x6a4424, { r: 0.85 });
+  const dark = M(0x10101e, { r: 0.9 });
+  const glow = new THREE.MeshBasicMaterial({ color: 0x8ceeff });
+  const glowCore = new THREE.MeshBasicMaterial({ color: 0xeaffff });
+  const glowSoft = new THREE.MeshBasicMaterial({ color: 0x73e0ff, transparent: true, opacity: 0.28, depthWrite: false });
 
-  const H = buildHumanoid({
-    skin: bandage, top: robe, bottom: robeDk, boots: robeDk, gloves: bandage, sleeve: robe, forearm: robeLt,
-    build: 0.96, headR: 0.29, eyes: false, noNose: true,
+  const shape = { taper: 0.3, chin: 0.04 };
+  const H = buildHero({
+    skin: bandage, top: robe, bottom: robeDk, boots: robeDk, gloves: bandage, arm: robe,
+    build: 0.93, headR: 0.22, ears: false, headShape: shape,
   });
-  const { group, head, headR: hr } = H;
+  const { group, head, headR: hr, at } = H;
+  group.userData.restyled = true; // proportions deja finales
 
-  // ---- Robe evasee jusqu au sol, ourlet dore dentele ----
-  const skirt = lathe([[0.36, 0.02], [0.33, 0.08], [0.25, 0.26], [0.18, 0.44], [0.16, 0.5]], robe, 26, 0.9);
-  group.add(skirt);
-  for (let i = 0; i < 14; i++) {
-    const a = (i / 14) * Math.PI * 2;
-    const tooth = bentCone(0.04, 0.06, 0, 0, gold, 4, 1);
-    tooth.position.set(Math.cos(a) * 0.35, 0.02, Math.sin(a) * 0.32);
-    tooth.rotation.set(Math.PI, 0, 0);
-    tooth.scale.set(1, 1, 0.5);
-    tooth.lookAt(0, 0.02, 0);
-    tooth.rotateX(Math.PI / 2);
-    group.add(tooth);
-  }
-  const hem = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.02, 6, 30), gold);
-  hem.rotation.x = Math.PI / 2;
-  hem.scale.set(1, 0.9, 1);
-  hem.position.y = 0.05;
-  group.add(hem);
-  // Bande centrale doree de la robe.
-  group.add(place(roundBox(0.06, 0.42, 0.02, 0.01, goldDk), 0, 0.28, 0.27, -0.28));
+  // ---- Robe evasee jusqu au sol, ourlet et galon central dores ----
+  const skirtRings = [[0.75, 0.118, 0.09], [0.63, 0.16, 0.125], [0.36, 0.225, 0.19], [0.09, 0.3, 0.26], [0.03, 0.31, 0.27]];
+  group.add(loft(skirtRings, robe, { segs: 26, sub: 5 }));
+  group.add(loft([[0.105, 0.28, 0.24], [0.095, 0.309, 0.269], [0.04, 0.323, 0.283], [0.022, 0.3, 0.26]], gold, { segs: 26, sub: 3 }));
+  const sk = profile(skirtRings);
+  group.add(band((t) => {
+    const y = 0.7 - t * 0.6;
+    const z = sk(y)[1] + 0.004;
+    const dz = (sk(y + 0.01)[1] - sk(y - 0.01)[1]) / 0.02;
+    return { p: new THREE.Vector3(0, y, z), n: new THREE.Vector3(0, -dz, 1).normalize(), w: 0.03 + 0.022 * t, th: 0.008 };
+  }, gold, { steps: 20, segs: 8, sq: 0.7 }));
+  // Ceinture doree.
+  group.add(loft([[0.69, 0.11, 0.09], [0.7, 0.142, 0.112], [0.745, 0.13, 0.102], [0.755, 0.1, 0.08]], gold, { segs: 22, sub: 3 }));
 
-  // ---- Cadran d horloge sur la poitrine ----
-  const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.025, 24), M(0xfff6d8, { r: 0.4 }));
-  dial.rotation.x = Math.PI / 2;
-  dial.position.set(0, 0.66, 0.16);
-  group.add(dial);
-  const dialRim = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.018, 8, 24), gold);
-  dialRim.position.set(0, 0.66, 0.175);
-  group.add(dialRim);
-  for (const [len, rot] of [[0.07, 0.4], [0.05, -1.4]]) {
-    const hnd = roundBox(0.012, len, 0.008, 0.004, dark);
+  // ---- Cadran d horloge ----
+  const clock = new THREE.Group();
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.068, 0.016, 10, 28), gold);
+  rim.castShadow = true;
+  clock.add(rim);
+  const face = detail(new THREE.Mesh(new THREE.CylinderGeometry(0.066, 0.066, 0.016, 24), M(0xfff6dc, { r: 0.5 })));
+  face.rotation.x = Math.PI / 2;
+  clock.add(face);
+  for (const [len, rot, wd] of [[0.05, -0.5, 0.012], [0.034, 1.25, 0.014]]) {
+    const hnd = detail(new THREE.Mesh(new THREE.BoxGeometry(wd, len, 0.006), dark));
     hnd.geometry.translate(0, len / 2, 0);
-    hnd.position.set(0, 0.66, 0.185);
+    hnd.position.z = 0.011;
     hnd.rotation.z = rot;
-    group.add(hnd);
+    clock.add(hnd);
+  }
+  const pin = detail(new THREE.Mesh(new THREE.SphereGeometry(0.011, 8, 6), gold));
+  pin.position.z = 0.012;
+  clock.add(pin);
+  clock.position.set(0, 0.795, 0.126);
+  clock.rotation.x = -0.1;
+  group.add(clock);
+
+  // ---- Pelerine sur les epaules, bord dore ----
+  group.add(loft([[0.915, 0.27, 0.15], [0.93, 0.292, 0.172], [0.985, 0.262, 0.158], [1.04, 0.17, 0.118], [1.075, 0.085, 0.08]], robeLt, { segs: 26, sub: 4 }));
+  group.add(loft([[0.9, 0.262, 0.146], [0.908, 0.3, 0.18], [0.934, 0.3, 0.18], [0.942, 0.262, 0.146]], gold, { segs: 26, sub: 3 }));
+
+  // ---- Manches evasees (suivent les bras), revers dore ----
+  for (const [arm, s] of [[H.armL, -1], [H.armR, 1]]) {
+    arm.add(loft([
+      [-0.15, 0.05, 0.054, s * 0.026, 0], [-0.2, 0.064, 0.068, s * 0.034, 0.004], [-0.28, 0.084, 0.088, s * 0.04, 0.018],
+      [-0.355, 0.1, 0.104, s * 0.044, 0.037], [-0.372, 0.092, 0.096, s * 0.045, 0.04],
+    ], robe, { segs: 16, sub: 4 }));
+    arm.add(loft([
+      [-0.34, 0.09, 0.094, s * 0.043, 0.034], [-0.348, 0.106, 0.11, s * 0.044, 0.036],
+      [-0.378, 0.108, 0.112, s * 0.045, 0.041], [-0.386, 0.09, 0.094, s * 0.045, 0.042],
+    ], gold, { segs: 16, sub: 3 }));
   }
 
-  // ---- Epaulettes en engrenage ----
-  for (const [arm, side] of [[H.armL, -1], [H.armR, 1]]) {
-    const gear = new THREE.Group();
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.04, 16), gold);
-    gear.add(disc);
-    for (let k = 0; k < 8; k++) {
-      const a = (k / 8) * Math.PI * 2;
-      const t = roundBox(0.035, 0.04, 0.03, 0.008, gold);
-      t.position.set(Math.cos(a) * 0.1, 0, Math.sin(a) * 0.1);
-      t.rotation.y = -a;
-      gear.add(t);
+  // ---- Tete momifiee : fente d ombre + yeux lumineux ----
+  const sm = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
+  const slit = sculptSphere((d, out) => {
+    // Meme volume que heroHead, gonfle uniquement dans la fente.
+    let x = d.x, y = d.y, z = d.z;
+    if (y < 0) {
+      const k = -y;
+      x *= 1 - shape.taper * Math.pow(k, 1.6);
+      z *= z > 0 ? 1 + 0.04 * k : 1 - 0.14 * k;
+      y *= 1 + shape.chin;
+    } else {
+      y *= 0.96;
     }
-    gear.position.set(side * 0.03, 0.05, 0);
-    gear.rotation.z = -side * 0.4;
-    arm.add(gear);
-    // Manche large evasee.
-    const elbow = arm.children.find(c => c.isGroup);
-    if (elbow) {
-      const sleeve = lathe([[0.1, -0.13], [0.07, -0.02], [0.05, 0.02]], robeLt, 14);
-      elbow.add(sleeve);
-    }
-  }
-
-  // ---- Tete momifiee : bandelettes croisees + fente d ombre ----
-  const cy = hr * 0.88;
-  for (const [y, tilt] of [[1.25, 0.22], [1.05, -0.2], [0.72, 0.18], [0.52, -0.14], [0.3, 0.1]]) {
-    const rr = Math.sqrt(Math.max(0.01, 1 - Math.pow((y * hr - cy) / (hr * 1.05), 2))) * hr * 1.06;
-    const b = new THREE.Mesh(new THREE.TorusGeometry(rr, 0.022, 6, 28), bandageDk);
-    b.rotation.set(Math.PI / 2, tilt, 0);
-    b.position.set(0, y * hr, 0);
-    head.add(b);
-  }
-  const slit = new THREE.Mesh(new THREE.SphereGeometry(hr * 0.72, 18, 10), dark);
-  slit.scale.set(1.3, 0.38, 0.5);
-  slit.position.set(0, hr * 0.92, hr * 0.72);
+    x *= 1 + 0.05 * Math.exp(-Math.pow((d.y + 0.32) / 0.3, 2));
+    z *= z > 0 ? 0.93 : 1.05;
+    const az = Math.atan2(Math.abs(d.x), d.z);
+    const m = sm(1.3, 1.08, az) * sm(-0.37, -0.3, d.y + 0.05 * (1 - Math.cos(az))) * sm(0.2, 0.13, d.y - 0.05 * (1 - Math.cos(az)));
+    const f = 0.88 + 0.135 * m;
+    out.set(x * hr * f, y * hr * f, z * hr * f);
+  }, dark, 120, 80);
+  slit.position.y = hr * 0.88;
+  slit.userData.noOutline = true;
+  slit.castShadow = false;
   head.add(slit);
-  for (const sx of [-1, 1]) {
-    const e = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 10), glow);
-    e.scale.set(1, 1.2, 0.5);
-    e.position.set(sx * hr * 0.36, hr * 0.92, hr * 1.02);
-    head.add(e);
-    const h2 = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), glowSoft);
-    h2.position.set(sx * hr * 0.36, hr * 0.92, hr * 1.0);
-    head.add(h2);
+  for (const s of [-1, 1]) {
+    const g = new THREE.Group();
+    const p = at(s * hr * 0.37, hr * 0.8, hr * 0.022);
+    g.position.copy(p);
+    g.rotation.set(0, s * 0.42, -s * 0.12);
+    const ball = (mat, w, h, z) => {
+      const m = detail(new THREE.Mesh(new THREE.SphereGeometry(1, 18, 14), mat));
+      m.scale.set(w, h, hr * 0.04);
+      m.position.z = z;
+      return m;
+    };
+    g.add(ball(glowSoft, hr * 0.27, hr * 0.33, 0));
+    g.add(ball(glow, hr * 0.17, hr * 0.235, hr * 0.012));
+    const core = ball(glowCore, hr * 0.085, hr * 0.13, hr * 0.03);
+    core.position.set(-s * hr * 0.02, hr * 0.03, hr * 0.03);
+    g.add(core);
+    head.add(g);
   }
-  const loose = strand([[hr * 0.8, hr * 0.5, hr * 0.3], [hr * 1.1, hr * 0.2, hr * 0.2], [hr * 1.15, -hr * 0.2, hr * 0.1]], 0.02, 0.012, bandage, 10);
-  head.add(loose);
+  // Bandelettes : quelques tours inclines autour de la tete.
+  const c0 = new THREE.Vector3(0, hr * 0.88, 0);
+  const surf = surfaceOf(H.skull, c0);
+  const wrap = (y, k, ph, w) => {
+    const b = headBand(surf, bandageDk, { y, k, phase: ph, w: hr * (w || 0.06), th: hr * 0.022, lift: hr * 0.012, sq: 0.6 });
+    b.userData.noOutline = true;
+    head.add(b);
+  };
+  wrap(0.27, 0.07, 0.3, 0.07);
+  wrap(-0.45, -0.07, 0.5, 0.07);
+  wrap(-0.95, 0.16, 2.0, 0.055);
+  wrap(0.72, -0.12, 1.2, 0.055);
+  // Bandelettes defaites qui flottent derriere la tete.
+  const l0 = surf(new THREE.Vector3(-0.7, -0.3, -0.65), 0.002);
+  head.add(band((t) => {
+    const p = l0.clone().add(new THREE.Vector3(-0.07 * Math.sin(t * 2.2), -0.24 * t, -0.1 * t + 0.025 * Math.sin(t * 7)));
+    return { p, n: new THREE.Vector3(-0.6, 0.1, -0.8).normalize(), w: 0.024 * (1 - 0.35 * t), th: 0.005 };
+  }, bandage, { steps: 16, segs: 8, sq: 0.6 }));
+  // Tours de bandelettes au cou.
+  group.add(loft([[1.055, 0.07, 0.068], [1.075, 0.09, 0.086], [1.105, 0.086, 0.084], [1.125, 0.066, 0.066]], bandageDk, { segs: 18, sub: 3 }));
 
-  // ---- Chapeau pointu courbe a large bord ----
+  // ---- Grand chapeau pointu a large bord ----
   const hat = new THREE.Group();
-  const brim = lathe([[0.02, 0], [0.5, 0.0], [0.52, 0.025], [0.3, 0.05]], robeDk, 28);
-  hat.add(brim);
-  const brimRim = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.022, 8, 32), gold);
-  brimRim.rotation.x = Math.PI / 2;
-  brimRim.position.y = 0.012;
-  hat.add(brimRim);
-  const cone = bentCone(0.3, 0.8, 0.22, -0.18, robe, 20, 10);
-  cone.position.y = 0.03;
-  hat.add(cone);
-  const hatBand = new THREE.Mesh(new THREE.TorusGeometry(0.28, 0.03, 8, 26), gold);
-  hatBand.rotation.x = Math.PI / 2;
-  hatBand.position.y = 0.1;
-  hat.add(hatBand);
-  const gem = new THREE.Mesh(new THREE.OctahedronGeometry(0.06), glowSoft.clone());
-  gem.material.opacity = 0.9;
-  gem.position.set(0, 0.1, 0.3);
-  hat.add(gem);
-  const pompon = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), gold);
-  pompon.position.set(0.22, 0.83, -0.18);
-  hat.add(pompon);
   hat.name = 'classHat';
-  hat.position.y = hr * 1.55;
-  hat.rotation.x = -0.1;
-  hat.scale.setScalar(0.82);
+  const brim = sculptSphere((d, out) => {
+    const r = Math.hypot(d.x, d.z);
+    const a = Math.atan2(d.x, d.z);
+    out.set(d.x * 0.345, d.y * 0.03 - r * r * (0.055 - 0.014 * Math.cos(a * 2)), d.z * 0.345);
+  }, robe, 40, 16);
+  hat.add(brim);
+  hat.add(band((t) => {
+    const a = t * Math.PI * 2;
+    const x = Math.sin(a), z = Math.cos(a);
+    const y = -(0.055 - 0.014 * Math.cos(a * 2));
+    return { p: new THREE.Vector3(x * 0.345, y, z * 0.345), n: new THREE.Vector3(x, 0, z), w: 0.02, th: 0.014 };
+  }, gold, { steps: 48, segs: 8, closed: true, sq: 0 }));
+  const tipPts = [[0, -0.01, 0], [0, 0.2, -0.012], [0, 0.4, -0.07], [0.03, 0.55, -0.19], [0.07, 0.6, -0.33], [0.1, 0.56, -0.43]];
+  hat.add(tubeAlong(tipPts, t => 0.224 * Math.pow(1 - t, 0.9) + 0.016, robe, { steps: 40, segs: 22 }));
+  hat.add(loft([[0.012, 0.2, 0.2], [0.022, 0.256, 0.256], [0.08, 0.244, 0.244, 0, -0.004], [0.09, 0.2, 0.2, 0, -0.004]], gold, { segs: 26, sub: 3 }));
+  const gem = sculptSphere((d, out) => { out.set(d.x * 0.04, d.y * 0.048, d.z * 0.022); }, glow, 12, 10);
+  gem.position.set(0, 0.05, 0.25);
+  gem.castShadow = false;
+  hat.add(gem);
+  const bob = new THREE.Mesh(new THREE.SphereGeometry(0.04, 14, 10), gold);
+  bob.position.set(0.105, 0.545, -0.455);
+  bob.castShadow = true;
+  hat.add(bob);
+  hat.position.set(0, hr * 1.5, -hr * 0.05);
+  hat.rotation.x = -0.13;
   head.add(hat);
 
   // ---- Baton a sablier (main droite) ----
   const staff = new THREE.Group();
-  staff.add(place(taper(0.022, 0.026, 1.2, M(0x5a3a20, { r: 0.85 })), 0, 0.92, 0));
-  const glass = lathe([[0.02, 0], [0.07, 0.03], [0.06, 0.08], [0.012, 0.12], [0.06, 0.16], [0.07, 0.21], [0.02, 0.24]], new THREE.MeshStandardMaterial({ color: 0xbfeaff, transparent: true, opacity: 0.55 }), 16);
-  glass.position.y = 0.92;
+  staff.add(tubeAlong([[0, -0.56, 0], [0.004, -0.1, 0], [-0.004, 0.35, 0], [0, 0.74, 0]], () => 0.022, wood, { steps: 16, segs: 9 }));
+  const cap = (y) => {
+    const c = loft([[y - 0.022, 0.04, 0.04], [y - 0.014, 0.078, 0.078], [y + 0.014, 0.078, 0.078], [y + 0.022, 0.04, 0.04]], gold, { segs: 16, sub: 2 });
+    staff.add(c);
+  };
+  cap(0.755);
+  cap(1.005);
+  const glassM = new THREE.MeshStandardMaterial({ color: 0xc8f0ff, transparent: true, opacity: 0.6, roughness: 0.2 });
+  const glass = lathe([[0.02, 0], [0.066, 0.025], [0.058, 0.075], [0.014, 0.115], [0.058, 0.155], [0.066, 0.205], [0.02, 0.23]], glassM, 18);
+  glass.position.y = 0.765;
+  glass.userData.noOutline = true;
   staff.add(glass);
-  for (const y of [0.9, 1.17]) {
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.085, 0.03, 14), gold);
-    cap.position.y = y;
-    staff.add(cap);
-  }
-  const sand = lathe([[0.01, 0], [0.05, 0.03], [0.012, 0.06]], M(0xf8d060), 12);
-  sand.position.y = 0.92;
+  const sand = detail(lathe([[0.01, 0], [0.05, 0.02], [0.03, 0.05], [0.006, 0.085]], M(0xf8d060, { r: 0.6 }), 12));
+  sand.position.y = 0.775;
   staff.add(sand);
-  staff.position.set(0, -0.1, 0.02);
-  staff.rotation.set(0.2, 0, -0.08);
+  const sand2 = detail(lathe([[0.006, 0], [0.04, 0.05], [0.044, 0.062], [0.01, 0.066]], M(0xf8d060, { r: 0.6 }), 12));
+  sand2.position.y = 0.885;
+  staff.add(sand2);
+  staff.position.set(0, -0.055, 0.03);
+  staff.rotation.set(0.42, 0, -0.4);
   H.handR.add(staff);
 
-  // Les jambes disparaissent sous la robe : on les masque.
-  H.legL.visible = false;
-  H.legR.visible = false;
   return group;
 }

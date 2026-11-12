@@ -3,7 +3,7 @@ import { Fighter, DEFS } from './Fighter.js';
 import { Character3D } from './Character3D.js';
 import { TurnManager } from './TurnManager.js';
 import { bfs, pathTo, hasLOS } from './Path.js';
-import { SPELLS } from './Spells.js';
+import { SPELLS, CLASS_STACKS, CLASS_STATES } from './Spells.js';
 import { spellElementColor } from './SpellIcons.js';
 import { getHero, addXp, monsterXp, bombBonus, heroStats } from './Leveling.js';
 import { recordTier } from './Progress.js';
@@ -61,7 +61,7 @@ export class Game {
     this.hud.on('onSpellSlot', (slot) => this.selectSpellSlot(slot));
     this.hud.on('onEnd', () => this.endTurn());
     // Permet au HUD de griser un sort d invocation deja "consomme".
-    this.hud.isSpellLocked = (fighter, spell) => this.isSummonBlocked(fighter, spell);
+    this.hud.isSpellLocked = (fighter, spell) => this.isSummonBlocked(fighter, spell) || !!this.stateBlockReason(fighter, spell);
   }
 
   setup(config) {
@@ -109,7 +109,7 @@ export class Game {
       }
       const f = new Fighter(cls, team, pos.c, pos.r, opts);
       // Aventure : les PV sont conserves d une salle a l autre.
-      const carried = config.adventure && config.adventure.hp && config.adventure.hp[cls];
+      const carried = ((config.adventure && config.adventure.hp) || config.carryHp || {})[cls];
       if (team === 'player' && carried !== undefined) f.hp = Math.max(1, Math.min(f.maxHp, Math.round(carried * f.maxHp)));
       f.character = new Character3D(this.scene3d.scene, cls, team, pos.c, pos.r);
       if (team === 'player') {
@@ -310,6 +310,19 @@ export class Game {
   async startTurn() {
     if (this.checkEnd()) return;
     const cur = this.turn.current();
+    // Numero de tour global (un mur de bombes ne blesse qu une fois par tour).
+    this._turnSerial = (this._turnSerial || 0) + 1;
+    cur._carried = null;
+    // Soins sur la duree (Mot de Regeneration) : en debut de tour.
+    let hotTotal = 0;
+    for (const b of cur.buffs) {
+      if (b.hot && cur.alive) hotTotal += cur.heal(b.hot.min + Math.floor(Math.random() * (b.hot.max - b.hot.min + 1)));
+    }
+    if (hotTotal > 0 && cur.character) {
+      cur.character.popHeal(hotTotal);
+      cur.character.hpBar.setHp(cur.hp, cur.maxHp);
+      this.hud.log && this.hud.log(`${cur.name} regagne ${hotTotal} PV (regeneration)`, 'heal');
+    }
     // 1) Appliquer les DoT actifs AVANT que la nouvelle ressource se
     //    rafraichisse (pour pouvoir mourir avant ses actions).
     let dotTotal = 0;
@@ -436,6 +449,11 @@ export class Game {
     // Cloture le tour du combattant courant (nettoie les buffs courts,
     // reinitialise les PA/PM affiches) avant de passer au suivant.
     const prev = this.turn.current();
+    if (prev && prev._carried) {
+      // Karcham sans Chamrak : la cible est reposee a la fin du tour.
+      this.hud.log && this.hud.log(`${prev.name} repose ${prev._carried.name}`, 'cast');
+      prev._carried = null;
+    }
     if (prev && prev.alive && prev.endTurn) prev.endTurn();
     this.turn.advance();
     this.startTurn();
@@ -496,6 +514,8 @@ export class Game {
   castBlockReason(cur, spell) {
     if (cur.isOnCooldown(spell.id)) return `${spell.name} en recharge (${cur.spellCooldowns[spell.id]} tours)`;
     if (spell.apCost > cur.pa) return 'Pas assez de PA pour ' + spell.name;
+    const stateReason = this.stateBlockReason(cur, spell);
+    if (stateReason) return stateReason;
     if (this.isSummonBlocked(cur, spell)) {
       return this.summonCount(cur) >= MAX_SUMMONS ? `Limite de ${MAX_SUMMONS} invocations atteinte` : 'Cette creature est deja invoquee';
     }
@@ -643,6 +663,7 @@ export class Game {
     for (const z of this.zones.slice()) {
       if (z.kind !== 'glyph' || z.team === f.team || !f.alive) continue;
       if (!z.cells.some(cl => cl.c === f.c && cl.r === f.r)) continue;
+      if (z.wall) f._wallHitSerial = this._turnSerial;
       this.vfx && this.vfx.shockwave(f.c, f.r, { color: z.color, radius: 0.9, duration: 0.5 });
       this.hud.log && this.hud.log(`${f.name} commence son tour dans ${z.name}`, 'attack');
       const t = z.onTurn || {};
@@ -679,6 +700,8 @@ export class Game {
 
   // Piege adverse sur la case du combattant : explosion en zone.
   async _checkTraps(f) {
+    await this._checkWalls(f);
+    if (!f.alive || this.ended) return true;
     const z = this.zones.find(t => t.kind === 'trap' && t.team !== f.team && t.c === f.c && t.r === f.r);
     if (!z) return false;
     this.zones = this.zones.filter(t => t !== z);
@@ -779,6 +802,8 @@ export class Game {
     // ciblage de sa case (le joueur ne le voit simplement plus).
     if (spell.target === 'self' && targetFighter !== caster) return 'Cible : soi-meme';
     if (spell.target === 'any' && !targetFighter) return 'Cible : un combattant ou une bombe';
+    const classReason = this.classTargetReason(caster, spell, c, r, targetFighter);
+    if (classReason) return classReason;
     if (spell.target === 'enemy' && (!targetFighter || targetFighter.team === caster.team)) return 'Pas d ennemi';
     // Ralentissement : une seule fois par adversaire et par tour.
     if (spell.id === 'ralentissement' && targetFighter
@@ -798,7 +823,7 @@ export class Game {
     if (spell.target === 'tile') {
       const isPlace = spell.effects.some(e => e.type === 'placeBomb' || e.type === 'moveBomb');
       const needsEmpty = spell.effects.some(e =>
-        e.type === 'teleport' || e.type === 'summon' || e.type === 'placeBomb' || e.type === 'moveBomb'
+        e.type === 'teleport' || e.type === 'summon' || e.type === 'placeBomb' || e.type === 'moveBomb' || e.type === 'throw'
       );
       if (needsEmpty && targetFighter) return 'Case occupee';
       if (spell.effects.some(e => e.type === 'summon')) {
@@ -822,6 +847,183 @@ export class Game {
       }
     }
     return null;
+  }
+
+  // ---------- MECANIQUES DE CLASSE ----------
+  // Etats nommes (buff.state : Saoul, Telefrag, Mot Vampirique) et jauges
+  // (fighter.stacks : Puissance, Veine, Ferveur), cf. Spells.CLASS_*.
+  hasState(f, name) {
+    return !!f && f.buffs.some(b => b.state === name);
+  }
+
+  stackOf(f, key) {
+    return (f && f.stacks && f.stacks[key]) || 0;
+  }
+
+  addStack(f, key, amount, max) {
+    const info = CLASS_STACKS[key] || { label: key, color: '#ffffff', max: 5 };
+    const cap = max || info.max || 5;
+    f.stacks = f.stacks || {};
+    const before = f.stacks[key] || 0;
+    f.stacks[key] = Math.max(0, Math.min(cap, before + amount));
+    const gained = f.stacks[key] - before;
+    if (gained > 0 && f.character) {
+      f.character.popText(`+${gained} ${info.label}`, info.color, { fontSize: 18, yStart: 1.9, yRise: 0.6, scaleX: 1.4, scaleY: 0.42 });
+      this.hud.log && this.hud.log(`${f.name} : ${info.label} ${f.stacks[key]}/${cap}`, 'buff');
+    }
+    this.hud.refreshTurnOrder && this.hud.refreshTurnOrder();
+    return gained;
+  }
+
+  // Sort interdit par l etat du lanceur (Saoul / a jeun, rien a lancer).
+  stateBlockReason(cur, spell) {
+    const lbl = (s) => (CLASS_STATES[s] || { label: s }).label;
+    if (spell.requires && !this.hasState(cur, spell.requires)) return `${spell.name} : il faut etre ${lbl(spell.requires)}`;
+    if (spell.forbids && this.hasState(cur, spell.forbids)) return `${spell.name} : impossible en etant ${lbl(spell.forbids)}`;
+    if (spell.requiresCarry && !(cur._carried && cur._carried.alive)) return `${spell.name} : attrape d abord une cible avec Karcham`;
+    return null;
+  }
+
+  // Effet conditionnel (effect.when) : depend de l etat du lanceur.
+  effectActive(effect, caster) {
+    const w = effect.when;
+    if (!w) return true;
+    if (w.caster && !this.hasState(caster, w.caster)) return false;
+    if (w.casterNot && this.hasState(caster, w.casterNot)) return false;
+    return true;
+  }
+
+  // Multiplicateur de degats lie au sort : meute (Osamodas), jauge
+  // depensee (Puissance, Veine) et Telefrag du Xelor (+50%).
+  spellMultiplier(caster, tf, spell, effect) {
+    let k = this.packMultiplier(caster, tf, spell);
+    const sb = effect && effect.stackBonus;
+    if (sb) k *= 1 + sb.per * this.stackOf(caster, sb.key);
+    if (tf && tf.buffs.some(b => b.state === 'telefrag' && b.owner === caster)) k *= 1.5;
+    return k;
+  }
+
+  // Regles de ciblage propres aux sorts de classe (null = valide).
+  classTargetReason(caster, spell, c, r, tf) {
+    for (const e of spell.effects) {
+      if (e.type === 'teleswap') {
+        if (tf === caster) return 'Case occupee';
+        if (tf && tf.stabilized) return 'Cible stabilisee';
+        if (!tf && this.map3d.isBlockedFor(c, r, caster)) return 'Inaccessible';
+      } else if (e.type === 'rewind') {
+        if (!tf) return 'Cible : un combattant';
+        if (tf.isBomb || !tf._turnStart) return 'La cible n a pas encore joue';
+        if (tf._turnStart.c === tf.c && tf._turnStart.r === tf.r) return 'La cible n a pas bouge ce tour';
+        if (tf.stabilized) return 'Cible stabilisee';
+        const occ = this.fighters.find(f => f.alive && f !== tf && f.c === tf._turnStart.c && f.r === tf._turnStart.r);
+        if (occ && occ.stabilized) return 'Case de depart bloquee';
+      } else if (e.type === 'carry') {
+        if (!tf || tf === caster) return 'Cible : un combattant adjacent';
+        if (tf.stabilized) return 'Cible stabilisee';
+        if (tf.def.isBoss) return 'Trop lourd a porter';
+      } else if (e.type === 'throw') {
+        const carried = caster._carried;
+        if (!carried || !carried.alive) return 'Rien a lancer';
+        if (Math.abs(carried.c - caster.c) + Math.abs(carried.r - caster.r) !== 1) return 'La cible portee est trop loin';
+        if (this.map3d.isBlockedFor(c, r, carried)) return 'Inaccessible';
+      }
+    }
+    return null;
+  }
+
+  // Pose l etat Telefrag sur un ennemi deplace par le Xelor.
+  _applyTelefrag(caster, tf, duration = 2) {
+    if (!tf || !tf.alive || tf.isBomb || tf.team === caster.team) return;
+    tf.buffs = tf.buffs.filter(b => b.state !== 'telefrag');
+    tf.buffs.push({ duration: duration + 1, state: 'telefrag', owner: caster, team: caster.team, source: 'Telefrag' });
+    tf.character.popText('TELEFRAG', '#7a8aff', { fontSize: 20, yStart: 1.7, yRise: 0.6, scaleX: 1.4, scaleY: 0.42 });
+    tf.character.flashGlow(0x7a8aff, 700);
+    this.hud.log && this.hud.log(`${tf.name} est en Telefrag : le prochain sort de ${caster.name} le frappe +50% et rend 2 PA`, 'buff');
+  }
+
+  // Apres un sort : jauges depensees, Telefrag consomme, murs de bombes.
+  _afterSpell(caster, spell) {
+    for (const e of spell.effects) {
+      const sb = e.stackBonus;
+      if (sb && sb.consume && this.stackOf(caster, sb.key) > 0) {
+        const info = CLASS_STACKS[sb.key] || { label: sb.key };
+        this.hud.log && this.hud.log(`${caster.name} depense ${caster.stacks[sb.key]} ${info.label}`, 'buff');
+        caster.stacks[sb.key] = 0;
+      }
+    }
+    let consumed = false;
+    for (const f of this.fighters) {
+      if (!f._telefragHit) continue;
+      f._telefragHit = false;
+      const n = f.buffs.length;
+      f.buffs = f.buffs.filter(b => !(b.state === 'telefrag' && b.owner === caster));
+      if (f.buffs.length !== n) consumed = true;
+    }
+    if (consumed && caster.alive) {
+      caster.pa += 2;
+      caster.character.popText('+2 PA', '#7ec6ff', { fontSize: 22, dx: 0.45, yStart: 1.5, scaleX: 1.1, scaleY: 0.42 });
+      this.hud.log && this.hud.log(`Telefrag consomme : ${caster.name} regagne 2 PA`, 'buff');
+    }
+    this._refreshBombWalls();
+    this.hud.refreshTurnOrder && this.hud.refreshTurnOrder();
+    if (!this.ended && this.turn) this.hud.update(this.turn.current(), this.mode, this.selectedSpellId);
+  }
+
+  // Murs de bombes : deux bombes du meme Roublard alignees a 2-5 cases
+  // tendent un mur de feu entre elles. Il blesse un ennemi qui y entre
+  // ou y commence son tour (une fois par tour), jamais les allies.
+  _refreshBombWalls() {
+    const had = this.zones.some(z => z.wall);
+    this.zones = this.zones.filter(z => !z.wall);
+    const bombs = this.fighters.filter(f => f.alive && f.isBomb && !f._exploding && f.bombOwner && f.bombOwner.alive);
+    for (let i = 0; i < bombs.length; i++) {
+      for (let j = i + 1; j < bombs.length; j++) {
+        const a = bombs[i], b = bombs[j];
+        if (a.bombOwner !== b.bombOwner) continue;
+        if (a.c !== b.c && a.r !== b.r) continue;
+        const d = Math.abs(a.c - b.c) + Math.abs(a.r - b.r);
+        if (d < 2 || d > 5) continue;
+        const sc = Math.sign(b.c - a.c), sr = Math.sign(b.r - a.r);
+        const cells = [];
+        for (let k = 1; k < d; k++) cells.push({ c: a.c + sc * k, r: a.r + sr * k });
+        if (cells.some(cl => this.map3d.isWall(cl.c, cl.r))) continue;
+        const k = Math.min(a.bombLevelMult || 1, b.bombLevelMult || 1);
+        this.zones.push({
+          kind: 'glyph', wall: true, cells, c: cells[0].c, r: cells[0].r, radius: 0,
+          owner: a.bombOwner, team: a.team, turns: Infinity, color: 0xff5a1f,
+          name: 'Mur de bombes', element: 'feu',
+          onTurn: { damage: { min: Math.round(14 * k), max: Math.round(20 * k) } },
+        });
+      }
+    }
+    if (had || this.zones.some(z => z.wall)) this._paintZones();
+  }
+
+  async _checkWalls(f) {
+    if (!f.alive || f.isBomb || this.ended) return;
+    if (f._wallHitSerial === this._turnSerial) return;
+    const z = this.zones.find(w => w.wall && w.team !== f.team && w.cells.some(cl => cl.c === f.c && cl.r === f.r));
+    if (!z) return;
+    f._wallHitSerial = this._turnSerial;
+    this.vfx && this.vfx.flash(f.c, f.r, { color: 0xff8a00, duration: 0.3 });
+    this.hud.log && this.hud.log(`${f.name} traverse un mur de bombes`, 'attack');
+    const d = z.onTurn.damage;
+    await this._zoneDamage(z, f, d.min + Math.floor(Math.random() * (d.max - d.min + 1)));
+  }
+
+  // Nombre de bombes qui exploseront en chaine a partir de `bomb`.
+  _bombChainSize(bomb) {
+    const seen = new Set([bomb]);
+    const queue = [bomb];
+    while (queue.length) {
+      const b = queue.shift();
+      const radius = (b.def.bombArea && b.def.bombArea.radius) || 2;
+      for (const o of this.fighters) {
+        if (!o.alive || !o.isBomb || o._exploding || seen.has(o)) continue;
+        if (Math.abs(o.c - b.c) + Math.abs(o.r - b.r) <= radius) { seen.add(o); queue.push(o); }
+      }
+    }
+    return seen.size;
   }
 
   // Nombre d invocations en vie d un lanceur.
@@ -869,6 +1071,8 @@ export class Game {
   }
 
   async applySpellEffects(caster, spell, target) {
+    // Un combattant mort en cours d action (mur de bombes, renvoi) ne lance plus rien.
+    if (!caster.alive) return;
     this.audio && this.audio.cast(spell.category);
     // Lancement facon Dofus : le lanceur prend la pose et un glyphe
     // runique de la couleur de l element du sort s illumine sous lui.
@@ -882,9 +1086,11 @@ export class Game {
       await this.vfx.castGlyph(caster.c, caster.r, { color: spellElementColor(spell) });
     }
     for (const effect of spell.effects) {
+      if (!this.effectActive(effect, caster)) continue;
       await this.applyEffect(effect, caster, spell, target);
       if (this.ended) return;
     }
+    this._afterSpell(caster, spell);
   }
 
   async applyEffect(effect, caster, spell, target) {
@@ -998,6 +1204,7 @@ export class Game {
           const tf = this.fighters.find(f => f.alive && f.c === cell.c && f.r === cell.r);
           if (!tf) continue;
           if (tf === caster) continue;
+          if (effect.enemiesOnly && tf.team === caster.team) continue;
           // Degats : jet, bonus du lanceur, critique, puis resistance
           // elementaire de la cible et enfin boucliers.
           const hit = this.rollHit(caster, tf, spell, effect);
@@ -1021,6 +1228,17 @@ export class Game {
           if (tf.alive && actual > 0) this._onHitSpecials(caster, tf, hit);
           const resTxt = hit.res ? ` (res. ${ELEMENT_LABEL[hit.el]} ${hit.res > 0 ? '+' : ''}${hit.res}%)` : '';
           this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} subit ${actual} degats${hit.crit ? ' CRITIQUES' : ''}${resTxt}`, 'attack');
+          // Mot Vampirique : l attaquant recupere une part des degats.
+          const vamp = actual > 0 && caster.alive && !caster.isBomb && tf.team !== caster.team
+            && tf.buffs.find(b => b.state === 'vampirique' && b.team === caster.team);
+          if (vamp) {
+            const got = caster.heal(Math.round(actual * (vamp.drain || 0.3)));
+            if (got > 0) {
+              caster.character.popHeal(got);
+              caster.character.hpBar.setHp(caster.hp, caster.maxHp);
+              this.hud.log && this.hud.log(`Mot Vampirique : ${caster.name} recupere ${got} PV`, 'heal');
+            }
+          }
           if (!tf.alive) dying.push(tf);
           touched++;
           // Renvoi de degats vers l attaquant.
@@ -1074,9 +1292,11 @@ export class Game {
         }
         if (this.vfx) this.vfx.healSparkles({ c: tf.c, r: tf.r });
         this.audio && this.audio.sfx('heal');
-        const amt = effect.type === 'heal'
+        let amt = effect.type === 'heal'
           ? effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1))
           : Math.round(tf.maxHp * (effect.percent || 0));
+        // Ferveur de l Eniripsa : le soin depense la jauge.
+        if (effect.stackBonus) amt = Math.round(amt * (1 + effect.stackBonus.per * this.stackOf(caster, effect.stackBonus.key)));
         const healed = tf.heal(amt);
         tf.character.popHeal(healed);
         tf.character.hpBar.setHp(tf.hp, tf.maxHp);
@@ -1132,8 +1352,19 @@ export class Game {
         }
         for (const tf of buffTargets) {
           if (this.vfx) {
-            if (effect.shield) this.vfx.shieldDome({ c: tf.c, r: tf.r }, { color: buffColorHex });
+            if (tf.team !== caster.team) this.vfx.debuffCloud({ c: tf.c, r: tf.r }, { color: buffColorHex });
+            else if (effect.shield) this.vfx.shieldDome({ c: tf.c, r: tf.r }, { color: buffColorHex });
             else this.vfx.buffAura({ c: tf.c, r: tf.r }, { color: buffColorHex });
+          }
+          // Etat nomme (Saoul, Mot Vampirique) : un seul a la fois.
+          if (effect.state) {
+            tf.buffs = tf.buffs.filter(b => b.state !== effect.state);
+            const st = CLASS_STATES[effect.state];
+            if (st) tf.character.popText(st.label.toUpperCase(), st.color, { fontSize: 20, yStart: 1.7, yRise: 0.6, scaleX: 1.4, scaleY: 0.42 });
+          }
+          if (effect.vuln) {
+            tf.buffs = tf.buffs.filter(b => !b.vuln);
+            tf.character.popText(`VULNERABLE +${effect.vuln}%`, '#b46ae8', { fontSize: 18, yStart: 1.7, yRise: 0.6, scaleX: 1.5, scaleY: 0.42 });
           }
           // Roue de la Fortune : bonus de degats tire au hasard.
           let dmgMult = effect.damageMult;
@@ -1142,6 +1373,8 @@ export class Game {
             dmgMult = +(lo + Math.random() * (hi - lo)).toFixed(2);
             tf.character.popText(`+${Math.round(dmgMult * 100)}% !`, '#ffcf3a', { fontSize: 22, yStart: 1.7, yRise: 0.6, scaleX: 1.2, scaleY: 0.45 });
             this.hud.log && this.hud.log(`${spell.name} : +${Math.round(dmgMult * 100)}% de degats`, 'buff');
+            // Mauvais tirage : la Veine de l Ecaflip monte en consolation.
+            if (effect.veineOnLow && dmgMult < (lo + hi) / 2) this.addStack(caster, 'veine', effect.veineOnLow);
           }
           tf.buffs.push({
             duration: (effect.duration || 1) + 1,
@@ -1155,7 +1388,15 @@ export class Game {
             fuite: effect.fuite,
             tacle: effect.tacle,
             stabilized: effect.stabilized,
-            res: effect.res,
+            // Vulnerabilite : resistance negative a tous les elements.
+            res: effect.vuln
+              ? { feu: -effect.vuln, eau: -effect.vuln, terre: -effect.vuln, air: -effect.vuln, neutre: -effect.vuln }
+              : effect.res,
+            vuln: effect.vuln,
+            hot: effect.hot,
+            drain: effect.drain,
+            state: effect.state,
+            team: caster.team,
             source: spell.name,
           });
           if (effect.bonusPa) tf.pa = Math.max(0, tf.pa + effect.bonusPa);
@@ -1213,6 +1454,12 @@ export class Game {
         // Vol de PA (Horloge) : on ne peut prendre que ce qu il reste
         // reellement a la cible. Si elle est deja a 0 PA effectif, rien.
         if (effect.steal) amount = Math.min(amount, tf.effectiveMaxPa);
+        // Retraits differes (Xelor) : une cible garde toujours au moins
+        // 40% de ses PA, pour ne pas etre bloquee indefiniment.
+        if (effect.currentTurnOnly) {
+          const cap = Math.ceil(tf.maxPa * 0.6);
+          amount = Math.min(amount, Math.max(0, cap - (tf.pendingPaDebuff || 0)));
+        }
         const hasDamage = spell.effects.some(e => e.type === 'damage');
         if (this.vfx && caster !== tf && !hasDamage) {
           caster.character.faceToward(tf.c, tf.r);
@@ -1268,9 +1515,12 @@ export class Game {
           );
           this.vfx.debuffCloud({ c: tf.c, r: tf.r }, { color: 0x9b59b6 });
         }
+        // Le poison suit la puissance du lanceur (niveau, boosts), comme
+        // les degats directs.
+        const dotK = caster.damageMultiplier ? caster.damageMultiplier() : 1;
         tf.buffs.push({
           duration: (effect.duration || 1) + 1,
-          dot: { min: effect.min, max: effect.max, element: damageElementOf(spell, caster) },
+          dot: { min: Math.round(effect.min * dotK), max: Math.round(effect.max * dotK), element: damageElementOf(spell, caster) },
         });
         tf.character.popText('POISON', '#c39bd3', {
           fontSize: 18, yStart: 1.5, yRise: 0.7, scaleX: 1.1, scaleY: 0.4,
@@ -1328,6 +1578,7 @@ export class Game {
         const hs = heroStats(bomb.def, caster.level || 1);
         bomb.maxHp = bomb.hp = Math.round(hs.hp * bb.hp);
         bomb.bombDamageMult = bb.damage * (caster.levelDamageMult || 1);
+        bomb.bombLevelMult = bb.damage;
         if (bb.shield) bomb.buffs.push({ permanent: true, duration: 9999, shield: bb.shield });
         bomb.character = new Character3D(this.scene3d.scene, 'bombeRoublard', caster.team, target.c, target.r);
         bomb.character.hpBar.setHp(bomb.hp, bomb.maxHp);
@@ -1456,6 +1707,7 @@ export class Game {
         if (Math.abs(dc0) >= Math.abs(dr0)) sc = Math.sign(dc0) || 1;
         else sr = Math.sign(dr0) || 1;
         let destC = tf.c, destR = tf.r;
+        let travelled = 0;
         for (let step = 1; step <= (effect.distance || 1); step++) {
           const cc = tf.c + sc * step, cr = tf.r + sr * step;
           if (!this.map3d.inBounds(cc, cr)) break;
@@ -1463,20 +1715,35 @@ export class Game {
           if (this.map3d.isWater(cc, cr) && !this.map3d.isBridge(cc, cr)) break;
           if (this.fighters.some(f => f.alive && f !== tf && f.c === cc && f.r === cr)) break;
           destC = cc; destR = cr;
+          travelled = step;
         }
-        if (destC === tf.c && destR === tf.r) {
+        const blockedCells = (effect.distance || 1) - travelled;
+        if (travelled === 0) {
           this.hud.log && this.hud.log(`${tf.name} ne peut pas etre repousse`, 'cast');
-          return;
+        } else {
+          if (this.vfx) this.vfx.flash(tf.c, tf.r, { color: 0xffd166, duration: 0.25 });
+          this.audio && this.audio.sfx('knockback');
+          let cc = tf.c, cr = tf.r;
+          this.hud.log && this.hud.log(`${caster.name} repousse ${tf.name}`, 'cast');
+          let stopped = false;
+          while (cc !== destC || cr !== destR) {
+            cc += sc; cr += sr;
+            await tf.character.moveTo(cc, cr, 110);
+            tf.c = cc; tf.r = cr;
+            if (await this._checkTraps(tf)) { stopped = true; break; }
+          }
+          if (stopped) return;
         }
-        if (this.vfx) this.vfx.flash(tf.c, tf.r, { color: 0xffd166, duration: 0.25 });
-        this.audio && this.audio.sfx('knockback');
-        let cc = tf.c, cr = tf.r;
-        this.hud.log && this.hud.log(`${caster.name} repousse ${tf.name}`, 'cast');
-        while (cc !== destC || cr !== destR) {
-          cc += sc; cr += sr;
-          await tf.character.moveTo(cc, cr, 110);
-          tf.c = cc; tf.r = cr;
-          if (await this._checkTraps(tf)) break;
+        // Degats de collision : chaque case de recul bloquee par un
+        // obstacle (mur, eau, combattant, bord de carte) fait mal.
+        if (effect.collide && blockedCells > 0 && tf.alive && !this.ended) {
+          let base = 0;
+          for (let i = 0; i < blockedCells; i++) {
+            base += effect.collide.min + Math.floor(Math.random() * (effect.collide.max - effect.collide.min + 1));
+          }
+          if (this.vfx) this.vfx.flash(tf.c, tf.r, { color: 0xff8a3a, duration: 0.3 });
+          tf.character.popText('COLLISION', '#ffb040', { fontSize: 18, yStart: 1.9, yRise: 0.6, scaleX: 1.4, scaleY: 0.42 });
+          await this._zoneDamage({ owner: caster, element: 'neutre', name: 'Collision' }, tf, base);
         }
         return;
       }
@@ -1571,16 +1838,158 @@ export class Game {
         return;
       }
       case 'chanceStrike': {
-        // Coup de Griffe du Chaton : 50% degats, 50% soin de la cible.
-        if (Math.random() < 0.5) {
-          this.hud.log && this.hud.log(`${spell.name} : la griffe mord !`, 'attack');
+        // Pari (Pile ou Face, Tout ou Rien, Coup de Griffe du Chaton) :
+        // reussi = gros degats ; rate = petits degats ou soin de la cible.
+        // La Veine du lanceur ajoute 10% de reussite par point ; un pari
+        // perdu en donne, un pari gagne la remet a zero.
+        const veine = this.stackOf(caster, 'veine');
+        const pWin = this.gambleChance(caster, effect);
+        if (Math.random() < pWin) {
+          this.hud.log && this.hud.log(`${spell.name} : pari gagne ! (${Math.round(pWin * 100)}% de chances)`, 'attack');
+          caster.character.popText('GAGNE !', '#ffcf3a', { fontSize: 20, yStart: 2.0, yRise: 0.6, scaleX: 1.3, scaleY: 0.42 });
+          if (veine > 0) {
+            caster.stacks.veine = 0;
+            this.hud.log && this.hud.log(`${caster.name} : la Veine retombe a 0`, 'buff');
+          }
           await this.applyEffect(
             { type: 'damage', min: effect.dmgMin, max: effect.dmgMax }, caster, spell, target);
         } else {
-          this.hud.log && this.hud.log(`${spell.name} : coup manque, la cible est soignee`, 'heal');
-          await this.applyEffect(
-            { type: 'heal', min: effect.healMin, max: effect.healMax }, caster, spell, target);
+          caster.character.popText('PERDU...', '#b8c0c8', { fontSize: 20, yStart: 2.0, yRise: 0.6, scaleX: 1.3, scaleY: 0.42 });
+          if (effect.failMax) {
+            this.hud.log && this.hud.log(`${spell.name} : pari perdu (${Math.round(pWin * 100)}% de chances), petit coup`, 'attack');
+            await this.applyEffect(
+              { type: 'damage', min: effect.failMin, max: effect.failMax }, caster, spell, target);
+          } else {
+            this.hud.log && this.hud.log(`${spell.name} : pari perdu (${Math.round(pWin * 100)}% de chances), la cible est soignee`, 'heal');
+            await this.applyEffect(
+              { type: 'heal', min: effect.healMin, max: effect.healMax }, caster, spell, target);
+          }
+          if (effect.veine && caster.alive) this.addStack(caster, 'veine', effect.veine);
         }
+        return;
+      }
+      case 'gainStack': {
+        this.addStack(caster, effect.key, effect.amount || 1, effect.max);
+        return;
+      }
+      case 'clearState': {
+        const n = caster.buffs.length;
+        caster.buffs = caster.buffs.filter(b => b.state !== effect.state);
+        if (caster.buffs.length !== n) {
+          const st = CLASS_STATES[effect.state] || { label: effect.state };
+          this.hud.log && this.hud.log(`${caster.name} n est plus ${st.label}`, 'buff');
+        }
+        return;
+      }
+      case 'teleswap': {
+        // Teleportation du Xelor : case libre = teleport ; case occupee =
+        // echange de places (Telefrag sur un ennemi).
+        const tf = this.fighters.find(f => f.alive && f !== caster && f.c === target.c && f.r === target.r);
+        const fromC = caster.c, fromR = caster.r;
+        if (this.vfx) {
+          this.vfx.portal(fromC, fromR, { color: 0x7a8aff });
+          this.vfx.portal(target.c, target.r, { color: 0x7a8aff });
+        }
+        await new Promise(r => setTimeout(r, 120));
+        if (tf) {
+          await Promise.all([
+            caster.character.teleportTo(target.c, target.r),
+            tf.character.teleportTo(fromC, fromR),
+          ]);
+          caster.c = target.c; caster.r = target.r;
+          tf.c = fromC; tf.r = fromR;
+          this.hud.log && this.hud.log(`${caster.name} echange sa place avec ${tf.name} (${spell.name})`, 'cast');
+          this._applyTelefrag(caster, tf, effect.telefrag || 2);
+          await this._checkTraps(tf);
+        } else {
+          await caster.character.teleportTo(target.c, target.r);
+          caster.c = target.c; caster.r = target.r;
+          this.hud.log && this.hud.log(`${caster.name} se teleporte (${spell.name})`, 'cast');
+        }
+        if (!this.ended) await this._checkTraps(caster);
+        return;
+      }
+      case 'rewind': {
+        // Rembobinage : la cible retourne sur sa case de debut de tour.
+        const tf = this.fighters.find(f => f.alive && f.c === target.c && f.r === target.r);
+        if (!tf || !tf._turnStart) return;
+        const dest = { c: tf._turnStart.c, r: tf._turnStart.r };
+        if (dest.c === tf.c && dest.r === tf.r) return;
+        const occ = this.fighters.find(f => f.alive && f !== tf && f.c === dest.c && f.r === dest.r);
+        const fromC = tf.c, fromR = tf.r;
+        if (this.vfx) {
+          this.vfx.portal(fromC, fromR, { color: 0x7a8aff });
+          this.vfx.portal(dest.c, dest.r, { color: 0x7a8aff });
+        }
+        await new Promise(r => setTimeout(r, 120));
+        const moves = [tf.character.teleportTo(dest.c, dest.r)];
+        if (occ) moves.push(occ.character.teleportTo(fromC, fromR));
+        await Promise.all(moves);
+        tf.c = dest.c; tf.r = dest.r;
+        if (occ) { occ.c = fromC; occ.r = fromR; }
+        this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} revient a sa case de depart${occ ? ` et echange sa place avec ${occ.name}` : ''}`, 'cast');
+        this._applyTelefrag(caster, tf, effect.telefrag || 2);
+        if (occ) this._applyTelefrag(caster, occ, effect.telefrag || 2);
+        await this._checkTraps(tf);
+        if (occ && !this.ended) await this._checkTraps(occ);
+        return;
+      }
+      case 'carry': {
+        // Karcham : le Pandawa attrape un combattant adjacent.
+        const tf = this.fighters.find(f => f.alive && f !== caster && f.c === target.c && f.r === target.r);
+        if (!tf) return;
+        caster._carried = tf;
+        tf._carriedBy = caster;
+        tf.character.popText('PORTE', '#ffcf5a', { fontSize: 20, yStart: 1.8, yRise: 0.6, scaleX: 1.3, scaleY: 0.42 });
+        tf.character.flashGlow(0xffcf5a, 700);
+        this.hud.log && this.hud.log(`${caster.name} attrape ${tf.name} : lance-le avec Chamrak`, 'cast');
+        this.hud.flash('Karcham : lance la cible avec Chamrak', 1400);
+        return;
+      }
+      case 'throw': {
+        // Chamrak : lance le combattant porte sur la case visee.
+        const tf = caster._carried;
+        caster._carried = null;
+        if (!tf || !tf.alive) return;
+        if (this.fighters.some(f => f.alive && f.c === target.c && f.r === target.r)) return;
+        if (this.vfx) this.vfx.portal(target.c, target.r, { color: 0xd89a4a, duration: 0.5 });
+        this.audio && this.audio.sfx('knockback');
+        await tf.character.teleportTo(target.c, target.r);
+        tf.c = target.c; tf.r = target.r;
+        this.hud.log && this.hud.log(`${caster.name} lance ${tf.name} (${spell.name})`, 'cast');
+        await this._checkTraps(tf);
+        return;
+      }
+      case 'magnet': {
+        // Aimantation : les ennemis alignes avec la bombe sont attires vers elle.
+        const bomb = this.fighters.find(f => f.alive && f.isBomb && f.bombOwner === caster && f.c === target.c && f.r === target.r);
+        if (!bomb) return;
+        if (this.vfx) this.vfx.shockwave(bomb.c, bomb.r, { color: 0x8ae04a, radius: (effect.reach || 4) * 0.8, duration: 0.6 });
+        let pulled = 0;
+        for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          for (let i = 1; i <= (effect.reach || 4); i++) {
+            const c = bomb.c + dc * i, r = bomb.r + dr * i;
+            if (!this.map3d.inBounds(c, r) || this.map3d.isWall(c, r)) break;
+            const f = this.fighters.find(o => o.alive && o.c === c && o.r === r);
+            if (!f || f.isBomb || f.team === caster.team || f.stabilized) continue;
+            let moved = 0;
+            while (moved < (effect.distance || 2) && f.alive && !this.ended) {
+              const nc = f.c - dc, nr = f.r - dr;
+              if (this.map3d.isWall(nc, nr) || (this.map3d.isWater(nc, nr) && !this.map3d.isBridge(nc, nr))) break;
+              if (this.fighters.some(o => o.alive && o.c === nc && o.r === nr)) break;
+              await f.character.moveTo(nc, nr, 110);
+              f.c = nc; f.r = nr;
+              moved++;
+              if (await this._checkTraps(f)) break;
+            }
+            if (moved) {
+              pulled++;
+              this.hud.log && this.hud.log(`${f.name} est attire de ${moved} case${moved > 1 ? 's' : ''} vers la bombe`, 'cast');
+            }
+            if (this.ended) return;
+          }
+        }
+        if (!pulled) this.hud.log && this.hud.log(`${spell.name} : aucun ennemi aligne avec la bombe`, 'cast');
         return;
       }
     }
@@ -1589,8 +1998,17 @@ export class Game {
   // Fait exploser une bombe : VFX, degats en zone (rayon 2 Manhattan),
   // touche allies ET ennemis, et declenche en chaîne toute bombe
   // touchee dans le rayon de l explosion.
-  async explodeBomb(bomb) {
+  async explodeBomb(bomb, combo) {
     if (!bomb || !bomb.alive || bomb._exploding) return;
+    // Combo : +25% de degats par bombe supplementaire dans la chaine.
+    if (combo === undefined) {
+      const n = this._bombChainSize(bomb);
+      combo = 1 + 0.25 * Math.min(3, n - 1);
+      if (n > 1) {
+        this.hud.log && this.hud.log(`Combo de ${n} bombes : +${Math.round((combo - 1) * 100)}% de degats !`, 'attack');
+        this.hud.flash(`COMBO x${n}`, 1200);
+      }
+    }
     bomb._exploding = true;
     this.audio && this.audio.sfx('explosion');
     // Aire : on supporte 'circle' (par defaut) ou ancien 'cross'.
@@ -1604,7 +2022,7 @@ export class Game {
     const baseDmg = bomb.def.bombDamage || 50;
     const growth = bomb.def.bombDamageGrowth || 0;
     const dmg = Math.round(baseDmg * (1 + growth * bomb.bombAge)
-      * (bomb.bombDamageMult || 1) * (1 + (bomb._detonateBonus || 0)));
+      * (bomb.bombDamageMult || 1) * (1 + (bomb._detonateBonus || 0)) * combo);
     const radiusVfx = (area.type === 'circle') ? ((area.radius || 2) + 0.6) : 2.4;
 
     // VFX : grosse onde de choc dimensionnee au rayon + flash central.
@@ -1650,8 +2068,15 @@ export class Game {
     for (const c of chained) {
       if (this.ended) return;
       await new Promise(r => setTimeout(r, 220));
-      await this.explodeBomb(c);
+      await this.explodeBomb(c, combo);
     }
+    this._refreshBombWalls();
+  }
+
+  // Chance de reussite d un pari : base + 10% par point de Veine.
+  gambleChance(caster, effect) {
+    const base = effect.chance === undefined ? 0.5 : effect.chance;
+    return Math.max(0.05, Math.min(0.95, base + 0.1 * this.stackOf(caster, 'veine')));
   }
 
   // Au debut du tour d un combattant, on vieillit toutes ses bombes
@@ -1761,7 +2186,9 @@ export class Game {
   rollHit(caster, tf, spell, effect) {
     const base = effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1));
     const el = damageElementOf(spell, caster);
-    let dmg = base * caster.damageMultiplier() * this.packMultiplier(caster, tf, spell);
+    let dmg = base * caster.damageMultiplier() * this.spellMultiplier(caster, tf, spell, effect);
+    // Telefrag : consomme a la fin du sort (cf. _afterSpell).
+    if (tf.buffs.some(b => b.state === 'telefrag' && b.owner === caster)) tf._telefragHit = true;
     const crit = !caster.isBomb && Math.random() < caster.critChance;
     if (crit) dmg *= 1.3;
     const res = tf.res[el] || 0;
@@ -1771,9 +2198,9 @@ export class Game {
 
   // Estimation (sans hasard) des degats d un effet apres resistances et
   // boucliers : sert a l apercu avant le lancer.
-  estimateHit(caster, tf, spell, min, max) {
+  estimateHit(caster, tf, spell, min, max, effect) {
     const el = damageElementOf(spell, caster);
-    const k = caster.damageMultiplier() * this.packMultiplier(caster, tf, spell) * (1 - (tf.res[el] || 0) / 100);
+    const k = caster.damageMultiplier() * this.spellMultiplier(caster, tf, spell, effect) * (1 - (tf.res[el] || 0) / 100);
     return { min: tf.computeShielded(Math.round(min * k)), max: tf.computeShielded(Math.round(max * k)), el };
   }
 
@@ -1885,22 +2312,35 @@ export class Game {
       out.get(f).lines.push(line);
     };
     for (const e of spell.effects) {
+      if (!this.effectActive(e, caster)) continue;
       if (e.type === 'damage') {
         for (const f of inArea) {
           if (f === caster) continue;
-          const est = this.estimateHit(caster, f, spell, e.min, e.max);
+          if (e.enemiesOnly && f.team === caster.team) continue;
+          const est = this.estimateHit(caster, f, spell, e.min, e.max, e);
           const entry = out.get(f) || { f, lines: [], min: 0, max: 0 };
           out.set(f, entry);
           entry.min += est.min; entry.max += est.max;
           entry.el = est.el;
         }
       } else if (e.type === 'chanceStrike' && onCell) {
-        const est = this.estimateHit(caster, onCell, spell, e.dmgMin, e.dmgMax);
-        add(onCell, { text: `50% : ${est.min}-${est.max}`, color: '#ff7a5a' });
-        add(onCell, { text: `50% : soin ${e.healMin}-${e.healMax}`, color: '#7ae08a' });
+        const est = this.estimateHit(caster, onCell, spell, e.dmgMin, e.dmgMax, e);
+        const p = Math.round(this.gambleChance(caster, e) * 100);
+        add(onCell, { text: `${p}% : ${est.min}-${est.max}`, color: '#ff7a5a' });
+        if (e.failMax) {
+          const low = this.estimateHit(caster, onCell, spell, e.failMin, e.failMax, e);
+          add(onCell, { text: `${100 - p}% : ${low.min}-${low.max}`, color: '#ffb48a' });
+        } else {
+          add(onCell, { text: `${100 - p}% : soin ${e.healMin}-${e.healMax}`, color: '#7ae08a' });
+        }
+      } else if (e.type === 'buff' && onCell && onCell.team !== caster.team && (e.vuln || e.state)) {
+        add(onCell, { text: e.vuln ? `Vulnerable +${e.vuln}%` : (CLASS_STATES[e.state] || { label: e.state }).label, color: '#d8a8ff' });
+      } else if ((e.type === 'teleswap' || e.type === 'rewind') && onCell && onCell !== caster && onCell.team !== caster.team) {
+        add(onCell, { text: 'Telefrag', color: '#9aa8ff' });
       } else if ((e.type === 'heal' || e.type === 'heal_percent') && onCell) {
-        const lo = e.type === 'heal' ? e.min : Math.round(onCell.maxHp * e.percent);
-        const hi = e.type === 'heal' ? e.max : lo;
+        const kHeal = e.stackBonus ? 1 + e.stackBonus.per * this.stackOf(caster, e.stackBonus.key) : 1;
+        const lo = Math.round((e.type === 'heal' ? e.min : onCell.maxHp * e.percent) * kHeal);
+        const hi = e.type === 'heal' ? Math.round(e.max * kHeal) : lo;
         add(onCell, { text: `+${Math.min(lo, onCell.maxHp - onCell.hp)}${hi !== lo ? '-' + Math.min(hi, onCell.maxHp - onCell.hp) : ''} PV`, color: '#7ae08a' });
       } else if (e.type === 'knockback' && onCell && onCell !== caster) {
         add(onCell, { text: onCell.stabilized ? 'Stabilise' : `Recul ${e.distance}`, color: '#ffd166' });
@@ -1942,18 +2382,12 @@ export class Game {
   async runAI() {
     if (this.ended) return;
     const ai = this.turn.current();
-    const profile = ai.def.ai || 'aggressive';
-    // Dispatch : chaque monstre a son IA dediee (cf. methodes runXxx),
-    // ce qui permet de les modifier independamment.
+    const profile = ai._aiRole || ai.def.ai || 'aggressive';
+    // Monstres : un ROLE par famille (cf. AI_ROLES et runRole). Les
+    // invocations gardent leurs IA dediees (runSmart, runRanged...).
     const dispatch = {
       aggressive: () => this.runAggressive(ai),
       fearful: () => this.runFearful(ai),
-      chafer: () => this.runChafer(ai),
-      chaferRoyal: () => this.runChaferRoyal(ai),
-      tofu: () => this.runTofu(ai),
-      tofuRoyal: () => this.runTofuRoyal(ai),
-      champignon: () => this.runChampignon(ai),
-      champignonRoyal: () => this.runChampignonRoyal(ai),
       // Invocations : IA "intelligente" (frappe tout ce qui est a portee,
       // depense tous ses PA, ne quitte pas le contact pour rien).
       craqueleur: () => this.runSmart(ai),
@@ -1962,14 +2396,21 @@ export class Game {
       harasser: () => this.runHarasser(ai),
       chaton: () => this.runSmart(ai),
       summon: () => this.runSmart(ai),
-      boss: () => this.runBoss(ai),
-      bossRanged: () => this.runFearful(ai),
     };
-    const fn = dispatch[profile] || dispatch.aggressive;
-    // Phase de soutien commune : soins, protections, boosts.
-    await this.aiSupport(ai);
-    if (this.ended) return;
-    await fn();
+    // Garde-fou : quoi qu il arrive (erreur dans une IA), le tour se
+    // termine et la main passe au combattant suivant.
+    try {
+      if (AI_ROLES[profile]) {
+        await this.runRole(ai);
+      } else {
+        // Phase de soutien commune : soins, protections, boosts.
+        await this.aiSupport(ai);
+        if (this.ended) return;
+        await (dispatch[profile] || dispatch.aggressive)();
+      }
+    } catch (err) {
+      console.error('IA : tour interrompu', ai && ai.name, err);
+    }
     if (this.ended) return;
     this.busy = false;
     this._advanceTurn();
@@ -1991,9 +2432,10 @@ export class Game {
 
   // Boosts sur soi ou en zone (PA, PM, degats, protection) quand un
   // ennemi est proche, sans se priver de sa principale attaque.
-  async aiSelfBuffs(ai) {
+  async aiSelfBuffs(ai, late = false) {
     const enemies = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.isBomb && !f.invisible);
     if (!enemies.length) return;
+    const allies = this.fighters.filter(f => f.alive && f.team === ai.team && f !== ai && !f.isBomb);
     const near = Math.min(...enemies.map(e => this._dist(ai, e)));
     const attacks = this.aiAttackSpells(ai);
     const minAttack = attacks.length ? Math.min(...attacks.map(s => s.apCost)) : 0;
@@ -2002,11 +2444,18 @@ export class Game {
       const eff = spell.effects.find(e => e.type === 'buff' && !e.invisible);
       if (!eff) continue;
       if (ai.buffs.some(b => b.source === spell.name)) continue;
+      // Envol (PM + fuite pour soi) : garde pour s echapper d un tacle ou
+      // rattraper une cible (cf. aiRetreat / aiAdvance).
+      if (isMobilityBuff(spell)) continue;
       // Protection : seulement quand l ennemi est tout pres.
-      if (eff.shield && near > 3) continue;
+      if (eff.shield && near > (late ? 6 : 3)) continue;
       if (!eff.shield && near > 8) continue;
+      // Cri / ordre de zone : il faut au moins un allie a portee de voix
+      // (sauf s il ne reste plus que lui).
+      if (spell.area && spell.area.type === 'circle' && allies.length
+          && !allies.some(a => this._dist(ai, a) <= spell.area.radius)) continue;
       // Garde de quoi attaquer (sauf si le sort rend des PA).
-      if (!eff.bonusPa && ai.pa - spell.apCost < minAttack && near <= 2) continue;
+      if (!late && !eff.bonusPa && ai.pa - spell.apCost < minAttack && near <= 2) continue;
       ai.pa -= spell.apCost;
       if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
       ai.character.popCost(spell.apCost, 'pa');
@@ -2021,7 +2470,7 @@ export class Game {
   async aiTryJump(ai, target, reach) {
     const spell = ai.spells.find(s => s.target === 'tile' && s.effects.some(e => e.type === 'teleport')
       && !ai.isOnCooldown(s.id) && ai.pa >= s.apCost);
-    if (!spell || !target) return false;
+    if (!spell || !target || ai.rooted) return false;
     const d0 = this._dist(ai, target);
     if (d0 - ai.pm <= reach) return false;
     let best = null, bd = d0;
@@ -2044,6 +2493,638 @@ export class Game {
     await this.applySpellEffects(ai, spell, best);
     await this.aiPause(250);
     return true;
+  }
+
+  // ===================================================================
+  // IA PAR ROLE (monstres)
+  // Chaque famille a un role (AI_ROLES) : meute, tirailleur, cracheur,
+  // harceleur, soldat, empoisonneur, tank, chargeur. Le tour suit
+  // toujours le meme fil, lisible pour le joueur :
+  //   1. phase 2 du boss (sous 50% de PV) ;
+  //   2. soutien : soins, protections, cris de guerre ;
+  //   3. le chef designe une cible, la meute se concentre dessus ;
+  //   4. meilleure action possible (case + sort) tant qu il reste des PA :
+  //      achever > cible designee > zone qui touche plusieurs ennemis,
+  //      jamais d allie dans une zone, les tireurs gardent leur distance ;
+  //   5. rien a frapper : il avance (bond, invisibilite, piege) ;
+  //   6. PA restants : piege, protection, soin ;
+  //   7. repli (tirailleurs, harceleurs, tireurs serres de pres) ou
+  //      poursuite (melee).
+  // Toutes les boucles sont bornees : un tour d IA se termine toujours.
+  // ===================================================================
+  async runRole(ai) {
+    await this.aiCheckEnrage(ai);
+    if (this.ended || !ai.alive) return;
+    const role = AI_ROLES[ai._aiRole || ai.def.ai] || AI_ROLES.pack;
+    await this.aiSupport(ai);
+    if (this.ended || !ai.alive) return;
+    if (ai.def.leader || ai.def.enrage) this.aiCallFocus(ai);
+
+    let acted = false;
+    let stay = false;
+    let guard = 0;
+    while (ai.alive && !this.ended && guard++ < 14) {
+      const plan = this.aiPlan(ai, role, stay);
+      if (!plan) break;
+      const before = { pa: ai.pa, pm: ai.pm, c: ai.c, r: ai.r };
+      if (plan.jump) {
+        await this.aiCast(ai, plan.jump, plan.cell);
+        if (this.ended || !ai.alive) return;
+        await this.aiPause(200);
+      } else if (plan.path && plan.path.length) {
+        await this._walk(ai, plan.path, 200);
+        if (this.ended || !ai.alive) return;
+        await this.aiPause(180);
+      }
+      if (ai.c !== plan.cell.c || ai.r !== plan.cell.r) {
+        // Deplacement interrompu (tacle, piege, mur de bombes) : on
+        // refait un plan depuis la case d arrivee, sans rebouger s il n a
+        // pas avance du tout.
+        if (ai.c === before.c && ai.r === before.r) stay = true;
+        if (ai.pa === before.pa && ai.pm === before.pm && stay && guard > 1) break;
+        continue;
+      }
+      if (plan.spell.apCost > ai.pa) { stay = true; continue; }
+      await this.aiCast(ai, plan.spell, plan.target);
+      acted = true;
+      if (this.checkEnd()) return;
+      if (!ai.alive) return;
+      await this.aiPause(240);
+    }
+    if (this.ended || !ai.alive) return;
+    if (!acted) {
+      await this.aiAdvance(ai, role);
+      if (this.ended || !ai.alive) return;
+    }
+    await this.aiSpendLeftovers(ai);
+    if (this.ended || !ai.alive) return;
+    await this.aiAfter(ai, role);
+  }
+
+  // Lance un sort (PA, recharge, effets).
+  async aiCast(ai, spell, target) {
+    ai.pa -= spell.apCost;
+    if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
+    ai.character.popCost(spell.apCost, 'pa');
+    this.hud.update(ai, this.mode, this.selectedSpellId);
+    await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
+  }
+
+  // Peut-il marcher ? (PM, pas enracine, pas porte par un Pandawa)
+  aiCanMove(ai) {
+    if (ai.pm <= 0 || ai.rooted) return false;
+    return !(ai._carriedBy && ai._carriedBy.alive && ai._carriedBy._carried === ai);
+  }
+
+  // Cases dangereuses connues de l IA : glyphes et murs de bombes adverses
+  // (les pieges adverses, eux, restent invisibles).
+  aiHazards(ai) {
+    const set = new Set();
+    for (const z of this.zones) {
+      if (z.kind !== 'glyph' || z.team === ai.team) continue;
+      for (const cl of z.cells) set.add(cl.c + ',' + cl.r);
+    }
+    return set;
+  }
+
+  // Cases atteignables en `pm` pas : [{ c, r, steps, res, hazard }]. Le
+  // chemin evite les cases dangereuses ; celles qu on ne peut atteindre
+  // qu en les traversant sont marquees `hazard`.
+  aiReach(ai, pm) {
+    const occ = this.computeOccupied(ai);
+    const blocked = (c, r) => this.map3d.isBlockedFor(c, r, ai);
+    const start = { c: ai.c, r: ai.r };
+    const full = bfs(this.map3d.getData(), occ, start, pm, blocked);
+    const hazards = this.aiHazards(ai);
+    const safe = hazards.size
+      ? bfs(this.map3d.getData(), occ, start, pm, (c, r) => blocked(c, r) || hazards.has(c + ',' + r))
+      : full;
+    const out = [];
+    for (const [key, d] of full.dist.entries()) {
+      if (d === 0) continue;
+      const [c, r] = key.split(',').map(Number);
+      if (safe.dist.has(key)) out.push({ c, r, steps: safe.dist.get(key), res: safe, hazard: false });
+      else out.push({ c, r, steps: d, res: full, hazard: true });
+    }
+    return out;
+  }
+
+  // Sort de bond (teleportation sur une case libre) disponible.
+  aiJumpSpell(ai) {
+    if (ai.rooted) return null;
+    return ai.spells.find(s => s.target === 'tile' && s.effects.some(e => e.type === 'teleport')
+      && !ai.isOnCooldown(s.id) && ai.pa >= s.apCost) || null;
+  }
+
+  // Cases libres a portee d un bond.
+  aiJumpCells(ai, spell) {
+    const out = [];
+    const R = spell.range.max;
+    for (let dc = -R; dc <= R; dc++) {
+      for (let dr = -R; dr <= R; dr++) {
+        const d = Math.abs(dc) + Math.abs(dr);
+        if (d < spell.range.min || d > R) continue;
+        const c = ai.c + dc, r = ai.r + dr;
+        if (!this.map3d.inBounds(c, r) || this.map3d.isBlockedFor(c, r, ai)) continue;
+        if (this.fighters.some(f => f.alive && f.c === c && f.r === r)) continue;
+        out.push({ c, r });
+      }
+    }
+    return out;
+  }
+
+  // Donnees partagees par un plan : ennemis, allies, cible designee...
+  aiContext(ai, role) {
+    const foes = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.invisible);
+    const real = foes.filter(f => !f.isBomb);
+    const heroes = real.filter(f => !f.isSummon);
+    const spells = this.aiAttackSpells(ai);
+    const maxRange = spells.reduce((m, s) => Math.max(m, s.range.max), 1);
+    const blockers = this.losBlockers();
+    blockers.delete(ai.c + ',' + ai.r);
+    const squishy = heroes.length > 1 ? heroes.slice().sort((a, b) => a.maxHp - b.maxHp)[0] : null;
+    return {
+      role, foes, real, heroes, spells, maxRange, blockers,
+      k: Math.max(0.5, ai.damageMultiplier()),
+      ideal: Math.max(3, Math.min(5, maxRange - 1)),
+      focus: this.aiFocusFor(ai),
+      prey: this.preyFor(ai),
+      squishy: ai.def.flank ? squishy : null,
+      allies: this.fighters.filter(f => f.alive && f.team === ai.team && f !== ai && !f.isBomb),
+      bombs: foes.filter(f => f.isBomb),
+      hazards: this.aiHazards(ai),
+      onlyBombs: real.length === 0,
+      cache: new Map(),
+      targets: new Map(),
+    };
+  }
+
+  // Cases visables par un sort : chaque ennemi, et pour une zone les
+  // cases voisines (pour toucher deux ennemis ou epargner un allie).
+  aiTargetCells(spell, ctx) {
+    let list = ctx.targets.get(spell.id);
+    if (list) return list;
+    list = [];
+    const seen = new Set();
+    const add = (c, r) => {
+      const key = c + ',' + r;
+      if (seen.has(key) || !this.map3d.inBounds(c, r) || this.map3d.isWall(c, r)) return;
+      seen.add(key);
+      list.push({ c, r });
+    };
+    const zone = spell.target === 'tile' && spell.area && spell.area.type === 'circle';
+    for (const f of ctx.foes) {
+      add(f.c, f.r);
+      if (zone) { add(f.c + 1, f.r); add(f.c - 1, f.r); add(f.c, f.r + 1); add(f.c, f.r - 1); }
+    }
+    ctx.targets.set(spell.id, list);
+    return list;
+  }
+
+  // Le sort peut-il etre lance depuis `from` sur la case `t` ?
+  aiCanCastFrom(spell, from, t, ctx) {
+    const dc = t.c - from.c, dr = t.r - from.r;
+    const d = Math.abs(dc) + Math.abs(dr);
+    if (d < spell.range.min || d > spell.range.max) return false;
+    if ((spell.lineOnly || (spell.area && spell.area.type === 'line')) && dc !== 0 && dr !== 0) return false;
+    if (spell.needsLOS && !hasLOS(this.map3d.getData(), from.c, from.r, t.c, t.r, ctx.blockers)) return false;
+    return true;
+  }
+
+  // Valeur d un lancer (en "points de degats") : degats attendus apres
+  // resistances et boucliers, controle (PA, PM, enracinement), bonus pour
+  // achever, pour la cible designee, pour chaque ennemi de plus dans la
+  // zone. Renvoie -1 si un allie serait blesse.
+  aiCastScore(ai, spell, t, ctx) {
+    const key = spell.id + ':' + t.c + ',' + t.r;
+    if (ctx.cache.has(key)) return ctx.cache.get(key);
+    const k = ctx.k;
+    const cells = this.areaCells(ai, spell, t);
+    let total = 0;
+    for (const cl of cells) {
+      const tf = this.fighters.find(f => f.alive && f.c === cl.c && f.r === cl.r);
+      if (!tf || tf === ai) continue;
+      const foe = tf.team !== ai.team;
+      const center = cl.c === t.c && cl.r === t.r;
+      let dmg = 0, ctl = 0;
+      for (const e of spell.effects) {
+        if (e.type === 'damage') {
+          if (!foe && e.enemiesOnly) continue;
+          const h = this.estimateHit(ai, tf, spell, e.min, e.max, e);
+          dmg += (h.min + h.max) / 2;
+          // Vol de vie : d autant plus interessant qu il est blesse.
+          if (foe && e.lifesteal && ai.hp < ai.maxHp * 0.8) ctl += ((h.min + h.max) / 2) * e.lifesteal;
+        } else if (!foe || tf.isBomb) {
+          continue;
+        } else if (e.type === 'dot' && center) {
+          const res = tf.res[damageElementOf(spell, ai)] || 0;
+          const already = tf.buffs.some(b => b.dot);
+          dmg += ((e.min + e.max) / 2) * (e.duration || 1) * k * (1 - res / 100) * 0.8
+            * (already ? (ctx.role.spread ? 0.55 : 0.85) : 1);
+        } else if (e.type === 'debuff_pa' && center) {
+          ctl += 8 * k * (e.value || 1) * (tf.isSummon ? 0.3 : 1) * (tf.buffs.some(b => b.bonusPa < 0) ? 0.5 : 1);
+        } else if (e.type === 'debuff_pm' && center) {
+          if (tf.rooted) continue;
+          ctl += 4 * k * (e.value || 1) * (tf.buffs.some(b => b.bonusPm < 0) ? 0.3 : 1) * (ctx.role.ranged ? 1.5 : 1);
+        } else if (e.type === 'state' && e.rooted) {
+          if (tf.rooted || tf.stabilized) continue;
+          ctl += 14 * k * ((e.duration || 1) > 1 ? 1.3 : 1);
+        } else if (e.type === 'knockback' && center) {
+          ctl += k * (ctx.role.ranged && this._dist(ai, tf) <= 2 ? 9 : 3);
+        } else if (e.type === 'glyph' && e.onTurn && e.onTurn.damage) {
+          // Nappe au sol : vaut plus sur une cible qui ne peut pas en sortir
+          // (et rien si sa nappe precedente la couvre deja).
+          if (this.zones.some(z => z.owner === ai && z.spellId === spell.id
+            && z.cells.some(c2 => c2.c === tf.c && c2.r === tf.r))) continue;
+          ctl += ((e.onTurn.damage.min + e.onTurn.damage.max) / 2) * k * (tf.rooted ? 1.4 : 0.7);
+        }
+      }
+      if (!foe) {
+        if (dmg > 0) { total = -1; break; }
+        continue;
+      }
+      const kills = dmg >= tf.hp;
+      let val;
+      if (tf.isBomb) {
+        // Une bombe : seulement pour la faire sauter d un coup, ou s il ne
+        // reste rien d autre a frapper.
+        if (!kills && !ctx.onlyBombs) continue;
+        val = (kills ? 12 * k : dmg * 0.3);
+      } else {
+        val = Math.min(dmg, tf.hp) + ctl + (kills ? (tf.isSummon ? 20 : 60) * k : 0);
+        let m = tf.isSummon ? 0.6 : 1;
+        if (tf === ctx.focus) m *= 1.35;
+        if (tf === ctx.prey) m *= 2;
+        if (tf === ctx.squishy) m *= 1.3;
+        m *= 1 + 0.25 * (1 - tf.hp / tf.maxHp);
+        if (ctx.role.gang) {
+          const pals = ctx.allies.filter(a => this._dist(a, tf) === 1).length;
+          m *= 1 + ctx.role.gang * Math.min(3, pals);
+        }
+        // Renvoi de degats (Momification) : cible a eviter.
+        m *= 1 - Math.min(0.8, tf.reflectFraction());
+        val *= m;
+      }
+      total += val;
+    }
+    // Sorts signature (longue recharge) : des que possible.
+    if (total > 0 && spell.cooldown >= 2) total *= 1.2;
+    ctx.cache.set(key, total);
+    return total;
+  }
+
+  // Meilleur lancer possible depuis une case (ou null).
+  aiBestCastFrom(ai, cell, ctx) {
+    let best = null;
+    for (const s of ctx.spells) {
+      if (s.apCost > cell.pa) continue;
+      for (const t of this.aiTargetCells(s, ctx)) {
+        if (!this.aiCanCastFrom(s, cell, t, ctx)) continue;
+        if (s.target === 'enemy' && !ctx.foes.some(f => f.c === t.c && f.r === t.r)) continue;
+        const sc = this.aiCastScore(ai, s, t, ctx);
+        if (sc > 0 && (!best || sc > best.score || (sc === best.score && s.apCost < best.spell.apCost))) {
+          best = { spell: s, target: t, score: sc };
+        }
+      }
+    }
+    return best;
+  }
+
+  // Interet d une case en elle-meme (independamment du sort lance).
+  aiCellScore(ai, cell, ctx) {
+    const k = ctx.k;
+    let s = 0;
+    if (cell.hazard || ctx.hazards.has(cell.c + ',' + cell.r)) s -= 14 * k;
+    // Ne reste pas dans le souffle d une bombe.
+    for (const b of ctx.bombs) if (Math.abs(b.c - cell.c) + Math.abs(b.r - cell.r) <= 2) s -= 5 * k;
+    if (ctx.role.ranged && ctx.real.length) {
+      // Tireur : le plus loin possible des ennemis, mais a portee de tir.
+      let dn = Infinity, nearest = null;
+      for (const f of ctx.real) {
+        const d = Math.abs(f.c - cell.c) + Math.abs(f.r - cell.r);
+        if (d < dn) { dn = d; nearest = f; }
+      }
+      s += 2.2 * k * Math.min(dn, ctx.ideal);
+      if (dn <= 1) s -= 8 * k;
+      // Archer : derriere la ligne de ses fantassins.
+      if (ai.def.rearGuard && nearest && ctx.allies.some(a => !a.def.rearGuard && this._dist(a, nearest) < dn)) s += 3 * k;
+    }
+    return s;
+  }
+
+  // Meilleur plan du moment : { cell, path | jump, spell, target }.
+  // Compare toutes les cases atteignables (a pied, tacle compris, ou d un
+  // bond) et tous les sorts lancables depuis chacune.
+  aiPlan(ai, role, stay = false) {
+    const ctx = this.aiContext(ai, role);
+    ctx.spells = ctx.spells.filter(s => s.apCost <= ai.pa);
+    if (!ctx.spells.length || !ctx.foes.length) return null;
+    // Tirailleur / harceleur : garde de quoi s echapper s il va etre tacle.
+    const escape = role.after === 'flee'
+      ? (this.aiJumpSpell(ai) || ai.spells.find(s => isMobilityBuff(s) && !ai.isOnCooldown(s.id) && ai.pa >= s.apCost))
+      : null;
+    const paAt = (c, r, pa) => {
+      if (!escape) return pa;
+      const info = this.tackleInfo(ai, c, r);
+      return info && info.esquive < 1 ? pa - escape.apCost : pa;
+    };
+    const cells = [{ c: ai.c, r: ai.r, steps: 0, pa: paAt(ai.c, ai.r, ai.pa), here: true }];
+    if (!stay && this.aiCanMove(ai)) {
+      const loss = this._tackleLoss(ai);
+      const pm = ai.pm - (loss ? loss.pm : 0);
+      const pa = ai.pa - (loss ? loss.pa : 0);
+      if (pm > 0) {
+        for (const cl of this.aiReach(ai, pm)) { cl.pa = paAt(cl.c, cl.r, pa); cells.push(cl); }
+      }
+    }
+    if (!stay && !(ai._carriedBy && ai._carriedBy.alive && ai._carriedBy._carried === ai)) {
+      // Bond : pour atteindre une cible hors de portee ou sortir d un tacle.
+      const jump = this.aiJumpSpell(ai);
+      if (jump) {
+        for (const cl of this.aiJumpCells(ai, jump)) {
+          cells.push({ c: cl.c, r: cl.r, steps: 0, pa: ai.pa - jump.apCost, jump });
+        }
+      }
+    }
+    let best = null;
+    for (const cell of cells) {
+      const cast = this.aiBestCastFrom(ai, cell, ctx);
+      if (!cast) continue;
+      const score = cast.score + this.aiCellScore(ai, cell, ctx)
+        - cell.steps * 0.2 * ctx.k - (cell.jump ? 3 * ctx.k : 0) + (cell.here ? 0.5 * ctx.k : 0);
+      if (!best || score > best.score) best = { spell: cast.spell, target: cast.target, cell, score };
+    }
+    if (!best) return null;
+    if (best.cell.jump) best.jump = best.cell.jump;
+    else if (best.cell.steps > 0) {
+      const path = pathTo(best.cell.res, best.cell);
+      best.path = path ? path.slice(1) : [];
+    }
+    return best;
+  }
+
+  // ----- Cible designee par un chef -----
+  aiFocusFor(ai) {
+    const f = this._aiFocus && this._aiFocus[ai.team];
+    if (!f || !f.target.alive || f.target.invisible || !f.by.alive) return null;
+    if (!this.fighters.includes(f.target) || !this.fighters.includes(f.by)) return null;
+    return f.target;
+  }
+
+  // Le chef (ou le boss) designe le heros le plus fragile a sa portee :
+  // sa meute le frappe en priorite tant qu il est en vie.
+  aiCallFocus(ai) {
+    if (this.aiFocusFor(ai)) return;
+    const heroes = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.isBomb && !f.isSummon && !f.invisible);
+    const pack = this.fighters.filter(f => f.alive && f.team === ai.team && f !== ai && !f.isBomb);
+    if (heroes.length < 2 || !pack.length) return;
+    const near = heroes.filter(h => this._dist(ai, h) <= 8);
+    const pool = near.length ? near : heroes;
+    pool.sort((a, b) => a.hp - b.hp || this._dist(ai, a) - this._dist(ai, b));
+    const target = pool[0];
+    this._aiFocus = this._aiFocus || {};
+    this._aiFocus[ai.team] = { target, by: ai };
+    target.character.popText('CIBLE', '#ff5a3a', { fontSize: 20, yStart: 1.8, yRise: 0.6, scaleX: 1.3, scaleY: 0.42 });
+    target.character.flashGlow && target.character.flashGlow(0xff5a3a, 600);
+    this.hud.log && this.hud.log(`${ai.name} designe ${target.name} : ses allies le prennent pour cible`, 'buff');
+  }
+
+  // ----- Phase 2 des boss (sous 50% de PV, une seule fois) -----
+  async aiCheckEnrage(ai) {
+    const e = ai.def.enrage;
+    if (!e || ai._enraged || !ai.alive || ai.hp > ai.maxHp * 0.5) return;
+    ai._enraged = true;
+    ai.buffs.push({
+      permanent: true, duration: 9999, enrage: true, source: e.name,
+      damageMult: e.damageMult, bonusPa: e.bonusPa, bonusPm: e.bonusPm,
+      shield: e.shield, fuite: e.fuite, tacle: e.tacle,
+    });
+    if (e.bonusPa) ai.pa += e.bonusPa;
+    if (e.bonusPm && !ai.rooted) ai.pm += e.bonusPm;
+    if (e.ai) ai._aiRole = e.ai;
+    // Ses sorts signature sont de nouveau prets.
+    for (const id in ai.spellCooldowns) ai.spellCooldowns[id] = 0;
+    ai.character.popText(e.name.toUpperCase() + ' !', '#ff4a2a', { fontSize: 20, yStart: 1.9, yRise: 0.7, scaleX: 1.7, scaleY: 0.42 });
+    ai.character.flashGlow && ai.character.flashGlow(0xff4a2a, 900);
+    this.vfx && this.vfx.buffAura({ c: ai.c, r: ai.r }, { color: 0xff4a2a });
+    this.hud.flash(`${ai.def.name} : ${e.name} !`, 1400);
+    this.hud.log && this.hud.log(`${ai.name} entre en phase 2 : ${e.name} (${enrageText(e)})`, 'buff');
+    this.hud.update(ai, this.mode, this.selectedSpellId);
+    await this.aiPause(500);
+  }
+
+  // Cible de marche : cible designee, sinon selon le role (la plus
+  // proche A PIED, pour ne pas rester bloque derriere un obstacle).
+  aiPickTarget(ai, role) {
+    const foes = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.invisible);
+    let pool = foes.filter(f => !f.isBomb && !f.isSummon);
+    if (!pool.length) pool = foes.filter(f => f.isSummon);
+    if (!pool.length) pool = foes;
+    if (!pool.length) return null;
+    const focus = this.aiFocusFor(ai);
+    if (focus && pool.includes(focus)) return focus;
+    const res = bfs(this.map3d.getData(), this.computeOccupied(ai), { c: ai.c, r: ai.r }, 999,
+      (c, r) => this.map3d.isBlockedFor(c, r, ai));
+    const walk = (t) => {
+      let best = Infinity;
+      for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+        const d = res.dist.get((t.c + dc) + ',' + (t.r + dr));
+        if (d !== undefined && d < best) best = d;
+      }
+      return best === Infinity ? 60 + this._dist(ai, t) : best;
+    };
+    const archers = this.fighters.filter(f => f.alive && f.team === ai.team && f.def.rearGuard);
+    const cost = (t) => {
+      let v = walk(t);
+      // Fantassin : barre la route de celui qui menace ses archers.
+      if (role.guard && archers.length) v += 0.5 * Math.min(...archers.map(a => this._dist(a, t)));
+      // Flanqueur : vise le heros le plus fragile.
+      if (ai.def.flank) v += t.maxHp / 40;
+      return v;
+    };
+    pool.sort((a, b) => cost(a) - cost(b) || a.hp - b.hp);
+    return pool[0];
+  }
+
+  // Aucune attaque possible ce tour : il se met en position pour le
+  // suivant (invisibilite, envol, bond, puis marche).
+  async aiAdvance(ai, role) {
+    const target = this.aiPickTarget(ai, role);
+    if (!target) return;
+    const dist = this._dist(ai, target);
+    if (dist > 2) {
+      await this.aiTryInvisibility(ai);
+      if (this.ended || !ai.alive) return;
+    }
+    if (!this.aiCanMove(ai)) return;
+    const foes = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.isBomb && !f.invisible);
+    if (role.ranged) {
+      // Tireur : marche vers la case de tir la plus proche A PIED (portee
+      // et ligne de vue), en contournant riviere et obstacles.
+      const spells = this.aiAttackSpells(ai);
+      if (!spells.length) return;
+      const ctx = { blockers: this.losBlockers() };
+      ctx.blockers.delete(ai.c + ',' + ai.r);
+      const canFire = (c, r, t) => spells.some(s => this.aiCanCastFrom(s, { c, r }, t, ctx));
+      const route = this.aiPathToGoal(ai, (c, r) => canFire(c, r, target))
+        || this.aiPathToGoal(ai, (c, r) => foes.some(t => canFire(c, r, t)));
+      if (route) await this._walk(ai, route.path.slice(0, ai.pm), 200);
+      else await this.aiApproach(ai, target, Math.max(1, spells.reduce((m, s) => Math.max(m, s.range.max), 1) - 1));
+      return;
+    }
+    if (role.after === 'flee') {
+      // Tirailleur / harceleur : s approche sans se coller (il frappera au
+      // tour suivant), pour ne pas offrir un tour de coups gratuits.
+      const route = this.aiPathToGoal(ai, (c, r) => Math.abs(c - target.c) + Math.abs(r - target.r) === 1);
+      if (route) {
+        const steps = route.path.slice(0, ai.pm);
+        let n = 0;
+        while (n < steps.length
+          && foes.every(f => Math.abs(f.c - steps[n].c) + Math.abs(f.r - steps[n].r) >= 3)) n++;
+        if (n > 0) await this._walk(ai, steps.slice(0, n), 200);
+        return;
+      }
+    }
+    // Trop loin pour arriver au contact : envol (+PM) si disponible.
+    if (role.after !== 'flee' && dist - 1 > ai.pm) {
+      const mob = ai.spells.find(s => isMobilityBuff(s) && !ai.isOnCooldown(s.id) && ai.pa >= s.apCost);
+      if (mob) {
+        await this.aiCast(ai, mob, ai);
+        if (this.ended || !ai.alive) return;
+        await this.aiPause(200);
+      }
+    }
+    await this.aiApproach(ai, target, 1);
+  }
+
+  // Chemin vers la case la plus proche a pied qui verifie `isGoal`
+  // ({ path, len } ou null). Contourne les murs de bombes et glyphes
+  // adverses si le detour reste court.
+  aiPathToGoal(ai, isGoal) {
+    const occ = this.computeOccupied(ai);
+    const blocked = (c, r) => this.map3d.isBlockedFor(c, r, ai);
+    const start = { c: ai.c, r: ai.r };
+    const search = (res) => {
+      let best = null, bd = Infinity;
+      for (const [key, d] of res.dist.entries()) {
+        if (d === 0 || d >= bd) continue;
+        const [c, r] = key.split(',').map(Number);
+        if (isGoal(c, r)) { bd = d; best = { c, r }; }
+      }
+      if (!best) return null;
+      const path = pathTo(res, best);
+      return path ? { path: path.slice(1), len: bd } : null;
+    };
+    const full = search(bfs(this.map3d.getData(), occ, start, 999, blocked));
+    if (!full) {
+      // Passage bouche par ses propres allies (pont, couloir) : il avance
+      // dans la file jusqu au premier combattant qui le gene.
+      const foesOnly = new Set();
+      for (const f of this.fighters) if (f.alive && f.team !== ai.team) foesOnly.add(f.c + ',' + f.r);
+      const through = search(bfs(this.map3d.getData(), foesOnly, start, 999, blocked));
+      if (!through) return null;
+      let n = 0;
+      while (n < through.path.length && !occ.has(through.path[n].c + ',' + through.path[n].r)) n++;
+      return n > 0 ? { path: through.path.slice(0, n), len: through.len } : null;
+    }
+    const hazards = this.aiHazards(ai);
+    if (!hazards.size) return full;
+    const safe = search(bfs(this.map3d.getData(), occ, start, 999, (c, r) => blocked(c, r) || hazards.has(c + ',' + r)));
+    return safe && safe.len <= full.len + 4 ? safe : full;
+  }
+
+  // PA restants en fin de tour : piege sur le chemin des heros, puis
+  // protections / soins qui n avaient pas ete lances.
+  async aiSpendLeftovers(ai) {
+    if (ai.pa <= 0) return;
+    if (ai.spells.some(s => s.effects.some(e => e.type === 'trap'))) {
+      await this.aiTryTrap(ai);
+      if (this.ended || !ai.alive) return;
+    }
+    await this.aiSelfBuffs(ai, true);
+    if (this.ended || !ai.alive || ai.pa <= 0) return;
+    if (ai.spells.some(s => s.target === 'ally' && s.effects.some(e => e.type === 'heal' || e.type === 'heal_percent'))) {
+      await this.aiTryHeal(ai);
+    }
+  }
+
+  // Fin de tour selon le role : repli ou poursuite.
+  async aiAfter(ai, role) {
+    if (!this.aiCanMove(ai)) return;
+    const foes = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.isBomb && !f.invisible);
+    if (!foes.length) return;
+    const near = Math.min(...foes.map(f => this._dist(ai, f)));
+    if (role.after === 'flee') {
+      // Tirailleur : quelques cases en arriere ; harceleur : aussi loin
+      // que possible tout en pouvant revenir frapper au tour suivant.
+      const cap = role.hop || Math.max(3, ai.effectiveMaxPm);
+      if (near < cap) await this.aiRetreat(ai, cap, 0);
+    } else if (role.after === 'kite') {
+      if (near <= 2) {
+        const spells = this.aiAttackSpells(ai);
+        const maxR = spells.reduce((m, s) => Math.max(m, s.range.max), 1);
+        await this.aiRetreat(ai, Math.max(3, Math.min(5, maxR - 1)), maxR);
+      }
+    } else if (role.after === 'stick') {
+      // Melee : reste au contact, sinon se rapproche pour le tour suivant.
+      if (near > 1) {
+        const target = this.aiPickTarget(ai, role);
+        if (target) await this.aiApproach(ai, target, 1);
+      }
+    }
+  }
+
+  // Repli : s eloigne des ennemis jusqu a `cap` cases. `tether` > 0 : reste
+  // a portee de tir d un heros. Tacle : bond ou envol si disponible, et il
+  // ne part que s il lui reste des PM apres le tacle.
+  async aiRetreat(ai, cap, tether = 0) {
+    const foes = () => this.fighters.filter(f => f.alive && f.team !== ai.team && !f.isBomb);
+    const hazards = this.aiHazards(ai);
+    const score = (c, r, hazard) => {
+      const list = foes();
+      if (!list.length) return 0;
+      const dn = Math.min(...list.map(f => Math.abs(f.c - c) + Math.abs(f.r - r)));
+      let s = Math.min(dn, cap);
+      if (tether && dn > tether) s -= (dn - tether);
+      if (hazard || hazards.has(c + ',' + r)) s -= 3;
+      for (const b of this.fighters) {
+        if (b.alive && b.isBomb && b.team !== ai.team && Math.abs(b.c - c) + Math.abs(b.r - r) <= 2) s -= 1;
+      }
+      return s;
+    };
+    let loss = this._tackleLoss(ai);
+    if (loss) {
+      const jump = this.aiJumpSpell(ai);
+      const mob = ai.spells.find(s => isMobilityBuff(s) && !ai.isOnCooldown(s.id) && ai.pa >= s.apCost);
+      if (jump) {
+        let best = null, bs = score(ai.c, ai.r, false) + 0.5;
+        for (const cl of this.aiJumpCells(ai, jump)) {
+          const sc = score(cl.c, cl.r, false);
+          if (sc > bs) { bs = sc; best = cl; }
+        }
+        if (best) {
+          await this.aiCast(ai, jump, best);
+          if (this.ended || !ai.alive) return;
+          await this.aiPause(200);
+        }
+      } else if (mob) {
+        await this.aiCast(ai, mob, ai);
+        if (this.ended || !ai.alive) return;
+        await this.aiPause(200);
+      }
+      loss = this._tackleLoss(ai);
+    }
+    if (!this.aiCanMove(ai)) return;
+    const pm = ai.pm - (loss ? loss.pm : 0);
+    if (pm <= 0) return;
+    let best = null, bs = score(ai.c, ai.r, false) + 0.5;
+    for (const cl of this.aiReach(ai, pm)) {
+      const sc = score(cl.c, cl.r, cl.hazard) - cl.steps * 0.01;
+      if (sc > bs) { bs = sc; best = cl; }
+    }
+    if (!best) return;
+    const path = pathTo(best.res, best);
+    if (path && path.length > 1) await this._walk(ai, path.slice(1), 190);
   }
 
   // ===== IA des invocations (et monstres "intelligents") =====
@@ -2218,62 +3299,26 @@ export class Game {
     );
   }
 
-  // BOSS de melee (Craqueleur Legendaire, Minotoror) : se renforce, ouvre
-  // avec son sort de controle (enracinement / charge), puis combat au
-  // corps a corps sans relache.
-  async runBoss(ai) {
-    await this.aiSelfBuff(ai);
-    if (this.ended) return;
-    const target = this.pickWeakestTarget(ai);
-    if (target) {
-      const openers = this.aiAttackSpells(ai).filter(s => s.effects.some(e => e.type === 'state' || e.type === 'charge'));
-      const usable = this.usableSpellsOn(ai, target, openers);
-      if (usable.length) {
-        const spell = usable[0];
-        ai.pa -= spell.apCost;
-        if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
-        ai.character.popCost(spell.apCost, 'pa');
-        this.hud.update(ai, this.mode, this.selectedSpellId);
-        await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
-        if (this.checkEnd()) return;
-        await this.aiPause(320);
-      }
-    }
-    await this.runRelentlessMelee(ai, 1);
-  }
-
-  // Sort de renforcement sur soi (Fureur...) quand un heros est proche.
-  async aiSelfBuff(ai) {
-    const hero = this.pickClosestHero(ai);
-    if (!hero || this._dist(ai, hero) > 7) return false;
-    const spell = ai.spells.find(s => s.target === 'self' && !ai.isOnCooldown(s.id) && ai.pa >= s.apCost
-      && s.effects.some(e => e.type === 'buff' && !e.invisible));
-    if (!spell) return false;
-    ai.pa -= spell.apCost;
-    if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
-    ai.character.popCost(spell.apCost, 'pa');
-    this.hud.update(ai, this.mode, this.selectedSpellId);
-    await this.applySpellEffects(ai, spell, { c: ai.c, r: ai.r });
-    await this.aiPause(300);
-    return true;
-  }
-
   // Pose un piege sur une case voisine, du cote des heros (Chafer Royal).
   async aiTryTrap(ai) {
     const spell = ai.spells.find(s => s.effects.some(e => e.type === 'trap') && !ai.isOnCooldown(s.id) && ai.pa >= s.apCost);
     if (!spell) return false;
     const hero = this.pickClosestHero(ai);
-    if (!hero) return false;
+    if (!hero || this._dist(ai, hero) > spell.range.max + 3) return false;
+    // Case libre a portee, la plus proche du heros (sur son chemin).
     let best = null, bd = 1e9;
-    for (const [dc, dr] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
-      const c = ai.c + dc, r = ai.r + dr;
-      const d0 = Math.abs(dc) + Math.abs(dr);
-      if (d0 < spell.range.min || d0 > spell.range.max) continue;
-      if (!this.map3d.inBounds(c, r) || this.map3d.isBlockedFor(c, r, ai)) continue;
-      if (this.fighters.some(f => f.alive && f.c === c && f.r === r)) continue;
-      if (this.zones.some(z => z.c === c && z.r === r)) continue;
-      const d = Math.abs(c - hero.c) + Math.abs(r - hero.r);
-      if (d < bd) { bd = d; best = { c, r }; }
+    const R = spell.range.max;
+    for (let dc = -R; dc <= R; dc++) {
+      for (let dr = -R; dr <= R; dr++) {
+        const c = ai.c + dc, r = ai.r + dr;
+        const d0 = Math.abs(dc) + Math.abs(dr);
+        if (d0 < spell.range.min || d0 > R) continue;
+        if (!this.map3d.inBounds(c, r) || this.map3d.isBlockedFor(c, r, ai) || this.map3d.isWater(c, r)) continue;
+        if (this.fighters.some(f => f.alive && f.c === c && f.r === r)) continue;
+        if (this.zones.some(z => z.c === c && z.r === r)) continue;
+        const d = Math.abs(c - hero.c) + Math.abs(r - hero.r) + d0 * 0.1;
+        if (d < bd) { bd = d; best = { c, r }; }
+      }
     }
     if (!best) return false;
     ai.pa -= spell.apCost;
@@ -2297,57 +3342,7 @@ export class Game {
     return heroes.length ? heroes[0].f : null;
   }
 
-  // ===== IA dediees aux monstres =====
-
-  // CHAFER : fantassin squelette. Combat acharne au corps a corps :
-  // frappe tout ce qui est a portee (invocation / bombe si le hero ne
-  // l est pas) puis poursuit sa route, jusqu a epuisement des PA / PM.
-  async runChafer(ai) {
-    await this.runRelentlessMelee(ai, 1);
-  }
-
-  // CHAFER ROYAL : officier squelette. Tant qu il n est pas au contact
-  // d un ennemi (pas a portee de melee), il se rend invisible pour
-  // avancer cache. Une fois au corps a corps, il combat sans relache.
-  async runChaferRoyal(ai) {
-    const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
-    // Pas de cible adjacente -> il tente de devenir invisible (le sort
-    // est ignore par aiTryInvisibility s il est deja invisible ou en
-    // recharge).
-    if (!target || this._dist(ai, target) > 1) {
-      await this.aiTryTrap(ai);
-      if (this.ended) return;
-      await this.aiTryInvisibility(ai);
-      if (this.ended) return;
-    }
-    await this.runRelentlessMelee(ai, 1);
-  }
-
-  // Combat de melee acharne : a chaque passe, frappe ce qui est a
-  // portee (le hero en priorite, sinon une invocation / bombe via
-  // aiAttackLoop) puis avance vers le hero. Boucle tant qu il reste des
-  // PA ou des PM et qu un progres est realise.
-  async runRelentlessMelee(ai, reach) {
-    let guard = 0;
-    while (ai.alive && (ai.pa > 0 || ai.pm > 0) && guard++ < 30) {
-      if (this.ended) return;
-      const spells = this.aiAttackSpells(ai);
-      const hero = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
-      if (!hero || spells.length === 0) return;
-      const before = { pa: ai.pa, c: ai.c, r: ai.r };
-      // 1. Frappe tout ce qui est deja a portee.
-      await this.aiAttackLoop(ai, hero, spells);
-      if (this.ended) return;
-      // 2. Poursuit sa route vers le hero avec les PM restants.
-      if (ai.pm > 0 && this._dist(ai, hero) > reach) {
-        await this.aiApproach(ai, hero, reach);
-        if (this.ended) return;
-      }
-      const progressed = ai.pa < before.pa || ai.c !== before.c || ai.r !== before.r;
-      if (!progressed) break;
-      await this.aiPause(280);
-    }
-  }
+  // ===== Outils communs et IA generiques de repli (aggressive / fearful) =====
 
   // Lance le sort d invisibilite sur soi-meme si disponible (Chafer Royal).
   async aiTryInvisibility(ai) {
@@ -2368,184 +3363,6 @@ export class Game {
     await this.applySpellEffects(ai, spell, { c: ai.c, r: ai.r });
     await this.aiPause(350);
     return true;
-  }
-
-  // TOFU : oiseau impulsif et rapide. Charge le hero LE PLUS PROCHE
-  // (pas le plus faible : il est impatient) et picore en rafale.
-  async runTofu(ai) {
-    const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
-    if (!target) return;
-    const spells = this.aiAttackSpells(ai);
-    if (spells.length === 0) return;
-    if (ai.pm > 0 && this._dist(ai, target) > 1) {
-      await this.aiApproach(ai, target, 1);
-      await this.aiPause(360);
-    }
-    if (this.ended) return;
-    await this.aiAttackLoop(ai, target, spells);
-    if (this.ended) return;
-    await this.aiRepositionTowardHero(ai, spells);
-  }
-
-  // TOFU ROYAL : Tofu geant. Dispose de Bourrasque (portee 2-5) en plus
-  // du Coup de Bec : il s approche a la portee la plus courte utile.
-  async runTofuRoyal(ai) {
-    const target = this.pickWeakestTarget(ai);
-    if (!target) return;
-    const spells = this.aiAttackSpells(ai);
-    if (spells.length === 0) return;
-    const reach = spells.reduce((m, s) => Math.min(m, s.range.max), Infinity);
-    if (ai.pm > 0 && this._dist(ai, target) > reach) {
-      await this.aiApproach(ai, target, reach);
-      await this.aiPause(420);
-    }
-    if (this.ended) return;
-    await this.aiAttackLoop(ai, target, spells);
-    if (this.ended) return;
-    await this.aiRepositionTowardHero(ai, spells);
-  }
-
-  // CHAMPIGNON : sporifere lent (2 PM). Reste a distance, empoisonne.
-  // Zone de confort = portee max de ses spores.
-  async runChampignon(ai) {
-    const target = this.pickWeakestTarget(ai);
-    if (!target) return;
-    const spells = this.aiAttackSpells(ai);
-    if (spells.length === 0) return;
-    const maxRange = spells.reduce((m, s) => Math.max(m, s.range.max), 0);
-    if (ai.pm > 0) {
-      await this.aiPositionAtRange(ai, target, maxRange, maxRange);
-      await this.aiPause(450);
-    }
-    if (this.ended) return;
-    await this.aiAttackLoop(ai, target, spells);
-    if (this.ended) return;
-    await this.aiRepositionTowardHero(ai, spells);
-  }
-
-  // CHAMPIGNON ROYAL : mycelien royal. Meme tactique que le champignon
-  // mais dispose en plus du Nuage de Spores (zone). Reste a distance.
-  async runChampignonRoyal(ai) {
-    const target = this.pickWeakestTarget(ai);
-    if (!target) return;
-    const spells = this.aiAttackSpells(ai);
-    if (spells.length === 0) return;
-    const maxRange = spells.reduce((m, s) => Math.max(m, s.range.max), 0);
-    if (ai.pm > 0) {
-      await this.aiPositionAtRange(ai, target, maxRange, maxRange);
-      await this.aiPause(450);
-    }
-    if (this.ended) return;
-    await this.aiAttackLoop(ai, target, spells);
-    if (this.ended) return;
-    await this.aiRepositionTowardHero(ai, spells);
-  }
-
-  // CRAQUELEUR (invocation Osamodas) : implacable. Il se rapproche au
-  // maximum, frappe la cible la plus proche (Frappe si possible, sinon
-  // Lancer de Rocher), depense tous ses PA, et s il tue une cible il
-  // fonce vers la suivante. Il bouge tant qu il a des PM, sauf au contact.
-  async runCraqueleur(ai) {
-    const spells = this.aiAttackSpells(ai);
-    if (spells.length === 0) return;
-    let guard = 0;
-    while (ai.alive && guard++ < 40) {
-      if (this.ended) return;
-      const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
-      if (!target) return;
-      let d = this._dist(ai, target);
-      // Se rapprocher au maximum si pas deja au contact.
-      let moved = false;
-      if (d > 1 && ai.pm > 0) {
-        const from = { c: ai.c, r: ai.r };
-        await this.aiApproach(ai, target, 1);
-        if (this.ended) return;
-        moved = (ai.c !== from.c || ai.r !== from.r);
-        d = this._dist(ai, target);
-        if (moved) await this.aiPause(280);
-      }
-      // Attaquer : Frappe en priorite (portee courte), Rocher sinon.
-      const usable = this.usableSpellsOn(ai, target, spells);
-      if (usable.length === 0) {
-        // Ni attaque possible ni rapprochement utile -> on s arrete.
-        if (!moved) break;
-        if (ai.pm <= 0) break;
-        break;
-      }
-      usable.sort((a, b) => (a.range.max - b.range.max) || (spellScore(b) - spellScore(a)));
-      const spell = usable[0];
-      ai.pa -= spell.apCost;
-      if (spell.cooldown) ai.setCooldown(spell.id, spell.cooldown);
-      ai.character.popCost(spell.apCost, 'pa');
-      this.hud.update(ai, this.mode, this.selectedSpellId);
-      await this.applySpellEffects(ai, spell, { c: target.c, r: target.r });
-      if (this.checkEnd()) return;
-      await this.aiPause(280);
-    }
-  }
-
-  // DRAGOUNET ROUGE (invocation Osamodas) : craintif. Soigne d abord un
-  // allie blesse (Dragosoin), puis se place a ~5 cases d un ennemi,
-  // ALIGNE pour cracher sa Dragoflamme. Tant qu il lui reste des PA / PM,
-  // il continue de se repositionner et d attaquer, en changeant de cible
-  // au besoin.
-  async runDragounet(ai) {
-    const spells = this.aiAttackSpells(ai);
-    const maxRange = spells.reduce((m, s) => Math.max(m, s.range.max), 0) || 8;
-    const target0 = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
-    // 1. Positionnement initial : zone de confort a 5 cases, aligne.
-    if (target0 && ai.pm > 0 && spells.length > 0) {
-      const moved = await this.aiPositionAtRange(ai, target0, 5, maxRange, true);
-      if (this.ended) return;
-      if (moved) await this.aiPause(450);
-    }
-    // 2. Le Dragounet PREFERE soigner : il frappe 1 fois avant de
-    //    soigner si un allie blesse est a portee.
-    const wantsHeal = this.hasHealableAlly(ai);
-    if (wantsHeal && target0 && spells.length > 0
-        && this.usableSpellsOn(ai, target0, spells).length > 0) {
-      await this.aiAttackLoop(ai, target0, spells, 1);
-      if (this.ended) return;
-      await this.aiPause(350);
-    }
-    await this.aiTryHeal(ai);
-    if (this.ended) return;
-    // 3. Tant qu il reste des PA / PM : se repositionner et attaquer,
-    //    quitte a changer de cible.
-    let guard = 0;
-    while (ai.alive && (ai.pa > 0 || ai.pm > 0) && guard++ < 20) {
-      if (this.ended) return;
-      const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
-      if (!target || spells.length === 0) break;
-      const before = { pa: ai.pa, c: ai.c, r: ai.r };
-      if (ai.pm > 0) {
-        await this.aiPositionAtRange(ai, target, 5, maxRange, true);
-        if (this.ended) return;
-      }
-      if (this.usableSpellsOn(ai, target, spells).length > 0) {
-        await this.aiAttackLoop(ai, target, spells);
-        if (this.ended) return;
-      }
-      if (ai.pa >= before.pa && ai.c === before.c && ai.r === before.r) break;
-      await this.aiPause(300);
-    }
-  }
-
-  // CHATON BLANC (invocation Ecaflip) : felin joueur. Fonce sur le hero
-  // ennemi le plus proche et griffe au corps a corps tant qu il peut.
-  async runChaton(ai) {
-    const spells = this.aiAttackSpells(ai);
-    if (spells.length === 0) return;
-    const target = this.pickClosestHero(ai) || this.pickWeakestTarget(ai);
-    if (!target) return;
-    if (ai.pm > 0 && this._dist(ai, target) > 1) {
-      await this.aiApproach(ai, target, 1);
-      await this.aiPause(320);
-    }
-    if (this.ended) return;
-    await this.aiAttackLoop(ai, target, spells);
-    if (this.ended) return;
-    await this.aiRepositionTowardHero(ai, spells);
   }
 
   async runAggressive(ai) {
@@ -2723,28 +3540,6 @@ export class Game {
     }
   }
 
-  // Y a-t-il un allie blesse soignable depuis la position courante ?
-  hasHealableAlly(ai) {
-    const healSpells = ai.spells.filter(s =>
-      !ai.isOnCooldown(s.id) && ai.pa >= s.apCost &&
-      s.effects.some(e => e.type === 'heal' || e.type === 'heal_percent') &&
-      s.target === 'ally'
-    );
-    if (healSpells.length === 0) return false;
-    const wounded = this.fighters.filter(f =>
-      f.alive && f.team === ai.team && f !== ai && !f.isBomb && f.hp < f.maxHp * 0.7
-    );
-    for (const w of wounded) {
-      for (const s of healSpells) {
-        const d = this._dist(ai, w);
-        if (d < s.range.min || d > s.range.max) continue;
-        if (s.needsLOS && !hasLOS(this.map3d.getData(), ai.c, ai.r, w.c, w.r, this.losBlockers())) continue;
-        return true;
-      }
-    }
-    return false;
-  }
-
   // Soigne les allies blesses tant que c est possible (PA + portee).
   async aiTryHeal(ai) {
     let healedAny = false;
@@ -2756,8 +3551,9 @@ export class Game {
         s.target === 'ally'
       );
       if (healSpells.length === 0) break;
+      const selfHeal = healSpells.some(s => s.range.min === 0);
       const wounded = this.fighters.filter(f =>
-        f.alive && f.team === ai.team && f !== ai && !f.isBomb && f.hp < f.maxHp * 0.7
+        f.alive && f.team === ai.team && (f !== ai || selfHeal) && !f.isBomb && f.hp < f.maxHp * 0.7
       ).sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp));
       if (wounded.length === 0) break;
       let cast = false;
@@ -2785,7 +3581,8 @@ export class Game {
 
   async aiTryShield(ai) {
     let anyCast = false;
-    while (true) {
+    let guard = 0;
+    while (guard++ < 8) {
       const shieldSpells = ai.spells.filter(s =>
         !ai.isOnCooldown(s.id) &&
         s.effects.some(e => e.type === 'buff' && e.shield) &&
@@ -2818,6 +3615,7 @@ export class Game {
       if (!cast) return anyCast;
       if (this.ended) return anyCast;
     }
+    return anyCast;
   }
 
   pickWeakestTarget(ai) {
@@ -2880,7 +3678,12 @@ export class Game {
     const occ = this.computeOccupied(ai);
     const blocked = (c, r) => this.map3d.isBlockedFor(c, r, ai);
     // 1. BFS depuis l IA (toutes contraintes : terrain + allies/ennemis).
-    const myResult = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, 999, blocked);
+    let myResult = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, 999, blocked);
+    // Meme recherche en contournant les murs de bombes et glyphes adverses.
+    const hazards = this.aiHazards(ai);
+    const safeResult = hazards.size
+      ? bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, 999, (c, r) => blocked(c, r) || hazards.has(c + ',' + r))
+      : null;
     // 2. BFS depuis la cible avec UNIQUEMENT les contraintes de terrain
     //    (pas les autres combattants). Donne la distance topologique
     //    "ideale" : pour la carte cascade, ça force le passage par le
@@ -2895,28 +3698,40 @@ export class Game {
     //       topologique a la cible (sans la traversee des autres
     //       combattants) -> ça force le passage par le pont sur Cascade
     //       au lieu d aller dans des culs-de-sac est/ouest.
-    let inRangeGoal = null;
-    let inRangeMyDist = Infinity;
-    let approachGoal = null;
-    let approachTDist = Infinity;
-    let approachMyDist = Infinity;
-    for (const [key, d] of myResult.dist.entries()) {
-      if (d === 0) continue;
-      const [c, r] = key.split(',').map(Number);
-      const manhattan = Math.abs(c - target.c) + Math.abs(r - target.r);
-      const td = tResult.dist.has(key) ? tResult.dist.get(key) : Infinity;
-      if (manhattan <= range) {
-        if (d < inRangeMyDist) {
-          inRangeMyDist = d;
-          inRangeGoal = { c, r };
+    const pickGoal = (result) => {
+      let inRangeGoal = null;
+      let inRangeMyDist = Infinity;
+      let approachGoal = null;
+      let approachTDist = Infinity;
+      let approachMyDist = Infinity;
+      for (const [key, d] of result.dist.entries()) {
+        if (d === 0) continue;
+        const [c, r] = key.split(',').map(Number);
+        const manhattan = Math.abs(c - target.c) + Math.abs(r - target.r);
+        const td = tResult.dist.has(key) ? tResult.dist.get(key) : Infinity;
+        if (manhattan <= range) {
+          if (d < inRangeMyDist) {
+            inRangeMyDist = d;
+            inRangeGoal = { c, r };
+          }
+        } else if (td !== Infinity && (td < approachTDist || (td === approachTDist && d < approachMyDist))) {
+          approachTDist = td;
+          approachMyDist = d;
+          approachGoal = { c, r };
         }
-      } else if (td !== Infinity && (td < approachTDist || (td === approachTDist && d < approachMyDist))) {
-        approachTDist = td;
-        approachMyDist = d;
-        approachGoal = { c, r };
       }
+      return { goal: inRangeGoal || approachGoal, inRange: !!inRangeGoal, len: inRangeMyDist, td: approachTDist };
+    };
+    let pick = pickGoal(myResult);
+    if (safeResult) {
+      // Le detour est accepte s il ne coute que quelques cases.
+      const safe = pickGoal(safeResult);
+      const useSafe = safe.goal && (pick.inRange
+        ? (safe.inRange && safe.len <= pick.len + 4)
+        : (safe.inRange || safe.td <= pick.td + 2));
+      if (useSafe) { pick = safe; myResult = safeResult; }
     }
-    const bestGoal = inRangeGoal || approachGoal;
+    const bestGoal = pick.goal;
     if (!bestGoal) return false;
     const fullPath = pathTo(myResult, bestGoal);
     if (!fullPath || fullPath.length <= 1) return false;
@@ -2936,6 +3751,7 @@ export class Game {
     const result = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, ai.pm, blocked);
     const mapData = this.map3d.getData();
     const blockers = this.losBlockers();
+    const hazards = this.aiHazards(ai);
     // Score d une case (plus bas = mieux) :
     //  - sur la cible (d < 1)        : a eviter absolument.
     //  - hors de portee (d > maxDist): case d APPROCHE -> on veut le d
@@ -2948,7 +3764,8 @@ export class Game {
       if (requireLine && c !== target.c && r !== target.r) return 5e4 + d;
       if (d > maxDist) return 1e4 + d;          // approche : minimise d
       if (!hasLOS(mapData, c, r, target.c, target.r, blockers)) return 9e5;
-      return Math.abs(d - idealDist);            // tir : vise idealDist
+      // tir : vise idealDist, hors des glyphes / murs de bombes adverses
+      return Math.abs(d - idealDist) + (hazards.has(c + ',' + r) ? 2.5 : 0);
     };
     let best = { c: ai.c, r: ai.r };
     const initialDist = Math.abs(ai.c - target.c) + Math.abs(ai.r - target.r);
@@ -3025,7 +3842,7 @@ export class Game {
         heroes: this.fighters.filter(f => f.team === 'player' && f.levelKind === 'hero')
           .map(f => ({ classId: f.classId, alive: f.alive, hpRatio: f.alive ? f.hp / f.maxHp : 0 })),
       };
-      let buttonLabel = 'REJOUER';
+      let buttonLabel = (this.config && this.config.endLabel) || 'REJOUER';
       if (adv) buttonLabel = winner !== 'player' ? 'QUITTER LE DONJON' : adv.last ? 'OUVRIR LE COFFRE' : 'SALLE SUIVANTE';
       setTimeout(() => this.hud.showEnd(winner, () => {
         if (this.onEnd) this.onEnd();
@@ -3046,6 +3863,42 @@ function spellScore(spell) {
     if (e.type === 'chanceStrike') score += ((e.dmgMin + e.dmgMax) / 2) * 0.5;
   }
   return score;
+}
+
+// Roles des monstres (cf. Game.runRole) : un role par famille.
+//  melee / ranged : style de combat ; gang : bonus pour frapper la cible
+//  deja entouree d allies ; guard : protege ses archers ; spread : repand
+//  ses poisons ; after : fin de tour (stick = colle la cible, flee = se
+//  replie, kite = recule si on le serre, hold = ne bouge plus) ; hop :
+//  distance du repli.
+const AI_ROLES = {
+  pack:       { melee: true, gang: 0.15, after: 'stick' },        // Bouftous
+  skirmisher: { melee: true, after: 'flee', hop: 4 },             // Wabbits
+  raider:     { melee: true, after: 'flee' },                     // Tofus
+  soldier:    { melee: true, guard: true, after: 'stick' },       // Chafers
+  tank:       { melee: true, after: 'stick' },                    // Craqueleurs
+  charger:    { melee: true, after: 'stick' },                    // Labyrinthe
+  spitter:    { ranged: true, after: 'kite' },                    // Crapauds, Kwaks, archers
+  poisoner:   { ranged: true, spread: true, after: 'hold' },      // Champignons
+};
+
+// Boost de mobilite pour soi (Envol : PM et fuite, sans degats ni PA).
+function isMobilityBuff(spell) {
+  if (spell.target !== 'self' || (spell.area && spell.area.type === 'circle')) return false;
+  const e = spell.effects.find(x => x.type === 'buff');
+  return !!e && (e.bonusPm > 0 || e.fuite > 0) && !e.damageMult && !e.bonusPa && !e.shield && !e.invisible;
+}
+
+// Resume d une phase 2 de boss pour le journal.
+function enrageText(e) {
+  const bits = [];
+  if (e.damageMult) bits.push(`+${Math.round(e.damageMult * 100)}% degats`);
+  if (e.shield) bits.push(`-${Math.round(e.shield * 100)}% degats subis`);
+  if (e.bonusPa) bits.push(`+${e.bonusPa} PA`);
+  if (e.bonusPm) bits.push(`+${e.bonusPm} PM`);
+  if (e.fuite) bits.push(`+${e.fuite} fuite`);
+  if (e.ai === 'skirmisher') bits.push('frappe puis se replie');
+  return bits.join(', ');
 }
 
 // Degats max qu un sort peut infliger d un coup (sert a estimer si une
