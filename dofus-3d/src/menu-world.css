@@ -1,0 +1,173 @@
+/* ==========================================================================
+   Ecran d accueil, carte du monde et fiche d entrainement
+   ========================================================================== */
+
+/* ---- Accueil : le decor 3D reste visible derriere ---- */
+#menu-root.home {
+  background:
+    radial-gradient(ellipse at 50% 30%, rgba(20, 14, 4, 0.15) 0%, rgba(14, 9, 2, 0.72) 70%, rgba(8, 5, 1, 0.92) 100%) !important;
+  justify-content: center !important;
+}
+#menu-root .menu-title {
+  font-family: var(--d-font-title, "Trebuchet MS", sans-serif) !important;
+  font-size: clamp(44px, 9vw, 84px) !important; letter-spacing: 4px !important; line-height: 1;
+  background: linear-gradient(180deg, #fff3b0 0%, #ffcf5a 38%, #f08a1a 70%, #b95d0c 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent !important;
+  -webkit-text-stroke: 2px #5a2e04;
+  filter: drop-shadow(0 4px 0 #3a1c02) drop-shadow(0 10px 18px rgba(0, 0, 0, 0.6));
+  text-shadow: none !important;
+}
+#menu-root:not(.home) .menu-title { font-size: clamp(26px, 5vw, 38px) !important; -webkit-text-stroke: 1px #5a2e04; margin: 0 !important; }
+#menu-root.home .menu-subtitle { font-size: 16px; color: #fff3d6; text-shadow: 0 2px 4px #000; margin-bottom: 18px; }
+#menu-root .mh-heroes { display: flex; justify-content: center; gap: 6px; margin: 0 0 18px; flex-wrap: wrap; }
+#menu-root .mh-hero {
+  position: relative; width: 58px; height: 58px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 40%, #5a6a8a, #232838 75%);
+  border: 3px solid #c9a24a; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.6);
+}
+#menu-root .mh-hero img, #menu-root .mh-hero svg { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
+#menu-root .mh-hero i, #menu-root .wm-lv {
+  position: absolute; right: -1px; bottom: -1px; min-width: 18px; height: 18px; padding: 0 3px; box-sizing: border-box;
+  border-radius: 9px; background: #1a120a; border: 1px solid #c9a24a; color: #ffcf5a;
+  font: 700 11px/16px var(--d-font-title, sans-serif); font-style: normal; text-align: center;
+}
+#menu-root.home .menu-modes { display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; width: min(760px, 100%); }
+#menu-root.home .menu-mode {
+  width: min(340px, 100%) !important; padding: 20px 18px !important; border-radius: 18px !important;
+  background: linear-gradient(180deg, rgba(72, 52, 26, 0.96), rgba(30, 20, 8, 0.97)) !important;
+  border: 3px solid #c9a24a !important; box-shadow: 0 10px 26px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 236, 180, 0.3) !important;
+  transition: transform 0.12s ease;
+}
+#menu-root.home .menu-mode:hover { transform: translateY(-4px); }
+#menu-root.home .menu-mode.adventure { border-color: #ffcf5a !important; }
+#menu-root.home .menu-mode .mm-icon { height: 84px !important; }
+#menu-root.home .menu-mode .mm-name { font-size: 26px !important; color: #ffcf5a !important; font-family: var(--d-font-title, sans-serif); }
+#menu-root.home .menu-mode .mm-desc { display: block !important; font-size: 13px !important; line-height: 1.4; }
+#menu-root .mm-prog { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 12px; color: #ffcf5a; font-weight: 700; }
+#menu-root .mm-bar { flex: 1; height: 10px; border-radius: 5px; background: #1a120a; border: 1px solid #5a4a32; overflow: hidden; }
+#menu-root .mm-bar div { height: 100%; background: linear-gradient(90deg, #f08a1a, #ffcf5a); }
+@media (max-width: 640px) {
+  #menu-root.home .menu-mode { padding: 14px !important; display: grid; grid-template-columns: 76px 1fr; column-gap: 12px; text-align: left; align-items: center; }
+  #menu-root.home .menu-mode .mm-icon { height: 64px !important; grid-row: 1 / span 3; margin: 0 !important; }
+  #menu-root.home .menu-mode .mm-name { font-size: 22px !important; }
+  #menu-root.home .menu-mode .mm-prog { grid-column: 2; }
+}
+
+/* ---- Carte du monde ---- */
+#menu-root.world { padding: 8px 8px 10px !important; }
+#menu-root.world .menu-stage { width: 100%; max-width: 1180px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+#menu-root.world .menu-subtitle { margin-bottom: 6px; }
+#menu-root .wm-team { display: flex; align-items: center; justify-content: center; gap: 5px; margin-bottom: 6px; flex-wrap: wrap; }
+#menu-root .wm-tl { font: 700 12px var(--d-font-title, sans-serif); color: #ffcf5a; text-transform: uppercase; letter-spacing: 1px; margin-right: 4px; }
+#menu-root .wm-hero {
+  position: relative; width: 46px; height: 46px; padding: 0; border-radius: 50%; cursor: pointer;
+  background: radial-gradient(circle at 50% 40%, #4a5470, #232838 75%);
+  border: 3px solid #5a4a32; opacity: 0.55; filter: grayscale(0.7);
+}
+#menu-root .wm-hero.on { border-color: #ffcf5a; opacity: 1; filter: none; box-shadow: 0 0 10px rgba(255, 207, 90, 0.7); }
+#menu-root .wm-hero img, #menu-root .wm-hero svg { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 50%; }
+#menu-root .wm-wrap { flex: 1; min-height: 0; display: flex; gap: 10px; }
+#menu-root .wm-map {
+  position: relative; flex: 1.6; min-height: 300px; border-radius: 14px; overflow: hidden;
+  border: 3px solid #c9a24a; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.6);
+}
+#menu-root .wm-bg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#menu-root .wm-node {
+  position: absolute; transform: translate(-50%, -50%); width: 92px; padding: 0; border: 0; background: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; color: #fff; font-family: var(--d-font-body, sans-serif);
+}
+#menu-root .wm-face {
+  width: 58px; height: 58px; border-radius: 50%; overflow: hidden; display: block;
+  background: radial-gradient(circle at 50% 40%, #fff3d6, #c9b48a 80%);
+  border: 4px solid var(--ring, #ffcf5a); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.55);
+}
+#menu-root .wm-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+#menu-root .wm-node.sel .wm-face { box-shadow: 0 0 0 4px #fff, 0 0 18px #ffcf5a; transform: scale(1.1); }
+#menu-root .wm-done {
+  position: absolute; top: -2px; right: 12px; width: 22px; height: 22px; border-radius: 50%;
+  background: #6aa533; border: 2px solid #241208; font: 700 13px/20px sans-serif; text-align: center;
+}
+#menu-root .wm-name { margin-top: 2px; padding: 0 6px; border-radius: 8px; background: rgba(20, 12, 4, 0.82); font: 700 11px/16px var(--d-font-title, sans-serif); color: #ffcf5a; white-space: nowrap; }
+#menu-root .wm-range { font: 700 10px/13px sans-serif; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+#menu-root .wm-panel {
+  flex: 1; min-width: 0; overflow: auto; padding: 10px 12px; border-radius: 14px; text-align: left;
+  background: linear-gradient(180deg, rgba(60, 44, 22, 0.97), rgba(26, 17, 7, 0.98));
+  border: 2px solid #8a6f44; color: #fff3d6; font-size: 13px; line-height: 1.4;
+}
+#menu-root .wm-hint { color: #c9b48a; text-align: center; padding: 14px 6px; }
+#menu-root .wm-ptitle { font: 700 19px var(--d-font-title, sans-serif); color: #ffcf5a; margin-bottom: 6px; }
+#menu-root .wm-ptitle span { font-size: 12px; color: #fff3d6; background: rgba(0, 0, 0, 0.4); border-radius: 10px; padding: 1px 8px; margin-left: 6px; white-space: nowrap; }
+#menu-root .wm-evo { display: flex; align-items: flex-start; gap: 2px; margin-bottom: 8px; overflow-x: auto; }
+#menu-root .wm-evo-i { flex: 0 0 auto; width: 70px; text-align: center; font-size: 10px; line-height: 1.15; }
+#menu-root .wm-evo-i img { width: 44px; height: 44px; border-radius: 50%; background: radial-gradient(circle, #fff3d6, #c9b48a); border: 2px solid #6d5c42; display: block; margin: 0 auto 2px; object-fit: cover; }
+#menu-root .wm-evo-i i { font-style: normal; }
+#menu-root .wm-arrow { color: #8a6f44; margin-top: 14px; font-size: 11px; }
+#menu-root .wm-row { margin: 6px 0; }
+#menu-root .wm-rl { display: block; font: 700 11px var(--d-font-title, sans-serif); letter-spacing: 1px; text-transform: uppercase; color: #c9b48a; margin-bottom: 4px; }
+#menu-root .wm-tiers { display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px; }
+#menu-root .wm-tier {
+  height: 44px; border-radius: 10px; cursor: pointer; font: 700 17px var(--d-font-title, sans-serif); color: #fff3d6;
+  background: linear-gradient(180deg, #5a4628, #2e2110); border: 2px solid #6d5c42;
+}
+#menu-root .wm-tier.won { background: linear-gradient(180deg, #5f8a2e, #2f4a14); border-color: #9ad85a; }
+#menu-root .wm-tier.rec { border-color: #ffcf5a; }
+#menu-root .wm-tier.locked { opacity: 0.35; cursor: default; }
+#menu-root .wm-tier.sel, #menu-root .wm-dungeon.sel { border-color: #fff; box-shadow: 0 0 0 2px #ffcf5a, 0 0 12px #f0a02a; }
+#menu-root .wm-dungeon {
+  width: 100%; min-height: 46px; border-radius: 10px; cursor: pointer; padding: 6px 10px;
+  font: 700 14px var(--d-font-title, sans-serif); color: #fff3d6;
+  background: linear-gradient(180deg, #7a3a2a, #3a160e); border: 2px solid #c0603a;
+}
+#menu-root .wm-dungeon:disabled { opacity: 0.45; cursor: default; }
+#menu-root .wm-detail { display: flex; gap: 8px; align-items: center; margin-top: 8px; padding: 8px; border-radius: 10px; background: rgba(0, 0, 0, 0.32); font-size: 12px; }
+#menu-root .wm-detail b { color: #ffcf5a; }
+#menu-root .wm-faces { display: flex; flex: 0 0 auto; }
+#menu-root .wm-faces img { width: 38px; height: 38px; border-radius: 50%; margin-left: -8px; border: 2px solid #6d5c42; background: radial-gradient(circle, #fff3d6, #c9b48a); object-fit: cover; }
+#menu-root .wm-faces img:first-child { margin-left: 0; }
+@media (orientation: portrait) {
+  #menu-root .wm-wrap { flex-direction: column; }
+  #menu-root.world .menu-stage { flex: none; }
+  #menu-root .wm-map { flex: none; height: 52vh; min-height: 380px; }
+  #menu-root.world .menu-nav {
+    position: sticky; bottom: 0; z-index: 5; flex-wrap: nowrap !important; padding: 8px 0 calc(4px + env(safe-area-inset-bottom, 0px));
+    background: linear-gradient(180deg, rgba(14, 9, 2, 0), rgba(14, 9, 2, 0.95) 30%);
+  }
+  #menu-root.world #menu-grimoire { display: none !important; }
+  #menu-root.world .menu-navbtn { flex: 1 1 30% !important; }
+  #menu-root .wm-panel { flex: none; overflow: visible; }
+  #menu-root .wm-node { width: 84px; }
+  #menu-root .wm-face { width: 50px; height: 50px; }
+}
+@media (orientation: landscape) and (max-height: 520px) {
+  #menu-root.world .menu-title, #menu-root.world .menu-subtitle { display: none; }
+  #menu-root .wm-face { width: 44px; height: 44px; }
+  #menu-root .wm-map { min-height: 200px; }
+}
+
+/* ---- Fiche d entrainement ---- */
+#tutorial-overlay {
+  position: fixed; inset: 0; z-index: 70; display: flex; align-items: center; justify-content: center;
+  background: rgba(8, 5, 1, 0.72); padding: 12px;
+}
+#tutorial-overlay .tu-card {
+  width: min(620px, 100%); max-height: 100%; overflow: auto; box-sizing: border-box; padding: 16px 18px;
+  border-radius: 16px; border: 3px solid #c9a24a; color: #fff3d6;
+  background: linear-gradient(180deg, rgba(64, 46, 22, 0.99), rgba(26, 17, 7, 0.99));
+  font: 13px/1.45 var(--d-font-body, "Trebuchet MS", sans-serif); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.8);
+}
+#tutorial-overlay .tu-title { font: 700 22px var(--d-font-title, sans-serif); color: #ffcf5a; }
+#tutorial-overlay .tu-title span { font-size: 12px; background: #ffcf5a; color: #1a1206; border-radius: 10px; padding: 1px 8px; vertical-align: 3px; margin-left: 4px; }
+#tutorial-overlay .tu-tip { margin: 8px 0; padding: 8px 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.35); }
+#tutorial-overlay .tu-h { font: 700 12px var(--d-font-title, sans-serif); letter-spacing: 1px; text-transform: uppercase; color: #c9b48a; margin: 10px 0 4px; }
+#tutorial-overlay .tu-list { margin: 0; padding-left: 18px; }
+#tutorial-overlay .tu-list b { color: #ffcf5a; }
+#tutorial-overlay .tu-spells { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; }
+#tutorial-overlay .tu-gl { font: 700 11px var(--d-font-title, sans-serif); text-transform: uppercase; letter-spacing: 1px; color: var(--sg); border-bottom: 2px solid var(--sg); margin-bottom: 3px; }
+#tutorial-overlay .tu-spell { font-size: 11.5px; margin-bottom: 4px; }
+#tutorial-overlay .tu-spell b { color: #fff; font-size: 12.5px; }
+#tutorial-overlay .tu-spell span { color: #8fd0ff; font-weight: 700; }
+#tutorial-overlay .tu-go {
+  display: block; margin: 14px auto 0; padding: 12px 34px; border-radius: 12px; cursor: pointer;
+  font: 700 17px var(--d-font-title, sans-serif); color: #fff8e0; letter-spacing: 1px;
+  background: linear-gradient(180deg, #ffc24a 0%, #e8841a 55%, #b95d0c 100%); border: 2px solid #5a2e04;
+}

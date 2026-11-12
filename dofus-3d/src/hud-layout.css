@@ -225,3 +225,54 @@ body.touch-ui #placement-ready { bottom: calc(var(--dock-h, 200px) + 58px) !impo
   body.touch-ui #cast-banner .cb-meta { display: none; }
   body.touch-ui #rot-dial { margin-left: auto; }
 }
+
+/* ==========================================================================
+   Ecran tactile : socle compact, vue de jeu degagee. Les fiches (sort,
+   combattant) n apparaissent que sur appui long, au-dessus du socle.
+   ========================================================================== */
+body.touch-ui .spell-group .sg-label { display: none; }
+body.touch-ui .spell-group { border-top: 3px solid var(--sg); padding-top: 3px; border-radius: 3px; }
+body.touch-ui .spell-bar { gap: 5px 8px !important; }
+body.touch-ui .spell-group .sg-btns { gap: 3px; }
+body.touch-ui .spell { width: 52px !important; height: 62px !important; }
+body.touch-ui .spell .sp-name { height: 19px; font-size: 8px; line-height: 8.5px; }
+body.touch-ui .spell .sp-name.long { font-size: 7px; line-height: 7.5px; }
+body.touch-ui .spell.painted .icon { inset: 1px 4px 20px 4px !important; }
+body.touch-ui .spell .spell-pips { bottom: 21px; }
+body.touch-ui .spell .spell-pips i { width: 5px; height: 5px; }
+body.touch-ui .spell .cost, body.touch-ui .spell.painted .cost { font-size: 11px !important; line-height: 14px !important; top: 2px !important; right: 2px !important; }
+body.touch-ui .spell.selected, body.touch-ui .spell.active { transform: translateY(-3px); }
+body.touch-ui #hud-spells { padding: 2px 4px 4px !important; }
+body.touch-ui .td-row { padding: 4px 6px 3px; gap: 6px; }
+body.touch-ui #hud-stats { flex: 0 0 auto; }
+body.touch-ui #hud-stats .name { display: none !important; }
+body.touch-ui #hud-stats .stat-row { gap: 6px; }
+body.touch-ui #hud-stats .stat-icon svg { width: 18px; height: 18px; }
+body.touch-ui #hud-stats .stat-icon .value { font-size: 14px; }
+body.touch-ui #btn-end-mobile { padding: 8px 10px; font-size: 12px; }
+body.touch-ui #rot-dial {
+  flex: 1; min-width: 0; padding: 0; background: rgba(0, 0, 0, 0.3); border-width: 1px; box-shadow: none; border-radius: 14px;
+}
+body.touch-ui #rot-dial .rd-step { display: none; }
+body.touch-ui #rot-dial .rd-track { width: auto !important; flex: 1; height: 32px; }
+body.touch-ui #cast-banner .cb-cancel { display: none; }
+body.touch-ui #turn-order { top: calc(54px + env(safe-area-inset-top, 0px)) !important; padding: 2px 4px !important; }
+body.touch-ui #turn-order .to-list { zoom: 0.68; }
+body.touch-ui #turn-order .to-slot { transform: none !important; margin: 0 !important; }
+body.touch-ui #fighter-info {
+  position: static !important; width: auto !important; max-width: min(520px, 96vw) !important; box-sizing: border-box;
+  pointer-events: auto; font-size: 12px; max-height: 46vh; overflow: auto;
+}
+body.touch-ui #fighter-info .fi-close, body.touch-ui #fighter-info button { display: none; }
+body.touch-ui #placement-ready { bottom: calc(var(--dock-h, 200px) + 14px) !important; }
+@media (orientation: landscape) {
+  body.touch-ui #turn-order { top: calc(6px + env(safe-area-inset-top, 0px)) !important; }
+  body.touch-ui .td-row { min-width: 190px; }
+  body.touch-ui #rot-dial { flex: 0 0 28px; width: 100%; height: 28px; box-sizing: border-box; align-self: stretch; }
+  body.touch-ui #rot-dial .rd-track { height: 26px; }
+  body.touch-ui .spell { width: 52px !important; height: 62px !important; }
+  body.touch-ui #dock-above { flex-direction: column-reverse; align-items: flex-start; }
+  body.touch-ui #cast-banner .cb-meta { display: block; }
+  body.touch-ui #cast-banner { max-width: 60vw; }
+}
+body.touch-ui .spell .sp-name.xlong { font-size: 6.3px; line-height: 6.4px; letter-spacing: -0.2px; }

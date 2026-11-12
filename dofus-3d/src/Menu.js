@@ -8,7 +8,8 @@ import { getHero, heroSpells, upgradeSpell, resetSpellPoints, heroStats, xpToNex
 import { spellIconFrame } from './SpellIcons.js';
 import { getAvatar, getPortrait } from './Avatars.js';
 import { DUNGEONS, dungeonClears, dungeonUnlocked } from './Adventure.js';
-import { getInventory, equippedItems, equippedList, equip, unequip, discard, wornBy, itemIcon, SLOTS, SLOT_LABEL, RARITY, statLines, flatTotals, setBonus, setCounts, statsDiff, withSwap, FAMILIES, FAMILY_ORDER } from './Items.js';
+import { renderWorld, startFromWorld, dungeonsCleared } from './WorldMap.js';
+import { getInventory, equippedItems, equippedList, equip, unequip, discard, wornBy, itemIcon, SLOTS, SLOT_LABEL, RARITY, statLines, flatTotals, setBonus, setCounts, statsDiff, withSwap, FAMILIES, FAMILY_ORDER, RARITY_ORDER, reqLevel, lockReason, equipBest } from './Items.js';
 import { setEmblem } from './ItemArt.js';
 
 // Icone d un monstre / boss : portrait 3D (repli : pastille vide).
@@ -517,6 +518,9 @@ export class Menu {
       { key: 'class', label: 'Heros', title: 'Choisis tes heros', options: CLASS_OPTIONS },
       { key: 'dungeon', label: 'Donjon', title: 'Choisis ton donjon', options: [] },
     ];
+    this.practiceSteps = [
+      { key: 'class', label: 'Heros', title: 'Choisis la classe a essayer', options: CLASS_OPTIONS },
+    ];
     this.steps = this.normalSteps;
     this.selection.dungeonId = DUNGEONS[0].id;
     this.invClass = 'iop';
@@ -526,7 +530,7 @@ export class Menu {
   }
 
   // Nombre max de heros selectionnables selon le mode.
-  maxHeroes() { return this.mode === 'solo' ? 1 : 3; }
+  maxHeroes() { return this.mode === 'practice' ? 1 : 3; }
 
   build() {
     const css = document.createElement('style');
@@ -839,48 +843,52 @@ export class Menu {
     if (this.view === 'home') this.renderHome();
     else if (this.view === 'grimoire') this.renderGrimoire();
     else if (this.view === 'inventory') this.renderInventory();
+    else if (this.view === 'world') this.renderWorldView();
     else this.renderStage();
+    this.root.classList.toggle('home', this.view === 'home');
+    this.root.classList.toggle('world', this.view === 'world');
     if (this.inventoryBtn) {
-      this.inventoryBtn.style.display = (this.view === 'home' || (this.view === 'steps' && this.step === 0)) ? '' : 'none';
+      this.inventoryBtn.style.display = (this.view === 'home' || this.view === 'world' || (this.view === 'steps' && this.step === 0)) ? '' : 'none';
     }
   }
 
-  // Ecran d accueil : choix Solo / Multi.
+  // Carte du monde (mode Aventure).
+  renderWorldView() {
+    renderWorld(this, { classOptions: CLASS_OPTIONS, classIcon, monsterIcon });
+  }
+
+  // Ecran d accueil : Aventure (carte du monde) ou Entrainement.
   renderHome() {
-    const soloIcon = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="32" cy="20" r="11" fill="#f1c40f"/>
-      <path d="M14 56 Q14 36 32 36 Q50 36 50 56 Z" fill="#f1c40f"/></svg>`;
-    const multiIcon = `<svg viewBox="0 0 96 64" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="20" cy="24" r="9" fill="#6678c4"/>
-      <path d="M6 56 Q6 40 20 40 Q34 40 34 56 Z" fill="#6678c4"/>
-      <circle cx="76" cy="24" r="9" fill="#6678c4"/>
-      <path d="M62 56 Q62 40 76 40 Q90 40 90 56 Z" fill="#6678c4"/>
-      <circle cx="48" cy="18" r="12" fill="#f1c40f"/>
-      <path d="M30 58 Q30 36 48 36 Q66 36 66 58 Z" fill="#f1c40f"/></svg>`;
-    const advIcon = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
-      <path d="M8 58 V26 L32 8 L56 26 V58 Z" fill="#6a5a42" stroke="#241208" stroke-width="3"/>
-      <path d="M22 58 V38 Q32 26 42 38 V58 Z" fill="#1a120a" stroke="#241208" stroke-width="3"/>
-      <path d="M26 30 L32 14 L38 30" fill="#f1c40f" stroke="#241208" stroke-width="2"/>
-      <circle cx="16" cy="36" r="3" fill="#ffb02a"/><circle cx="48" cy="36" r="3" fill="#ffb02a"/></svg>`;
-    this.subEl.innerHTML = 'Choisis ton mode de jeu';
+    const cleared = dungeonsCleared();
+    const total = DUNGEONS.length;
+    const heroes = CLASS_OPTIONS.map(o => `<span class="mh-hero">${classIcon(o)}<i>${getHero(o.id).level}</i></span>`).join('');
+    const mapIcon = `<svg viewBox="0 0 96 64" xmlns="http://www.w3.org/2000/svg">
+      <path d="M6 12 L32 6 L62 14 L90 6 V52 L62 60 L32 52 L6 58 Z" fill="#e8d59a" stroke="#5a3a14" stroke-width="3" stroke-linejoin="round"/>
+      <path d="M32 6 V52 M62 14 V60" stroke="#b89a5a" stroke-width="2"/>
+      <path d="M14 42 Q26 24 40 34 T66 28 T82 20" fill="none" stroke="#c0392b" stroke-width="3" stroke-dasharray="5 4" stroke-linecap="round"/>
+      <circle cx="14" cy="42" r="4" fill="#6aa533" stroke="#241208" stroke-width="2"/>
+      <path d="M78 22 L86 14 M86 22 L78 14" stroke="#c0392b" stroke-width="3.5" stroke-linecap="round"/></svg>`;
+    const dummyIcon = `<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+      <rect x="29" y="30" width="6" height="28" fill="#8a5a2a" stroke="#241208" stroke-width="2"/>
+      <rect x="12" y="30" width="40" height="6" rx="3" fill="#8a5a2a" stroke="#241208" stroke-width="2"/>
+      <circle cx="32" cy="18" r="12" fill="#e8d59a" stroke="#241208" stroke-width="3"/>
+      <circle cx="32" cy="18" r="6" fill="none" stroke="#c0392b" stroke-width="3"/><circle cx="32" cy="18" r="1.8" fill="#c0392b"/>
+      <path d="M18 58 H46" stroke="#241208" stroke-width="4" stroke-linecap="round"/></svg>`;
+    this.subEl.innerHTML = 'Fais grandir tes heros et pars a l aventure';
     this.stepsEl.innerHTML = '';
     this.stageEl.innerHTML = `
-      <div class="menu-stage-title">Mode de jeu</div>
+      <div class="mh-heroes">${heroes}</div>
       <div class="menu-modes">
-        <button class="menu-mode" data-mode="solo">
-          <div class="mm-icon">${soloIcon}</div>
-          <div class="mm-name">Mode Solo</div>
-          <div class="mm-desc">Un seul heros a controler. Combat classique.</div>
-        </button>
-        <button class="menu-mode" data-mode="multi">
-          <div class="mm-icon">${multiIcon}</div>
-          <div class="mm-name">Mode Multi</div>
-          <div class="mm-desc">Jusqu a 3 heros a controler. Les combats s etoffent en consequence.</div>
-        </button>
         <button class="menu-mode adventure" data-mode="aventure">
-          <div class="mm-icon">${advIcon}</div>
+          <div class="mm-icon">${mapIcon}</div>
           <div class="mm-name">Aventure</div>
-          <div class="mm-desc">Donjons : une suite de salles sans soin complet, un boss et son coffre au bout. 1 a 3 heros.</div>
+          <div class="mm-desc">Explore la carte du monde, choisis ou combattre, equipe tes heros et vaincs les gardiens des donjons.</div>
+          <div class="mm-prog"><div class="mm-bar"><div style="width:${Math.round(cleared / total * 100)}%"></div></div><span>${cleared} / ${total} donjons</span></div>
+        </button>
+        <button class="menu-mode practice" data-mode="practice">
+          <div class="mm-icon">${dummyIcon}</div>
+          <div class="mm-name">Entrainement</div>
+          <div class="mm-desc">Essaie une classe au niveau 10 avec tous ses sorts, guide a l appui. Sans risque ni recompense.</div>
         </button>
       </div>
     `;
@@ -888,13 +896,16 @@ export class Menu {
       btn.addEventListener('click', () => {
         this.audio && this.audio.sfx('uiSelect');
         this.mode = btn.dataset.mode;
-        this.steps = this.mode === 'aventure' ? this.adventureSteps : this.normalSteps;
-        if (this.mode === 'solo' && this.selection.classIds.length > 1) {
-          this.selection.classIds = [this.selection.classIds[0]];
+        if (this.mode === 'aventure') {
+          this.view = 'world';
+          this.render();
+          return;
         }
+        this.steps = this.practiceSteps;
+        if (this.selection.classIds.length > 1) this.selection.classIds = [this.selection.classIds[0]];
         this.view = 'steps';
         this.step = 0;
-        this.renderStage();
+        this.render();
       });
     });
     this.backBtn.style.visibility = 'hidden';
@@ -904,7 +915,14 @@ export class Menu {
 
 
   goNext() {
+    if (this.view === 'world') { this.hideOptionTooltip(); startFromWorld(this); return; }
     if (this.view !== 'steps') return;
+    if (this.mode === 'practice') {
+      if (!this.selection.classIds.length) { this.audio && this.audio.sfx('uiError'); return; }
+      this.hideOptionTooltip();
+      this.onStart && this.onStart({ playerClasses: [this.selection.classIds[0]], practice: true });
+      return;
+    }
     if (this.step < this.steps.length - 1) {
       // L etape "heros" exige au moins un personnage selectionne.
       if (this.step === 0 && this.selection.classIds.length === 0) {
@@ -938,6 +956,11 @@ export class Menu {
   goBack() {
     if (this.view === 'grimoire' || this.view === 'inventory') {
       this.view = this.grimoireReturn || 'home';
+      this.render();
+      return;
+    }
+    if (this.view === 'world') {
+      this.view = 'home';
       this.render();
       return;
     }
@@ -1025,6 +1048,9 @@ export class Menu {
   }
 
   // ---------- Inventaire : equipement des heros ----------
+  // Un appui sur un objet du sac : equipe directement si l emplacement est
+  // libre, sinon ouvre une fiche (comparatif ligne a ligne + gros bouton
+  // "Equiper"). Un appui sur un emplacement porte : fiche avec "Retirer".
   renderInventory() {
     const cls = this.invClass;
     const hero = getHero(cls);
@@ -1034,6 +1060,9 @@ export class Menu {
     const totals = flatTotals(worn);
     const counts = setCounts(worn);
     const heroName = DEFS[cls].name;
+    const nameOf = (c) => (DEFS[c] ? DEFS[c].name : c);
+    const msg = this.invMsg || null;
+    this.invMsg = null;
     this.subEl.innerHTML = 'Inventaire : equipe tes heros et complete tes panoplies';
     this.stepsEl.innerHTML = '';
     const tabs = CLASS_OPTIONS.map(o => `<button class="gr-tab ${o.id === cls ? 'active' : ''}" data-cls="${o.id}" title="${o.name}">
@@ -1041,56 +1070,71 @@ export class Menu {
     // Apercu 3D du heros avec son equipement.
     let preview = '';
     try { preview = getAvatar(cls, 160, null, worn) || ''; } catch (_) {}
+    const filter = SLOTS.includes(this.invSlotFilter) ? this.invSlotFilter : null;
     const slots = SLOTS.map(sl => {
       const it = eq[sl];
-      return `<button class="inv-slot ${it ? 'filled' : ''} ${this.invSelected && it && it.id === this.invSelected ? 'sel' : ''}" data-slot="${sl}" ${it ? `data-item="${it.id}"` : ''}>
-        ${it ? itemIcon(it, 50) : `<div class="inv-empty">${SLOT_LABEL[sl]}</div>`}${it && hero.level < it.req ? `<div class="inv-lvl bad">Niv. ${it.req}</div>` : ''}</button>`;
+      const bad = it && hero.level < it.req;
+      return `<button class="inv-slot ${it ? 'filled' : ''} ${bad ? 'locked' : ''} ${this.invSelected && it && it.id === this.invSelected ? 'sel' : ''} ${!it && filter === sl ? 'filt' : ''}" data-slot="${sl}" ${it ? `data-item="${it.id}" style="border-color:${RARITY[it.rarity].color}"` : ''}>
+        ${it ? itemIcon(it, 46) : `<div class="inv-empty">+</div>`}<div class="inv-slot-lbl">${SLOT_LABEL[sl]}</div>${bad ? `<div class="inv-lvl bad">Niv. ${it.req}</div>` : ''}</button>`;
     }).join('');
-    const totLines = statsDiff({}, totals.flat).map(r => `<div>+${r.to} ${r.label}</div>`).join('') || 'Aucun';
+    const totLines = statsDiff({}, totals.flat).map(r => `<span class="inv-chip">+${r.to} ${r.label}</span>`).join('') || '<span class="inv-chip none">Aucun bonus</span>';
     const setLines = totals.sets.map(st => `<div class="inv-setact">${setEmblem(st.family, 16)} ${FAMILIES[st.family].set} (${st.count}/5)${st.bonus.special ? ` <b>${st.bonus.special.name}</b>` : ''}</div>`).join('');
 
-    // Detail + comparatif de l objet selectionne.
+    // Fiche de l objet selectionne : comparatif compact + action principale.
     const sel = this.invSelected && inv.items.find(i => i.id === this.invSelected);
-    let detail = '<div class="inv-hint">Clique un objet pour voir ses statistiques et le comparer a ton equipement.</div>';
+    let sheet = '';
     if (sel) {
       const R = RARITY[sel.rarity];
       const w = wornBy(sel.id, inv);
       const cur = eq[sel.slot];
       const onMe = w === cls;
-      let cmp = '';
-      if (!onMe) {
+      const why = lockReason(sel, hero.level);
+      const sign = (d) => `${d > 0 ? '+' : ''}${d}`;
+      let body;
+      if (onMe) {
+        body = `<div class="inv-rows">${statsDiff({}, sel.stats).map(r => `<div class="inv-row"><span>${r.label}</span><b class="up">+${r.to}</b></div>`).join('')}</div>`;
+      } else {
         const rows = statsDiff(cur ? cur.stats : {}, sel.stats);
         const after = flatTotals(withSwap(cls, sel, inv));
-        const tot = statsDiff(totals.flat, after.flat).filter(r => r.diff !== 0);
-        const row = (r) => `<tr><td>${r.label}</td><td>${r.from || '-'}</td><td>${r.to || '-'}</td><td class="${r.diff > 0 ? 'up' : r.diff < 0 ? 'down' : ''}">${r.diff > 0 ? '+' : ''}${r.diff || '='}</td></tr>`;
         const specGain = after.specials.filter(x => !totals.specials.includes(x));
         const specLoss = totals.specials.filter(x => !after.specials.includes(x));
         const specName = (id) => { const f = Object.values(FAMILIES).find(ff => ff.special.id === id); return f ? f.special.name : id; };
-        cmp = `<div class="inv-cmp">
-          <div class="inv-tt">${cur ? `Comparaison avec ${cur.name} (${RARITY[cur.rarity].label})` : 'Emplacement vide'}</div>
-          <table class="cmp-t"><tr><th>Objet</th><th>Equipe</th><th>Nouveau</th><th>Ecart</th></tr>${rows.map(row).join('')}</table>
-          <div class="inv-tt" style="margin-top:6px">Total du heros (panoplies comprises)</div>
-          ${tot.length ? `<table class="cmp-t"><tr><th>Stat</th><th>Avant</th><th>Apres</th><th>Ecart</th></tr>${tot.map(row).join('')}</table>` : '<div class="inv-hint">Aucun changement</div>'}
-          ${specGain.map(x => `<div class="cmp-spec up">+ Effet ${specName(x)}</div>`).join('')}${specLoss.map(x => `<div class="cmp-spec down">- Effet ${specName(x)}</div>`).join('')}
-        </div>`;
+        // Effet des bonus de panoplie gagnes / perdus (hors stats de l objet).
+        const itemNet = {};
+        for (const r of rows) itemNet[r.key] = r.diff;
+        const setNet = why ? [] : statsDiff(totals.flat, after.flat)
+          .map(r => ({ label: r.label, d: r.diff - (itemNet[r.key] || 0) })).filter(r => r.d !== 0);
+        const famNow = counts[sel.family] || 0;
+        const famAfter = famNow + (cur && cur.family === sel.family && hero.level >= cur.req ? 0 : 1);
+        body = `<div class="inv-cmp-h">${cur ? `Remplace <b style="color:${RARITY[cur.rarity].color}">${cur.name}</b>` : 'Emplacement libre'}</div>
+          <div class="inv-rows">${rows.map(r => `<div class="inv-row"><span>${r.label}</span><i>${cur ? `${r.from || 0} &rarr; ` : ''}${r.to || 0}</i><b class="${r.diff > 0 ? 'up' : r.diff < 0 ? 'down' : ''}">${r.diff ? sign(r.diff) : '='}</b></div>`).join('')}</div>
+          ${!why && famAfter !== famNow ? `<div class="inv-setline">${setEmblem(sel.family, 16)} ${FAMILIES[sel.family].set} : ${famNow}/5 &rarr; <b>${famAfter}/5</b></div>` : ''}
+          ${setNet.length ? `<div class="inv-setline">Bonus de panoplie : ${setNet.map(r => `<b class="${r.d > 0 ? 'up' : 'down'}">${sign(r.d)} ${r.label}</b>`).join(', ')}</div>` : ''}
+          ${why ? '' : specGain.map(x => `<div class="inv-setline"><b class="up">+ Effet ${specName(x)}</b></div>`).join('') + specLoss.map(x => `<div class="inv-setline"><b class="down">- Effet ${specName(x)}</b></div>`).join('')}`;
       }
-      detail = `<div class="inv-detail">
-        <div class="inv-dh">${itemIcon(sel, 60)}<div>
+      const main = onMe
+        ? `<button class="menu-navbtn inv-main" id="inv-unequip">Retirer</button>`
+        : why
+          ? `<button class="menu-navbtn inv-main" disabled>Verrouille : ${why}</button>`
+          : `<button class="menu-navbtn primary inv-main" id="inv-equip">Equiper${w ? ` (pris a ${nameOf(w)})` : ''}</button>`;
+      sheet = `<div class="inv-sheet" style="border-color:${R.color}">
+        <div class="inv-dh">${itemIcon(sel, 48)}<div class="inv-dtxt">
           <div class="inv-dname" style="color:${R.color}">${sel.name}</div>
-          <div class="inv-dmeta">${R.label} - ${SLOT_LABEL[sel.slot]} - <span class="${hero.level < sel.req ? 'req-bad' : 'req-ok'}">niveau ${sel.req} requis</span> - ${FAMILIES[sel.family].set}${w ? ` - porte par ${DEFS[w] ? DEFS[w].name : w}` : ''}</div>
-        </div></div>
-        <div class="inv-dstats">${statLines(sel.stats).map(l => `<div>${l}</div>`).join('')}</div>
-        ${hero.level < sel.req ? `<div class="req-warn">${heroName} est niveau ${hero.level} : cet objet demande le niveau ${sel.req}${wornBy(sel.id, inv) === cls ? ' (porte mais inactif)' : ''}.</div>` : ''}
-        ${cmp}
-        <div class="inv-dbtns">
-          ${onMe ? `<button class="menu-navbtn" id="inv-unequip">Retirer</button>` : `<button class="menu-navbtn primary" id="inv-equip" ${hero.level < sel.req ? 'disabled' : ''}>${hero.level < sel.req ? `Niveau ${sel.req} requis` : `Equiper sur ${heroName}`}</button>`}
-          <button class="menu-navbtn" id="inv-discard">Jeter</button>
-        </div></div>`;
+          <div class="inv-dmeta">${R.label} - ${SLOT_LABEL[sel.slot]} - <span class="${why ? 'req-bad' : 'req-ok'}">niveau ${sel.req} requis</span>${w ? ` - porte par ${nameOf(w)}` : ''}</div>
+        </div><button class="inv-x" id="inv-close" aria-label="Fermer">&times;</button></div>
+        ${why ? `<div class="inv-lockmsg">Verrouille pour ${heroName} (niveau ${hero.level}) : un objet ${R.label.toLowerCase()} de cette panoplie demande le niveau ${sel.req}${onMe ? ' - porte mais inactif' : ''}.</div>` : ''}
+        ${body}
+        <div class="inv-dbtns">${main}<button class="menu-navbtn inv-side" id="inv-discard">Jeter</button></div>
+      </div>`;
+    } else if (msg) {
+      sheet = `<div class="inv-sheet inv-toast ${msg.bad ? 'bad' : ''}">${msg.text}</div>`;
     }
 
-    // Sac trie par panoplie, avec les bonus de chaque panoplie.
+    // Sac trie par panoplie, avec le role et les bonus de chaque panoplie.
     const groups = FAMILY_ORDER.map(fam => {
-      const items = inv.items.filter(i => i.family === fam)
+      const all = inv.items.filter(i => i.family === fam);
+      if (!all.length) return '';
+      const items = all.filter(i => !filter || i.slot === filter)
         .sort((a, b) => (SLOTS.indexOf(a.slot) - SLOTS.indexOf(b.slot)) || (RARITY[b.rarity].rank - RARITY[a.rarity].rank));
       if (!items.length) return '';
       const F = FAMILIES[fam];
@@ -1102,65 +1146,122 @@ export class Menu {
       }).join('');
       const open = this.invOpenSet === fam;
       return `<div class="inv-set">
-        <button class="inv-set-h" data-set="${fam}">${setEmblem(fam, 24)}<b>${F.set}</b><span class="inv-set-lv">niv. ${F.level}</span>
-          <span class="inv-set-n ${n ? 'on' : ''}">${n}/5 sur ${heroName}</span><span class="inv-set-more">${open ? 'masquer les bonus' : 'voir les bonus'}</span></button>
-        ${open ? `<div class="set-tiers">${tiers}</div>` : ''}
+        <button class="inv-set-h" data-set="${fam}">${setEmblem(fam, 28)}<span class="inv-set-t"><b>${F.set}</b><span class="inv-set-role">${F.role}</span></span>
+          <span class="inv-set-n ${n ? 'on' : ''}">${n}/5</span><span class="inv-set-more">${open ? 'masquer' : 'bonus'}</span></button>
+        ${open ? `<div class="set-tiers"><div class="set-req">Niveau requis : ${RARITY_ORDER.map(r => `<span style="color:${RARITY[r].color}">${RARITY[r].label} ${reqLevel(fam, r)}</span>`).join(' - ')}</div>${tiers}</div>` : ''}
         <div class="inv-bag">${items.map(it => {
           const ww = wornBy(it.id, inv);
-          return `<button class="inv-item ${this.invSelected === it.id ? 'sel' : ''} ${hero.level < it.req ? 'locked' : ''}" data-item="${it.id}" title="${it.name} (${RARITY[it.rarity].label})">
-            ${itemIcon(it, 48)}<div class="inv-lvl ${hero.level < it.req ? 'bad' : ''}">${it.req}</div>${ww ? `<div class="inv-worn">${DEFS[ww] ? DEFS[ww].name : ww}</div>` : ''}</button>`;
+          const bad = hero.level < it.req;
+          return `<button class="inv-item ${this.invSelected === it.id ? 'sel' : ''} ${bad ? 'locked' : ''} ${ww === cls ? 'mine' : ''}" data-item="${it.id}" style="border-color:${RARITY[it.rarity].color}" title="${it.name} (${RARITY[it.rarity].label}) - niveau ${it.req} requis">
+            ${itemIcon(it, 48)}<div class="inv-lvl ${bad ? 'bad' : ''}">${bad ? 'Niv. ' : ''}${it.req}</div>${ww ? `<div class="inv-worn ${ww === cls ? 'me' : ''}">${ww === cls ? 'Porte' : nameOf(ww)}</div>` : ''}</button>`;
         }).join('')}</div>
       </div>`;
-    }).join('') || '<div class="inv-none">Ton sac est vide : bats des monstres pour obtenir du butin !</div>';
+    }).join('') || (inv.items.length
+      ? `<div class="inv-none">Aucun objet pour cet emplacement (${SLOT_LABEL[filter]}).</div>`
+      : '<div class="inv-none">Ton sac est vide : bats des monstres pour obtenir du butin !</div>');
 
     this.stageEl.innerHTML = `
       <div class="gr-tabs">${tabs}</div>
       <div class="inv-wrap">
         <div class="inv-left">
-          <div class="inv-hero">${preview ? `<img class="inv-preview" src="${preview}" alt="">` : ''}<div><b>${heroName}</b><span>Niveau ${hero.level}</span></div></div>
+          <div class="inv-hero">${preview ? `<img class="inv-preview" src="${preview}" alt="">` : ''}<div class="inv-hero-t"><b>${heroName}</b><span>Niveau ${hero.level}</span>
+            <button class="menu-navbtn primary inv-best" id="inv-best">Equiper le meilleur</button></div></div>
           <div class="inv-slots">${slots}</div>
-          <div class="inv-total"><div class="inv-tt">Bonus d equipement</div>${totLines}${setLines ? `<div class="inv-tt" style="margin-top:6px">Panoplies actives</div>${setLines}` : ''}</div>
+          <div class="inv-total"><div class="inv-tt">Bonus d equipement</div><div class="inv-chips">${totLines}</div>${setLines ? `<div class="inv-tt" style="margin-top:6px">Panoplies actives</div>${setLines}` : ''}</div>
         </div>
         <div class="inv-right">
-          ${detail}
-          <div class="inv-tt" style="margin-top:8px">Sac (${inv.items.length} objets) - trie par panoplie</div>
+          <div class="inv-tt inv-bag-h">Sac (${inv.items.length} objets) - trie par panoplie${filter ? ` <button class="inv-filter" id="inv-nofilter">${SLOT_LABEL[filter]} seulement &times;</button>` : ''}</div>
+          <div class="inv-help">Touche un objet pour l equiper ou le comparer. Le chiffre est le niveau requis.</div>
           ${groups}
         </div>
-      </div>`;
-    this.stageEl.querySelectorAll('.gr-tab').forEach(b => b.addEventListener('click', () => {
+      </div>
+      ${sheet}`;
+    const on = (q, fn) => this.stageEl.querySelectorAll(q).forEach(b => b.addEventListener('click', () => fn(b)));
+    on('.gr-tab', b => {
       this.audio && this.audio.sfx('uiSelect');
       this.invClass = b.dataset.cls;
+      this.invSelected = null;
       this.renderInventory();
-    }));
-    this.stageEl.querySelectorAll('.inv-item, .inv-slot.filled').forEach(b => b.addEventListener('click', () => {
+    });
+    on('.inv-slot', b => {
       this.audio && this.audio.sfx('uiSelect');
-      this.invSelected = b.dataset.item;
+      if (b.dataset.item) {
+        this.invSelected = this.invSelected === b.dataset.item ? null : b.dataset.item;
+      } else {
+        // Emplacement vide : ne montre que les objets qui peuvent y aller.
+        this.invSlotFilter = this.invSlotFilter === b.dataset.slot ? null : b.dataset.slot;
+        this.invSelected = null;
+      }
       this.renderInventory();
-    }));
-    this.stageEl.querySelectorAll('.inv-set-h').forEach(b => b.addEventListener('click', () => {
+    });
+    on('.inv-item', b => {
+      const it = inv.items.find(i => i.id === b.dataset.item);
+      if (!it) return;
+      if (this.invSelected === it.id) {
+        this.invSelected = null;
+      } else if (!eq[it.slot] && !wornBy(it.id, inv) && !lockReason(it, hero.level) && !equip(cls, it.id, hero.level)) {
+        // Emplacement libre : on equipe directement.
+        this.invSelected = null;
+        this.invMsg = { text: `${it.name} equipe sur ${heroName}` };
+        this.audio && this.audio.sfx('cast_boost');
+        this.renderInventory();
+        return;
+      } else {
+        this.invSelected = it.id;
+      }
+      this.audio && this.audio.sfx('uiSelect');
+      this.renderInventory();
+    });
+    on('.inv-set-h', b => {
       this.audio && this.audio.sfx('uiClick');
       this.invOpenSet = this.invOpenSet === b.dataset.set ? null : b.dataset.set;
       this.renderInventory();
-    }));
-    const eqBtn = this.stageEl.querySelector('#inv-equip');
-    if (eqBtn) eqBtn.addEventListener('click', () => {
+    });
+    on('#inv-best', () => {
+      const n = equipBest(cls);
+      this.invSelected = null;
+      this.invMsg = { text: n ? `${n} objet${n > 1 ? 's' : ''} equipe${n > 1 ? 's' : ''} sur ${heroName}` : `${heroName} porte deja son meilleur equipement` };
+      this.audio && this.audio.sfx(n ? 'cast_boost' : 'uiClick');
+      this.renderInventory();
+    });
+    on('#inv-nofilter', () => {
+      this.invSlotFilter = null;
+      this.renderInventory();
+    });
+    on('#inv-close', () => {
+      this.invSelected = null;
+      this.renderInventory();
+    });
+    on('#inv-equip', () => {
       const err = equip(cls, sel.id, hero.level);
       this.audio && this.audio.sfx(err ? 'uiError' : 'cast_boost');
+      this.invSelected = null;
+      this.invMsg = err ? { text: err, bad: true } : { text: `${sel.name} equipe sur ${heroName}` };
       this.renderInventory();
     });
-    const unBtn = this.stageEl.querySelector('#inv-unequip');
-    if (unBtn) unBtn.addEventListener('click', () => {
+    on('#inv-unequip', () => {
       unequip(cls, sel.slot);
+      this.invSelected = null;
+      this.invMsg = { text: `${sel.name} retire` };
       this.audio && this.audio.sfx('uiClick');
       this.renderInventory();
     });
-    const dBtn = this.stageEl.querySelector('#inv-discard');
-    if (dBtn) dBtn.addEventListener('click', () => {
+    on('#inv-discard', () => {
+      // Deux appuis pour jeter : evite les pertes par erreur au doigt.
+      if (this.invConfirmDiscard !== sel.id) {
+        this.invConfirmDiscard = sel.id;
+        const b = this.stageEl.querySelector('#inv-discard');
+        if (b) { b.textContent = 'Confirmer ?'; b.classList.add('warn'); }
+        return;
+      }
+      this.invConfirmDiscard = null;
       discard(sel.id);
       this.invSelected = null;
+      this.invMsg = { text: `${sel.name} jete` };
       this.audio && this.audio.sfx('uiClick');
       this.renderInventory();
     });
+    this.invConfirmDiscard = null;
     this.backBtn.style.visibility = 'visible';
     this.nextBtn.style.display = 'none';
     this.grimoireBtn.style.display = 'none';
@@ -1276,7 +1377,7 @@ export class Menu {
 
     if (step.key === 'tier') step.options = this.tierOptions();
     if (step.key === 'dungeon') step.options = this.dungeonOptions();
-    this.subEl.innerHTML = `Selection guidee &mdash; etape ${this.step + 1} sur ${this.steps.length}`;
+    this.subEl.innerHTML = this.mode === 'practice' ? 'Entrainement : niveau 10, tous les sorts, aucun risque' : `Selection guidee &mdash; etape ${this.step + 1} sur ${this.steps.length}`;
 
     this.stepsEl.innerHTML = this.steps.map((s, i) => {
       const cls = i === this.step ? 'active' : (i < this.step ? 'done' : '');
@@ -1286,9 +1387,9 @@ export class Menu {
 
     let title = step.title;
     if (step.key === 'class') {
-      title = this.mode !== 'solo'
+      title = this.mode !== 'practice'
         ? `Choisis tes heros (${this.selection.classIds.length}/3)`
-        : 'Choisis ton heros';
+        : 'Choisis la classe a essayer';
     }
     this.stageEl.innerHTML = `
       <div class="menu-stage-title">${title}</div>
@@ -1302,7 +1403,7 @@ export class Menu {
     this.backBtn.style.visibility = 'visible';
     this.nextBtn.style.display = '';
     const last = this.step === this.steps.length - 1;
-    this.nextBtn.textContent = last ? (this.mode === 'aventure' ? 'ENTRER' : 'COMBATTRE') : 'Suivant';
+    this.nextBtn.textContent = last ? (this.mode === 'practice' ? 'S ENTRAINER' : 'COMBATTRE') : 'Suivant';
     this.nextBtn.classList.toggle('fight', last);
     this.nextBtn.classList.toggle('primary', !last);
     this.grimoireBtn.style.display = this.step === 0 ? '' : 'none';
@@ -1457,7 +1558,8 @@ export class Menu {
     if (!this.root) return;
     // On revient toujours a l ecran d accueil (choix du mode) et on
     // rafraichit les etoiles (la progression a pu changer apres un combat).
-    this.view = 'home';
+    // Apres un combat d aventure, on retrouve la carte du monde.
+    this.view = this.mode === 'aventure' ? 'world' : 'home';
     this.step = 0;
     document.body.classList.add('in-menu');
     this.render();

@@ -45,53 +45,75 @@ const STAT_UNIT = {
   'res.feu': 0.8, 'res.eau': 0.8, 'res.terre': 0.8, 'res.air': 0.8, 'res.neutre': 0.8,
 };
 
-// Panoplies : niveau (requis), couleurs, stats de predilection (dans
-// l ordre d importance) et effet special a 5 objets.
+// Niveau requis : chaque rarete s equipe plus tard que la precedente.
+//   niveau requis = niveau de base de la panoplie (req) + palier de rarete
+// Un heros niveau 1 ne peut donc porter que du Bouftou commun ; le premier
+// legendaire (Bouftou) demande le niveau 8, le dernier (Minotoror) le 20.
+export const RARITY_REQ = { commun: 0, rare: 2, epique: 4, legendaire: 7 };
+const REQ_MAX = 20;
+
+// Panoplies : chacune reprend le style de combat de son monstre.
+//   level : puissance (budget de stats)      req : niveau requis de base
+//   core  : stat signature, presente sur CHAQUE objet de la panoplie
+//   stats : stats secondaires, reparties selon l emplacement
+//   bonus : stats des bonus a 2 / 3 / 4 objets (defaut : core + 2 secondaires)
+//   perk  : petit bonus fixe d un emplacement a partir d une rarete
+//   special : effet unique a 5 objets
 export const FAMILIES = {
   bouftou: {
-    name: 'du Bouftou', set: 'Panoplie du Bouftou', level: 1, color: '#f4efe4', accent: '#8a6a3a',
-    stats: ['hp', 'res.terre', 'tacle', 'dmg'],
+    name: 'du Bouftou', set: 'Panoplie du Bouftou', level: 1, req: 1, color: '#f4efe4', accent: '#8a6a3a',
+    role: 'Tacleur resistant : colle l ennemi et tient longtemps',
+    core: 'tacle', stats: ['hp', 'res.terre', 'res.neutre'],
     special: { id: 'toison', name: 'Toison', desc: 'Regenere 4% des PV max au debut de chaque tour.' },
   },
   wabbit: {
-    name: 'du Wabbit', set: 'Panoplie du Wabbit', level: 3, color: '#f6f0ff', accent: '#f07a1a',
-    stats: ['fuite', 'crit', 'hp', 'res.terre'],
+    name: 'du Wabbit', set: 'Panoplie du Wabbit', level: 3, req: 2, color: '#f6f0ff', accent: '#f07a1a',
+    role: 'Bondissant chanceux : coups critiques et esquive',
+    core: 'crit', stats: ['fuite', 'res.air', 'init', 'res.terre'],
     special: { id: 'lapin', name: 'Chance du Wabbit', desc: '+10% critique ; chaque coup critique rend 1 PM.', stats: { crit: 10 } },
   },
   crapaud: {
-    name: 'du Crapaud', set: 'Panoplie du Crapaud', level: 4, color: '#5ab84a', accent: '#f2e060',
-    stats: ['res.eau', 'hp', 'dmg', 'init'],
+    name: 'du Crapaud', set: 'Panoplie du Crapaud', level: 4, req: 3, color: '#5ab84a', accent: '#f2e060',
+    role: 'Cracheur des marais : dommages, resistance eau, entrave',
+    core: 'res.eau', stats: ['dmg', 'hp', 'init', 'res.feu'],
     special: { id: 'bave', name: 'Bave collante', desc: '25% de chance que tes attaques retirent 1 PM a la cible.' },
   },
   tofu: {
-    name: 'du Tofu', set: 'Panoplie du Tofu', level: 5, color: '#ffd23a', accent: '#e8762a',
-    stats: ['fuite', 'res.air', 'init', 'crit'],
+    name: 'du Tofu', set: 'Panoplie du Tofu', level: 5, req: 4, color: '#ffd23a', accent: '#e8762a',
+    role: 'Insaisissable : fuite, PM, initiative, resistance air',
+    core: 'fuite', stats: ['res.air', 'init', 'crit'],
+    perk: { slot: 'bottes', from: 'epique', stats: { pm: 1 } },
     special: { id: 'envol', name: 'Envol', desc: '+1 PM et tu ne peux plus etre tacle.', stats: { pm: 1 } },
   },
   chafer: {
-    name: 'du Chafer', set: 'Panoplie du Chafer', level: 7, color: '#e8e0c8', accent: '#3a3430',
-    stats: ['tacle', 'dmg', 'res.neutre', 'hp'],
+    name: 'du Chafer', set: 'Panoplie du Chafer', level: 7, req: 6, color: '#e8e0c8', accent: '#3a3430',
+    role: 'Guerrier d os : encaisse le neutre, tacle et rend les coups',
+    core: 'res.neutre', stats: ['tacle', 'dmg', 'res.terre', 'hp'],
     special: { id: 'osDurs', name: 'Os durs', desc: 'Renvoie 10% des degats subis a l attaquant.' },
   },
   champignon: {
-    name: 'du Champignon', set: 'Panoplie du Champignon', level: 8, color: '#c8322a', accent: '#f2e8d0',
-    stats: ['res.terre', 'res.eau', 'hp', 'tacle'],
+    name: 'du Champignon', set: 'Panoplie du Champignon', level: 8, req: 7, color: '#c8322a', accent: '#f2e8d0',
+    role: 'Mur vivant : enorme vitalite, resistances terre/eau, poison',
+    core: 'hp', stats: ['res.terre', 'res.eau', 'tacle'],
     special: { id: 'spores', name: 'Spores', desc: '30% de chance d empoisonner la cible touchee (2 tours).' },
   },
   craqueleur: {
-    name: 'du Craqueleur', set: 'Panoplie du Craqueleur', level: 10, color: '#9a8a78', accent: '#7af0ff',
-    stats: ['hp', 'res.terre', 'tacle', 'res.feu'],
+    name: 'du Craqueleur', set: 'Panoplie du Craqueleur', level: 10, req: 9, color: '#9a8a78', accent: '#7af0ff',
+    role: 'Bloc de pierre : resistance terre, vitalite, tacle, inamovible',
+    core: 'res.terre', stats: ['hp', 'tacle', 'res.feu', 'res.neutre'],
     special: { id: 'pierre', name: 'Peau de pierre', desc: 'Toujours stabilise (inamovible) et -10% degats subis.' },
   },
   kwakwa: {
-    name: 'du Kwakwa', set: 'Panoplie du Kwakwa', level: 13, color: '#2a2438', accent: '#ff7a2a',
-    stats: ['res.feu', 'res.eau', 'res.air', 'crit', 'dmg'],
+    name: 'du Kwakwa', set: 'Panoplie du Kwakwa', level: 13, req: 11, color: '#2a2438', accent: '#ff7a2a',
+    role: 'Oiseau elementaire : fuite et resistances a tous les elements',
+    core: 'fuite', stats: ['res.feu', 'res.eau', 'res.air', 'res.terre'], bonus: ['fuite', 'init', 'dmg'],
     special: { id: 'prisme', name: 'Prisme', desc: '+10% resistance a tous les elements et +10% dommages.',
       stats: { dmg: 10, 'res.feu': 10, 'res.eau': 10, 'res.terre': 10, 'res.air': 10, 'res.neutre': 10 } },
   },
   minotoror: {
-    name: 'du Minotoror', set: 'Panoplie du Minotoror', level: 16, color: '#6a3a1e', accent: '#e8c14a',
-    stats: ['dmg', 'hp', 'tacle', 'crit'],
+    name: 'du Minotoror', set: 'Panoplie du Minotoror', level: 16, req: 13, color: '#6a3a1e', accent: '#e8c14a',
+    role: 'Brute du labyrinthe : gros dommages, tacle et vitalite',
+    core: 'dmg', stats: ['tacle', 'hp', 'crit', 'res.neutre'],
     special: { id: 'fureur', name: 'Fureur du Minotoror', desc: 'Sous 50% de PV : +1 PA et +20% dommages.' },
   },
 };
@@ -100,36 +122,57 @@ export const FAMILY_ORDER = Object.keys(FAMILIES);
 // Monstre -> panoplie : la famille du bestiaire.
 const FAMILY_OF = FAMILY_OF_MONSTER;
 
+// Niveau requis pour porter un objet (panoplie + rarete).
+export function reqLevel(familyId, rarity) {
+  const fam = FAMILIES[familyId] || FAMILIES.bouftou;
+  return Math.min(REQ_MAX, fam.req + (RARITY_REQ[rarity] || 0));
+}
+
 // ---------------------------------------------------------------------------
 // Jets fixes : statistiques d un objet (panoplie, emplacement, rarete).
+// La stat signature de la panoplie est toujours la plus forte ; les stats
+// secondaires tournent selon l emplacement.
 // ---------------------------------------------------------------------------
-const WEIGHTS = [0.45, 0.3, 0.15, 0.1];
+const WEIGHTS = [0.4, 0.3, 0.18, 0.12];
+// Une signature en % (resistance, dommages, critique) pese moins lourd :
+// portee sur les 5 objets, elle plafonnerait sinon bien trop vite.
+const PCT_CORE = 0.2;
+const isPct = (k) => k === 'dmg' || k === 'crit' || k.startsWith('res.');
 
 export function itemStats(familyId, slot, rarity) {
   const fam = FAMILIES[familyId] || FAMILIES.bouftou;
   const R = RARITY[rarity] || RARITY.commun;
   const si = Math.max(0, SLOTS.indexOf(slot));
-  // Chaque emplacement met en avant une stat differente de la panoplie.
-  const keys = [];
+  const keys = [fam.core];
   for (let i = 0; i < fam.stats.length && keys.length < R.stats; i++) keys.push(fam.stats[(si + i) % fam.stats.length]);
   const budget = (6 + fam.level * 1.6) * R.mult;
-  const wsum = WEIGHTS.slice(0, keys.length).reduce((a, b) => a + b, 0);
+  const w = WEIGHTS.slice(0, keys.length);
+  if (isPct(fam.core)) w[0] = PCT_CORE;
+  // Le budget est reparti sur les 2 premieres stats : les stats en plus
+  // des raretes superieures s ajoutent, elles ne diluent pas les autres.
+  const wsum = w[0] + w[1];
   const stats = {};
   keys.forEach((k, i) => {
-    stats[k] = Math.max(1, Math.round(budget * (WEIGHTS[i] / wsum) * STAT_UNIT[k]));
+    stats[k] = Math.max(1, Math.round(budget * (w[i] / wsum) * STAT_UNIT[k]));
   });
   // Legendaires : l amulette donne 1 PA, les bottes 1 PM.
   if (rarity === 'legendaire' && slot === 'amulette') stats.pa = 1;
   if (rarity === 'legendaire' && slot === 'bottes') stats.pm = 1;
+  // Bonus propre a la panoplie (ex. bottes du Tofu : 1 PM des l epique).
+  const pk = fam.perk;
+  if (pk && pk.slot === slot && R.rank >= RARITY[pk.from].rank) {
+    for (const [k, v] of Object.entries(pk.stats)) stats[k] = Math.max(stats[k] || 0, v);
+  }
   return stats;
 }
 
 export function makeItem(familyId, rarity, slot) {
   const fam = FAMILIES[familyId] || FAMILIES.bouftou;
   slot = slot || SLOTS[Math.floor(Math.random() * SLOTS.length)];
+  const req = reqLevel(familyId, rarity);
   return {
     family: familyId, slot, rarity,
-    level: fam.level, req: fam.level,
+    level: req, req,
     name: `${SLOT_LABEL[slot]} ${fam.name}`,
     stats: itemStats(familyId, slot, rarity),
   };
@@ -147,9 +190,11 @@ export function setBonus(familyId, count) {
   // Les % de dommages / critique / resistances sont plus precieux : bonus reduits.
   const SCALE = (k) => (k === 'dmg' || k === 'crit') ? 0.6 : k.startsWith('res.') ? 0.8 : 1;
   const add = (k, pts) => { if (pts > 0) stats[k] = (stats[k] || 0) + Math.max(1, Math.round(pts * STAT_UNIT[k] * SCALE(k))); };
-  add(fam.stats[0], P * 0.5 * (n - 1));
-  if (n >= 3) add(fam.stats[1], P * 0.4 * (n - 2));
-  if (n >= 4) add(fam.stats[2], P * 0.35 * (n - 3));
+  // Stat signature des 2 objets, puis deux stats secondaires (ou `bonus`).
+  const bs = fam.bonus || [fam.core, fam.stats[0], fam.stats[1]];
+  add(bs[0], P * (isPct(bs[0]) ? 0.25 : 0.5) * (n - 1));
+  if (n >= 3) add(bs[1], P * 0.4 * (n - 2));
+  if (n >= 4) add(bs[2], P * 0.35 * (n - 3));
   let special = null;
   if (n >= 5) {
     special = fam.special;
@@ -166,8 +211,10 @@ function normalize(it) {
   if (!RARITY[it.rarity]) it.rarity = 'commun';
   if (!SLOTS.includes(it.slot)) it.slot = 'anneau';
   const fam = FAMILIES[it.family];
-  it.level = fam.level;
-  it.req = fam.level;
+  // Niveau requis et jets toujours recalcules : les anciennes sauvegardes
+  // (req = niveau de la panoplie, anciens jets) se mettent a jour seules.
+  it.req = reqLevel(it.family, it.rarity);
+  it.level = it.req;
   it.name = `${SLOT_LABEL[it.slot]} ${fam.name}`;
   it.stats = itemStats(it.family, it.slot, it.rarity);
   return it;
@@ -216,12 +263,20 @@ export function equippedList(classId, inv = load()) {
   return Object.values(equippedItems(classId, inv)).filter(it => lv >= it.req);
 }
 
+// Raison pour laquelle un heros ne peut pas porter l objet (null si OK).
+export function lockReason(item, heroLevel) {
+  if (!item) return 'Objet introuvable';
+  if (heroLevel < item.req) return `Niveau ${item.req} requis (${RARITY[item.rarity].label})`;
+  return null;
+}
+
 // Equipe un objet sur un heros (le retire de celui qui le portait).
-export function equip(classId, itemId, heroLevel = 99) {
+// Refuse si le heros n a pas le niveau requis par la rarete de l objet.
+export function equip(classId, itemId, heroLevel = getHero(classId).level) {
   const inv = load();
   const it = inv.items.find(i => i.id === itemId);
-  if (!it) return 'Objet introuvable';
-  if (heroLevel < it.req) return `Niveau ${it.req} requis`;
+  const why = lockReason(it, heroLevel);
+  if (why) return why;
   for (const slots of Object.values(inv.equipped)) {
     for (const [s, id] of Object.entries(slots)) if (id === itemId) delete slots[s];
   }
@@ -362,6 +417,73 @@ export function chestLoot(familyId, _level, count = 2) {
     out.push(makeItem(familyId, r));
   }
   return out;
+}
+
+// Valeur d un equipement complet : stats (ramenees en points de budget),
+// PA / PM et effets de panoplie. Sert a "Equiper le meilleur".
+const SPECIAL_VALUE = 80;
+export function loadoutScore(items) {
+  const { flat, specials } = flatTotals(items);
+  let s = specials.length * SPECIAL_VALUE;
+  for (const [k, v] of Object.entries(flat)) {
+    if (k === 'pa') s += v * 60;
+    else if (k === 'pm') s += v * 45;
+    else s += v / (STAT_UNIT[k] || 1);
+  }
+  return s;
+}
+
+// Meilleur equipement que le heros a le droit de porter : essaie toutes
+// les combinaisons (une par panoplie et par emplacement, la meilleure
+// rarete autorisee), bonus de panoplie compris. Une panoplie complete
+// l emporte donc quand ses bonus valent mieux que des objets depareilles.
+// Ne prend jamais un objet porte par un autre heros.
+export function bestLoadout(classId, inv = load()) {
+  const lv = getHero(classId).level;
+  const cur = equippedItems(classId, inv);
+  const cands = SLOTS.map(sl => {
+    const best = {};
+    for (const it of inv.items) {
+      if (it.slot !== sl || lv < it.req) continue;
+      const w = wornBy(it.id, inv);
+      if (w && w !== classId) continue;
+      const b = best[it.family];
+      const better = !b || RARITY[it.rarity].rank > RARITY[b.rarity].rank
+        || (it.rarity === b.rarity && cur[sl] && cur[sl].id === it.id);
+      if (better) best[it.family] = it;
+    }
+    const list = Object.values(best);
+    return list.length ? list : [null];
+  });
+  let bestSet = null, bestScore = -1;
+  const pick = [];
+  const walk = (i) => {
+    if (i === SLOTS.length) {
+      const items = pick.filter(Boolean);
+      // Leger avantage a ce qui est deja porte (evite les echanges inutiles).
+      const kept = items.filter(it => cur[it.slot] && cur[it.slot].id === it.id).length;
+      const sc = loadoutScore(items) + kept * 0.01;
+      if (sc > bestScore) { bestScore = sc; bestSet = items.slice(); }
+      return;
+    }
+    for (const c of cands[i]) { pick[i] = c; walk(i + 1); }
+  };
+  walk(0);
+  return bestSet || [];
+}
+
+// Equipe d un coup le meilleur equipement autorise. Renvoie le nombre
+// d emplacements modifies.
+export function equipBest(classId) {
+  const inv = load();
+  const best = bestLoadout(classId, inv);
+  const slots = inv.equipped[classId] = inv.equipped[classId] || {};
+  let changed = 0;
+  for (const it of best) {
+    if (slots[it.slot] !== it.id) { slots[it.slot] = it.id; changed++; }
+  }
+  if (changed) save(inv);
+  return changed;
 }
 
 export function itemScore(it) {

@@ -1310,7 +1310,7 @@ export class Hud {
         <div class="key">${keyLabel}</div>
         <div class="icon">${iconHtml}</div>
         <div class="cost">${spell.apCost} PA</div>
-        <div class="sp-name${shortName.length > 16 || shortName.split(/[\s-]+/).some(w => w.length > 10) ? ' long' : ''}">${shortName}</div>
+        <div class="sp-name${shortName.length > 22 ? ' xlong' : ''}${shortName.length > 16 || shortName.split(/[\s-]+/).some(w => w.length > 10) ? ' long' : ''}">${shortName}</div>
         ${fighter && fighter.levelKind === 'hero' ? `<div class="spell-pips">${[1, 2, 3].map(n => `<i class="${n <= (spell.spellLevel || 1) ? 'on' : ''}"></i>`).join('')}</div>` : ''}
         <div class="cd-overlay"></div>
       `;
@@ -1346,7 +1346,10 @@ export class Hud {
         cancelLp();
         lpTimer = setTimeout(() => {
           lpFired = true;
-          this.showTooltip(spell, btn);
+          // Tactile : la fiche du sort s affiche dans le bandeau au-dessus
+          // des sorts (elle reste jusqu au prochain appui).
+          if (this._touch) this.showSpellInfo(fighter, spell);
+          else this.showTooltip(spell, btn);
         }, 450);
       });
       btn.addEventListener('pointermove', (e) => {
@@ -1374,8 +1377,21 @@ export class Hud {
     return this.slotOrder && this.slotOrder[pos] !== undefined ? this.slotOrder[pos] : pos;
   }
 
+  // Tactile : fiche complete d un sort, sur appui long.
+  showSpellInfo(fighter, spell) {
+    this._bannerKey = null;
+    this.renderCastBanner(fighter, spell.id, true);
+    this._infoShownAt = performance.now();
+  }
+
+  // Ferme les fiches ouvertes par appui long (sort, combattant).
+  hideTouchInfo() {
+    if (this.bannerEl) { this.bannerEl.classList.remove('show'); this._bannerKey = null; }
+    if (this._infoFighter && !this._pinnedFighter) { this._infoFighter = null; this.renderFighterInfo(); }
+  }
+
   // Bandeau du sort selectionne : ce que l on s apprete a lancer.
-  renderCastBanner(fighter, spellId) {
+  renderCastBanner(fighter, spellId, full = false) {
     if (!this.bannerEl) {
       const el = document.createElement('div');
       el.id = 'cast-banner';
@@ -1402,8 +1418,8 @@ export class Hud {
       <div class="cb-icon">${icon}</div>
       <div class="cb-txt">
         <div class="cb-name">${spell.name} <span class="cb-type">${G.label}</span></div>
-        <div class="cb-eff">${spellEffectLines(spell).slice(0, 2).join(' - ')}</div>
-        <div class="cb-meta">${spell.apCost} PA - ${range}${spell.needsLOS ? ' - ligne de vue' : ''} &nbsp;|&nbsp; ${touch ? 'Touche une case pour viser, retouche-la pour lancer' : 'Clique une case pour lancer (clic droit : annuler)'}</div>
+        <div class="cb-eff">${full ? spellEffectLines(spell).join('<br>') : spellEffectLines(spell).slice(0, 2).join(' - ')}</div>
+        <div class="cb-meta">${spell.apCost} PA - ${range}${spell.needsLOS ? ' - ligne de vue' : ''}${spell.cooldown ? ` - recharge ${spell.cooldown} tours` : ''}${full ? '' : ` &nbsp;|&nbsp; ${touch ? 'Touche une case pour viser, retouche-la pour lancer' : 'Clique une case pour lancer (clic droit : annuler)'}`}</div>
       </div>
       <button class="cb-cancel" type="button" title="Annuler">&#10005;</button>`;
   }
@@ -1442,14 +1458,16 @@ export class Hud {
         for (const p of panels) { if (p) { p.style.left = p.style.top = p.style.right = p.style.bottom = ''; p.style.transform = ''; } }
         document.body.appendChild(dock);
         row.appendChild(this.statsEl);
+        if (this.dialEl) row.appendChild(this.dialEl);
         row.appendChild(this.btnEndMobile);
         dock.appendChild(this.spellsEl);
-        if (this.dialEl) above.appendChild(this.dialEl);
+        above.appendChild(this.fighterInfoEl);
       } else {
         document.body.appendChild(this.statsEl);
         document.body.appendChild(this.spellsEl);
         this.spellsEl.appendChild(this.btnEndMobile);
         document.body.appendChild(above);
+        document.body.appendChild(this.fighterInfoEl);
         if (this.dialEl) document.body.appendChild(this.dialEl);
         dock.remove();
         this.restorePanelPosition(this.statsEl, 'dofus3d.statsPos');
@@ -1457,6 +1475,10 @@ export class Hud {
       }
       this._reportInsets();
     };
+    // Les fiches ouvertes par appui long se ferment au prochain appui.
+    document.addEventListener('pointerdown', () => {
+      if (this._touch && performance.now() - (this._infoShownAt || 0) > 300) this.hideTouchInfo();
+    }, true);
     this._applyLayout = apply;
     apply();
     window.addEventListener('resize', apply);
@@ -1475,7 +1497,6 @@ export class Hud {
     let top = 0, bottom = 0;
     if (this._touch && !document.body.classList.contains('in-menu')) {
       bottom = this.dockEl ? this.dockEl.getBoundingClientRect().height : 0;
-      if (bottom) bottom += 46; // molette posee au-dessus du socle
       const t = this.turnOrderEl && this.turnOrderEl.getBoundingClientRect();
       top = t ? t.bottom : 0;
 
@@ -1627,7 +1648,8 @@ export class Hud {
     // Si l infobulle pointe vers un combattant (epingle ou en survol),
     // on rafraichit ses stats en direct (PA / PM / PV mis a jour au fil
     // des sorts et des deplacements, meme si ce n est pas l actif).
-    this.renderCastBanner(fighter, isPlayer && !isAutonomous && mode === 'spell' ? selectedSpellId : null);
+    // Sur ecran tactile le bandeau n apparait que sur appui long (vue degagee).
+    if (!this._touch) this.renderCastBanner(fighter, isPlayer && !isAutonomous && mode === 'spell' ? selectedSpellId : null);
     if (this._infoFighter) this.renderFighterInfo();
     // Etats et PV de la timeline suivent les changements.
     if (this._turnOrder) this.refreshTurnOrder();
@@ -1905,6 +1927,14 @@ export class Hud {
 
   pinFighterInfo(fighter) {
     if (!this.fighterInfoEl || !fighter) return;
+    if (this._touch) {
+      // Tactile : fiche temporaire (appui long), jamais epinglee.
+      this._pinnedFighter = null;
+      this._infoFighter = fighter;
+      this._infoShownAt = performance.now();
+      this.renderFighterInfo();
+      return;
+    }
     // Le pin reste colle : un second clic sur la meme cible ne la
     // depingle plus (seul le bouton X de l infobulle le fait). Cela
     // evite de perdre la cible quand on cast un sort dessus.

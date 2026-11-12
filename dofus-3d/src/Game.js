@@ -99,7 +99,10 @@ export class Game {
       let opts;
       if (team === 'player') {
         const hero = getHero(cls);
-        opts = { kind: 'hero', level: hero.level, spellLevels: hero.spellLevels, equipment: equipmentStats(cls) };
+        // Entrainement : niveau 10, tous les sorts, sans equipement.
+        opts = config.practice
+          ? { kind: 'hero', level: 10, spellLevels: {}, equipment: null }
+          : { kind: 'hero', level: hero.level, spellLevels: hero.spellLevels, equipment: equipmentStats(cls) };
       } else {
         // Niveau fixe du monstre (bestiaire).
         opts = { kind: 'monster', level: DEFS[cls].level || monsterLevel };
@@ -2997,7 +3000,7 @@ export class Game {
       // (partagee avec un bonus de groupe en multi), et le palier est valide.
       let xpResults = null;
       let tierUnlocked = false;
-      if (winner === 'player' && this.config) {
+      if (winner === 'player' && this.config && !this.config.practice) {
         const heroes = this.fighters.filter(f => f.team === 'player' && f.levelKind === 'hero');
         const enemies = this.initialEnemies || [];
         const n = Math.max(1, heroes.length);
@@ -3013,7 +3016,7 @@ export class Game {
       }
       // Butin : objets laches par les monstres vaincus.
       let loot = [];
-      if (winner === 'player') {
+      if (winner === 'player' && !(this.config && this.config.practice)) {
         loot = addItems(rollLoot(this.initialEnemies || []));
       }
       // Resultat transmis au mode aventure (PV restants des heros).

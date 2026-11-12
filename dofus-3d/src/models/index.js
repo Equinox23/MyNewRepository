@@ -59,7 +59,7 @@ export const BUILDERS = {
   minotoror: buildMinotoror,
 };
 // Heros : proportions elancees appliquees apres la construction.
-const HERO_STYLE = { iop: {}, osamodas: {}, roublard: {}, ecaflip: {}, pandawa: {}, eniripsa: { legs: 1.18 }, xelor: { legs: 1 } };
+const HERO_STYLE = { iop: { legs: 1, head: 1 }, osamodas: {}, roublard: {}, ecaflip: {}, pandawa: {}, eniripsa: { legs: 1.18 }, xelor: { legs: 1 } };
 for (const [id, style] of Object.entries(HERO_STYLE)) {
   const build = BUILDERS[id];
   BUILDERS[id] = () => restyleHero(build(), style);
