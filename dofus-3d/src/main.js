@@ -48,6 +48,8 @@ map3d.onRebuild(map3d.config, map3d);
 scene3d.setQuality(scene3d.quality, false);
 const picker = new Picker(scene3d, map3d);
 const rangeOverlay = new RangeOverlay(scene3d.scene, MAP_SIZE);
+// Teinte des cases adaptee au sol (eau / type de carte).
+rangeOverlay.ground = (c, r) => (map3d.isWater(c, r) ? 'water' : map3d.currentMapId);
 // Couche des glyphes / pieges (sous la surbrillance des portees).
 const zoneOverlay = new RangeOverlay(scene3d.scene, MAP_SIZE, 0.062);
 const hud = new Hud();

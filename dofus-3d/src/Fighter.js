@@ -15,7 +15,7 @@ export const DEFS = {
     name: 'Osamodas',
     role: 'Invocateur',
     hp: 100, pa: 8, pm: 4, initiative: 11,
-    spellIds: ['fouetOsamodas', 'invocationTofu', 'invocationBouftou', 'piqureMotivante', 'soinInvocation', 'invocationCraqueleur', 'transpositionAnimale', 'invocationDragounet'],
+    spellIds: ['fouetOsamodas', 'invocationTofu', 'invocationBouftou', 'piqureMotivante', 'soinInvocation', 'invocationCraqueleur', 'criDeLaBete', 'invocationDragounet'],
   },
   roublard: {
     name: 'Roublard',

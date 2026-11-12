@@ -55,3 +55,44 @@ export function tierComposition(familyId, tier, heroCount = 1) {
   for (let h = 1; h < heroCount; h++) comp.unshift(f.members[Math.min(extra + 1, 2)]);
   return comp;
 }
+
+// ---------------------------------------------------------------------------
+// Evolutions et tranches de niveau (exploration des regions).
+// Chaque evolution de la famille (sbire, variante, chef, royal) ouvre une
+// TRANCHE : les groupes de la tranche k sont menes par l evolution k,
+// accompagnee de l evolution precedente. Tranche 1 = sbires seuls,
+// derniere tranche = chefs + royal.
+// ---------------------------------------------------------------------------
+// Evolutions distinctes d une famille, de la plus faible a la plus forte.
+export function familyEvolutions(familyId) {
+  const f = MONSTER_FAMILIES[familyId] || MONSTER_FAMILIES.bouftou;
+  return f.members.filter((m, i, a) => a.indexOf(m) === i);
+}
+
+export function bandCount(familyId) {
+  return familyEvolutions(familyId).length;
+}
+
+// Composition d un groupe de la tranche `band` (1..n). `size` : 0 petit,
+// 1 moyen, 2 grand. Un monstre de plus par heros supplementaire (pris
+// dans l evolution precedente). a = evolution de la tranche, b = la
+// precedente, c = celle d avant.
+const BAND_FIRST = [['a', 'a'], ['a', 'a', 'a'], ['a', 'a', 'a', 'a']];
+const BAND_MID = [['b', 'a'], ['b', 'b', 'a'], ['b', 'b', 'a', 'a']];
+const BAND_LAST = [['b', 'a'], ['b', 'b', 'a'], ['c', 'b', 'b', 'a']];
+export function bandComposition(familyId, band, size = 1, heroCount = 1) {
+  const evo = familyEvolutions(familyId);
+  const n = evo.length;
+  const k = Math.max(1, Math.min(n, band)) - 1;
+  const pick = { a: evo[k], b: evo[Math.max(0, k - 1)], c: evo[Math.max(0, k - 2)] };
+  const tpl = (k === 0 ? BAND_FIRST : k === n - 1 ? BAND_LAST : BAND_MID)[Math.max(0, Math.min(2, size))];
+  const comp = tpl.map(x => pick[x]);
+  for (let h = 1; h < heroCount; h++) comp.unshift(pick.b);
+  return comp;
+}
+
+// Palier (ancien systeme, 1..10) equivalent a une tranche vaincue : sert
+// a relire les anciennes sauvegardes et a les garder a jour.
+export function bandTierThresholds(familyId) {
+  return bandCount(familyId) >= 4 ? [1, 3, 5, 6] : [1, 4, 6];
+}

@@ -6,7 +6,7 @@ import { SPELL_GROUPS, spellGroup } from './Hud.js';
 
 const TIPS = {
   iop: 'Guerrier de melee. Bondis au contact, renforce-toi (Concentration, Precipitation) puis enchaine les coups d epee. Fragile a distance : ne laisse pas l ennemi te fuir.',
-  osamodas: 'Invocateur. Tes creatures font le travail : le Tofu harcele, le Bouftou tacle, le Craqueleur encaisse, le Dragounet tire de loin. Designe une Proie au Fouet pour que toute la meute la vise, et soigne ou dope tes invocations.',
+  osamodas: 'Invocateur. Tes creatures font le travail : le Tofu harcele, le Bouftou tacle, le Craqueleur encaisse, le Dragounet tire de loin. Designe une Proie au Fouet pour que toute la meute la vise, et soigne ou dope tes invocations. Ta faiblesse : peu mobile, ne te laisse pas coincer au contact.',
   roublard: 'Artificier. Pose des bombes pres des ennemis, deplace-les, puis fais-les exploser en chaine. Plus une bombe attend, plus elle fait mal. Attention : les explosions touchent aussi tes allies.',
   xelor: 'Mage du temps. Tu retires des PA aux ennemis pour les empecher d agir et tu te teleportes. Peu de degats bruts, mais un ennemi sans PA ne fait rien.',
   ecaflip: 'Joueur de hasard. Des coups puissants mais incertains, un chaton pour t epauler et des bonds pour rester mobile. Tente ta chance au bon moment.',

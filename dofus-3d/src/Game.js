@@ -109,7 +109,7 @@ export class Game {
       }
       const f = new Fighter(cls, team, pos.c, pos.r, opts);
       // Aventure : les PV sont conserves d une salle a l autre.
-      const carried = config.adventure && config.adventure.hp && config.adventure.hp[cls];
+      const carried = ((config.adventure && config.adventure.hp) || config.carryHp || {})[cls];
       if (team === 'player' && carried !== undefined) f.hp = Math.max(1, Math.min(f.maxHp, Math.round(carried * f.maxHp)));
       f.character = new Character3D(this.scene3d.scene, cls, team, pos.c, pos.r);
       if (team === 'player') {
@@ -3025,7 +3025,7 @@ export class Game {
         heroes: this.fighters.filter(f => f.team === 'player' && f.levelKind === 'hero')
           .map(f => ({ classId: f.classId, alive: f.alive, hpRatio: f.alive ? f.hp / f.maxHp : 0 })),
       };
-      let buttonLabel = 'REJOUER';
+      let buttonLabel = (this.config && this.config.endLabel) || 'REJOUER';
       if (adv) buttonLabel = winner !== 'player' ? 'QUITTER LE DONJON' : adv.last ? 'OUVRIR LE COFFRE' : 'SALLE SUIVANTE';
       setTimeout(() => this.hud.showEnd(winner, () => {
         if (this.onEnd) this.onEnd();
