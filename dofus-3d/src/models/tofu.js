@@ -70,8 +70,8 @@ export function buildTofu(opts = {}) {
     wing.rotation.set(-(Math.PI - 0.6), s * Math.PI / 2, 0);
     const w = new THREE.Group();
     w.add(wing);
-    w.position.set(s * 0.335, bodyY + 0.13, 0.035);
-    w.rotation.z = s * 0.3;
+    w.position.set(s * 0.33, bodyY + 0.08, 0.035);
+    w.rotation.z = s * 0.2;
     group.add(w);
   }
 
