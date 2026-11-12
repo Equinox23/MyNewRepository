@@ -289,3 +289,9 @@ body.touch-ui .hud-gauge .hg i { width: 8px; height: 8px; }
 body.touch-ui #hud-stats .stat-row { flex-wrap: wrap; row-gap: 2px; }
 body.touch-ui .hud-gauge { flex-basis: 100%; }
 body.touch-ui .hud-gauge .hg b { display: inline; font-size: 9px; }
+@media (orientation: portrait) {
+  body.touch-ui .td-row { display: grid; grid-template-columns: auto minmax(48px, 1fr) auto; align-items: center; }
+  body.touch-ui #hud-stats { min-width: 0; max-width: 62vw; }
+  body.touch-ui #hud-stats .stat-row { max-width: 100%; }
+  body.touch-ui .hud-gauge { flex: 0 0 100%; min-width: 0; overflow: hidden; }
+}
