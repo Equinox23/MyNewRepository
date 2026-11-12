@@ -25,6 +25,7 @@ const HP_BAR_Y = {
   pandawa: 1.80,
   eniripsa: 1.75,
   bouftouInvoc: 1.15,
+  tofuInvoc: 0.95,
   wabbit: 1.65,
   waWabbit: 2.4,
   chafer: 1.85,

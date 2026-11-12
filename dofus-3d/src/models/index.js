@@ -38,6 +38,7 @@ export const BUILDERS = {
   bouftou: buildBouftou,
   bouftouRoyal: buildBouftouRoyal,
   bouftouInvoc: () => { const g = new THREE.Group(); const b = buildBouftou(); b.scale.setScalar(0.85); g.add(b); return g; },
+  tofuInvoc: () => { const g = new THREE.Group(); const b = buildTofu(); b.scale.setScalar(0.85); g.add(b); return g; },
   craqueleur: buildCraqueleur,
   crapaud: buildCrapaud,
   crapaudChef: buildCrapaudChef,

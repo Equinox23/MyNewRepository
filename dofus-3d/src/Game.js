@@ -35,6 +35,8 @@ const ENEMY_SPAWNS = [
   { c: 13, r: 4 }, { c: 13, r: 10 }, { c: 10, r: 6 }, { c: 10, r: 8 },
 ];
 
+const MAX_SUMMONS = 3;
+
 export class Game {
   constructor({ scene3d, map3d, picker, hud, rangeOverlay, zoneOverlay, vfx, audio }) {
     this.scene3d = scene3d;
@@ -491,7 +493,9 @@ export class Game {
   castBlockReason(cur, spell) {
     if (cur.isOnCooldown(spell.id)) return `${spell.name} en recharge (${cur.spellCooldowns[spell.id]} tours)`;
     if (spell.apCost > cur.pa) return 'Pas assez de PA pour ' + spell.name;
-    if (this.isSummonBlocked(cur, spell)) return 'Cette creature est deja invoquee';
+    if (this.isSummonBlocked(cur, spell)) {
+      return this.summonCount(cur) >= MAX_SUMMONS ? `Limite de ${MAX_SUMMONS} invocations atteinte` : 'Cette creature est deja invoquee';
+    }
     if (spell.maxCastsPerTurn
         && (cur._castCounts && cur._castCounts[spell.id] || 0) >= spell.maxCastsPerTurn) {
       return `${spell.name} : deja lance ${spell.maxCastsPerTurn} fois ce tour`;
@@ -786,6 +790,7 @@ export class Game {
     if (spell.target === 'ally') {
       if (!targetFighter || targetFighter.team !== caster.team) return 'Pas d allie';
       if (spell.targetFilter === 'bomb' && !targetFighter.isBomb) return 'Cible : une bombe';
+      if (spell.targetFilter === 'summon' && !(targetFighter.isSummon && targetFighter.summonOwner === caster)) return 'Cible : une de tes invocations';
     }
     if (spell.target === 'tile') {
       const isPlace = spell.effects.some(e => e.type === 'placeBomb' || e.type === 'moveBomb');
@@ -816,11 +821,32 @@ export class Game {
     return null;
   }
 
+  // Nombre d invocations en vie d un lanceur.
+  summonCount(caster) {
+    return this.fighters.filter(f => f.alive && f.isSummon && f.summonOwner === caster).length;
+  }
+
+  // Proie designee (Fouet de l Osamodas) pour l equipe de `ai`.
+  preyFor(ai) {
+    return this.fighters.find(f => f.alive && f.team !== ai.team && !f.invisible && f.buffs.some(b => b.prey === ai.team)) || null;
+  }
+
+  // Bonus de degats lies a la meute : Fouet (+x% par invocation en vie)
+  // et invocations qui frappent la proie designee (+25%).
+  packMultiplier(caster, tf, spell) {
+    let k = 1;
+    const eff = spell.effects.find(e => e.packBonus);
+    if (eff) k += eff.packBonus * this.summonCount(caster);
+    if (caster.isSummon && tf && tf.buffs.some(b => b.prey === caster.team)) k += 0.25;
+    return k;
+  }
+
   // Un sort d invocation est bloque tant qu une creature du meme type,
   // appartenant au lanceur, est encore en vie (1 de chaque max).
   isSummonBlocked(caster, spell) {
     const summonEff = spell && spell.effects && spell.effects.find(e => e.type === 'summon');
     if (!summonEff) return false;
+    if (this.summonCount(caster) >= MAX_SUMMONS) return true;
     return this.fighters.some(f =>
       f.alive && f.classId === summonEff.creatureId &&
       (f.summonOwner === caster || f.team === caster.team)
@@ -1373,6 +1399,31 @@ export class Game {
         this.hud.log && this.hud.log(`${caster.name} echange sa place avec sa bombe`, 'cast');
         return;
       }
+      case 'swapWithSummon': {
+        const pet = this.fighters.find(f => f.alive && f.isSummon && f.summonOwner === caster && f.c === target.c && f.r === target.r);
+        if (!pet) return;
+        const fromC = caster.c, fromR = caster.r, toC = pet.c, toR = pet.r;
+        if (this.vfx) {
+          this.vfx.portal(fromC, fromR, { color: 0x4fb02e, duration: 0.5 });
+          this.vfx.portal(toC, toR, { color: 0x4fb02e, duration: 0.5 });
+        }
+        await Promise.all([caster.character.teleportTo(toC, toR), pet.character.teleportTo(fromC, fromR)]);
+        caster.c = toC; caster.r = toR;
+        pet.c = fromC; pet.r = fromR;
+        this.hud.log && this.hud.log(`${caster.name} echange sa place avec ${pet.name}`, 'cast');
+        return;
+      }
+      case 'prey': {
+        const tf = this.fighters.find(f => f.alive && f.team !== caster.team && f.c === target.c && f.r === target.r);
+        if (!tf) return;
+        // Une seule proie a la fois par equipe.
+        for (const f of this.fighters) f.buffs = f.buffs.filter(b => b.prey !== caster.team);
+        tf.buffs.push({ duration: (effect.duration || 2) + 1, prey: caster.team, source: spell.name });
+        tf.character.popText('PROIE', '#ff5a3a', { fontSize: 20, yStart: 1.7, yRise: 0.6, scaleX: 1.4, scaleY: 0.42 });
+        this.hud.log && this.hud.log(`${tf.name} est la proie de la meute (${effect.duration} tours)`, 'buff');
+        this.hud.refreshTurnOrder && this.hud.refreshTurnOrder();
+        return;
+      }
       case 'detonateBomb': {
         // Le joueur a clique sur une de ses bombes ; on l explose.
         const bomb = this.fighters.find(f =>
@@ -1707,7 +1758,7 @@ export class Game {
   rollHit(caster, tf, spell, effect) {
     const base = effect.min + Math.floor(Math.random() * (effect.max - effect.min + 1));
     const el = damageElementOf(spell, caster);
-    let dmg = base * caster.damageMultiplier();
+    let dmg = base * caster.damageMultiplier() * this.packMultiplier(caster, tf, spell);
     const crit = !caster.isBomb && Math.random() < caster.critChance;
     if (crit) dmg *= 1.3;
     const res = tf.res[el] || 0;
@@ -1719,7 +1770,7 @@ export class Game {
   // boucliers : sert a l apercu avant le lancer.
   estimateHit(caster, tf, spell, min, max) {
     const el = damageElementOf(spell, caster);
-    const k = caster.damageMultiplier() * (1 - (tf.res[el] || 0) / 100);
+    const k = caster.damageMultiplier() * this.packMultiplier(caster, tf, spell) * (1 - (tf.res[el] || 0) / 100);
     return { min: tf.computeShielded(Math.round(min * k)), max: tf.computeShielded(Math.round(max * k)), el };
   }
 
@@ -1903,7 +1954,9 @@ export class Game {
       // Invocations : IA "intelligente" (frappe tout ce qui est a portee,
       // depense tous ses PA, ne quitte pas le contact pour rien).
       craqueleur: () => this.runSmart(ai),
-      dragounet: () => this.runSmart(ai),
+      dragounet: () => this.runRanged(ai),
+      tackler: () => this.runSmart(ai),
+      harasser: () => this.runHarasser(ai),
       chaton: () => this.runSmart(ai),
       summon: () => this.runSmart(ai),
       boss: () => this.runBoss(ai),
@@ -2018,6 +2071,9 @@ export class Game {
         if (adj.length) return;
       }
       enemies.sort((a, b) => this._dist(ai, a) - this._dist(ai, b) || a.hp - b.hp);
+      // La proie designee par l invocateur passe avant tout le monde.
+      const prey = this.preyFor(ai);
+      if (prey) { enemies.splice(enemies.indexOf(prey), 1); enemies.unshift(prey); }
       const melee = affordable.filter(s => s.range.max <= 1);
       const before = { c: ai.c, r: ai.r };
       // Cible la plus proche ; si le chemin est bouche, on essaie la suivante.
@@ -2037,6 +2093,88 @@ export class Game {
     }
   }
 
+  // Cible d une invocation : la proie designee, sinon l ennemi le plus proche.
+  aiSummonTarget(ai) {
+    const prey = this.preyFor(ai);
+    if (prey) return prey;
+    const list = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.isBomb && !f.invisible);
+    list.sort((a, b) => this._dist(ai, a) - this._dist(ai, b) || a.hp - b.hp);
+    return list[0] || null;
+  }
+
+  // HARCELEUR (Tofu) : fonce, picore tant qu il a des PA, puis s eloigne
+  // le plus loin possible des ennemis avec les PM qui lui restent.
+  async runHarasser(ai) {
+    const spells = this.aiAttackSpells(ai);
+    const target = this.aiSummonTarget(ai);
+    if (!target || !spells.length) return;
+    const dist = this._dist(ai, target);
+    if (dist > 1 && ai.pm > 0) {
+      // Cible hors d atteinte ce tour : il s approche sans se coller
+      // (a ~4 cases), pret a frapper au tour suivant, et ne repart pas.
+      if (dist - 1 > ai.pm) { await this.aiPositionAtRange(ai, target, 4, 5, false); return; }
+      await this.aiApproach(ai, target, 1);
+      if (this.ended) return;
+      await this.aiPause(220);
+    }
+    let guard = 0;
+    while (ai.alive && !this.ended && guard++ < 8 && await this.aiStrikeInRange(ai, spells)) {
+      if (this.checkEnd()) return;
+      await this.aiPause(220);
+    }
+    if (!ai.alive || this.ended || ai.pm <= 0) return;
+    const enemies = this.fighters.filter(f => f.alive && f.team !== ai.team && !f.isBomb);
+    if (!enemies.length) return;
+    const occ = this.computeOccupied(ai);
+    const result = bfs(this.map3d.getData(), occ, { c: ai.c, r: ai.r }, ai.pm, (c, r) => this.map3d.isBlockedFor(c, r, ai));
+    const safety = (c, r) => Math.min(...enemies.map(e => Math.abs(c - e.c) + Math.abs(r - e.r)));
+    let best = { c: ai.c, r: ai.r }, bestS = safety(ai.c, ai.r);
+    for (const key of result.dist.keys()) {
+      const [c, r] = key.split(',').map(Number);
+      const sc = safety(c, r);
+      if (sc > bestS) { bestS = sc; best = { c, r }; }
+    }
+    if (best.c === ai.c && best.r === ai.r) return;
+    const path = pathTo(result, best);
+    if (path && path.length > 1) await this._walk(ai, path.slice(1), 180);
+  }
+
+  // TIREUR (Dragounet) : garde ses distances. Il se place a 3-5 cases de
+  // sa cible, aligne pour cracher, tire tant qu il peut, et recule si un
+  // ennemi est venu trop pres.
+  async runRanged(ai) {
+    const spells = this.aiAttackSpells(ai);
+    if (!spells.length) return;
+    const maxRange = Math.max(...spells.map(s => s.range.max));
+    const line = spells.some(s => s.lineOnly);
+    const tooClose = () => this.fighters.some(f => f.alive && f.team !== ai.team && !f.isBomb && this._dist(ai, f) <= 2);
+    let guard = 0;
+    while (ai.alive && !this.ended && guard++ < 6) {
+      const target = this.aiSummonTarget(ai);
+      if (!target) return;
+      const before = { pa: ai.pa, c: ai.c, r: ai.r };
+      const d = this._dist(ai, target);
+      const canHit = this.usableSpellsOn(ai, target, spells).length > 0;
+      if (ai.pm > 0 && (!canHit || d < 3 || d > 5 || tooClose())) {
+        await this.aiPositionAtRange(ai, target, 4, Math.min(maxRange, 6), line);
+        if (this.ended) return;
+        await this.aiPause(260);
+      }
+      let n = 0;
+      while (n++ < 4 && await this.aiStrikeInRange(ai, spells)) {
+        if (this.checkEnd()) return;
+        await this.aiPause(260);
+      }
+      if (ai.pa >= before.pa && ai.c === before.c && ai.r === before.r) break;
+      if (!spells.some(s => s.apCost <= ai.pa && !ai.isOnCooldown(s.id))) break;
+    }
+    // Plus de PA : il s ecarte si on lui colle au train.
+    if (ai.alive && !this.ended && ai.pm > 0 && tooClose()) {
+      const target = this.aiSummonTarget(ai);
+      if (target) await this.aiPositionAtRange(ai, target, 5, Math.min(maxRange, 6), false);
+    }
+  }
+
   // Lance le meilleur sort possible sur un ennemi a portee (sans toucher
   // d allie avec un sort de zone). Renvoie true si un sort est parti.
   async aiStrikeInRange(ai, spells) {
@@ -2051,7 +2189,8 @@ export class Game {
         }
         const dmg = maxDamageOf(s);
         const kill = dmg >= e.hp ? 1 : 0;
-        const score = kill * 1000 + spellScore(s) + (e.isSummon || e.isBomb ? -20 : 0) - e.hp / 50;
+        const score = kill * 1000 + spellScore(s) + (e.isSummon || e.isBomb ? -20 : 0) - e.hp / 50
+          + (e.buffs.some(b => b.prey === ai.team) ? 500 : 0);
         if (!best || score > best.score) best = { s, e, score };
       }
     }

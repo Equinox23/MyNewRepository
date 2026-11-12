@@ -408,7 +408,7 @@ export const SPELLS = {
     target: 'tile', area: { type: 'single' },
     cooldown: 4,
     effects: [{ type: 'summon', creatureId: 'craqueleur' }],
-    desc: 'Invoque un Craqueleur sur une case adjacente libre.',
+    desc: 'Invoque un Craqueleur : un TANK lent et tres resistant, qui bloque les ennemis et frappe en zone.',
   },
   piqureMotivante: {
     id: 'piqureMotivante', name: 'Piqure Motivante', short: 'PI', icon: ICON_BOOST,
@@ -432,7 +432,7 @@ export const SPELLS = {
     desc: 'Bouclier : -50% degats reçus pendant 2 tours.',
   },
   soinInvocation: {
-    id: 'soinInvocation', name: 'Soin de l Invocation', short: 'SI', icon: ICON_HEAL_CROSS,
+    id: 'soinInvocation', name: 'Soin Animal', short: 'SI', icon: ICON_HEAL_CROSS,
     category: 'heal', color: SPELL_CATEGORY_COLOR.heal,
     apCost: 4, range: { min: 1, max: 4 }, needsLOS: true,
     target: 'ally', area: { type: 'single' },
@@ -446,7 +446,7 @@ export const SPELLS = {
     target: 'tile', area: { type: 'single' },
     cooldown: 5,
     effects: [{ type: 'summon', creatureId: 'dragounetRouge' }],
-    desc: 'Invoque un Dragounet Rouge sur une case adjacente libre.',
+    desc: 'Invoque un Dragounet Rouge : un TIREUR qui garde ses distances (3 a 5 cases), crache du feu en ligne et soigne les allies.',
   },
 
   // ---------- DRAGOUNET ROUGE (invocation Osamodas) ----------
@@ -873,8 +873,8 @@ export const SPELLS = {
     category: 'attack', color: SPELL_CATEGORY_COLOR.attack,
     apCost: 3, range: { min: 1, max: 3 }, needsLOS: true,
     target: 'enemy', area: { type: 'single' },
-    effects: [{ type: 'damage', min: 14, max: 22 }, { type: 'debuff_pm', value: 1 }],
-    desc: 'Un claquement de fouet : 14-22 degats et -1 PM.',
+    effects: [{ type: 'damage', min: 14, max: 22, packBonus: 0.15 }, { type: 'prey', duration: 2 }],
+    desc: 'Designe une PROIE : tes invocations la prennent pour cible et lui infligent +25% de degats pendant 2 tours. Le Fouet frappe +15% plus fort par invocation en vie.',
   },
   invocationBouftou: {
     id: 'invocationBouftou', name: 'Invocation de Bouftou', short: 'IB', icon: ICON_SUMMON,
@@ -883,7 +883,25 @@ export const SPELLS = {
     target: 'tile', area: { type: 'single' },
     cooldown: 4,
     effects: [{ type: 'summon', creatureId: 'bouftouInvoc' }],
-    desc: 'Invoque un Bouftou apprivoise qui fonce mordre les ennemis.',
+    desc: 'Invoque un Bouftou : un TACLEUR qui fonce sur l ennemi le plus proche et l empeche de s enfuir.',
+  },
+  invocationTofu: {
+    id: 'invocationTofu', name: 'Invocation de Tofu', short: 'IT', icon: ICON_SUMMON,
+    category: 'summon', color: SPELL_CATEGORY_COLOR.summon,
+    apCost: 2, range: { min: 1, max: 2 }, needsLOS: false,
+    target: 'tile', area: { type: 'single' },
+    cooldown: 3,
+    effects: [{ type: 'summon', creatureId: 'tofuInvoc' }],
+    desc: 'Invoque un Tofu : un HARCELEUR tres rapide et fragile, qui picore sa cible puis s eloigne aussitot.',
+  },
+  transpositionAnimale: {
+    id: 'transpositionAnimale', name: 'Transposition Animale', short: 'TA', icon: ICON_BOOST,
+    category: 'move', color: SPELL_CATEGORY_COLOR.move,
+    apCost: 2, range: { min: 1, max: 6 }, needsLOS: false,
+    target: 'ally', area: { type: 'single' }, targetFilter: 'summon',
+    cooldown: 2,
+    effects: [{ type: 'swapWithSummon' }],
+    desc: 'Echange ta place avec une de tes invocations : pour te mettre a l abri ou envoyer une creature au contact.',
   },
   criDeLaBete: {
     id: 'criDeLaBete', name: 'Cri de la Bete', short: 'CB', icon: ICON_BOOST,
@@ -1367,7 +1385,7 @@ const BOMB_LEVELS = [
 ];
 
 const SUMMON_NAMES = {
-  craqueleur: 'Craqueleur', dragounetRouge: 'Dragounet Rouge', chatonBlanc: 'Chaton Blanc', bouftouInvoc: 'Bouftou apprivoise',
+  craqueleur: 'Craqueleur', dragounetRouge: 'Dragounet Rouge', chatonBlanc: 'Chaton Blanc', bouftouInvoc: 'Bouftou apprivoise', tofuInvoc: 'Tofu apprivoise',
 };
 
 // Helpers pour fabriquer le contenu du tooltip a partir d un spell.
@@ -1378,6 +1396,7 @@ export function spellEffectLines(spell) {
       case 'damage':
         lines.push(`Degats ${ELEMENT_LABEL[damageElementOf(spell)] || ''} : ${eff.min}-${eff.max}`.replace('  ', ' '));
         if (eff.lifesteal) lines.push(`Vole ${Math.round(eff.lifesteal * 100)}% des degats en PV`);
+        if (eff.packBonus) lines.push(`+${Math.round(eff.packBonus * 100)}% degats par invocation en vie`);
         if (spell.area && spell.area.type === 'line') {
           const lenTxt = spell.area.length < 0
             ? 'jusqu au bord de la carte'
@@ -1463,6 +1482,12 @@ export function spellEffectLines(spell) {
         break;
       case 'swapWithBomb':
         lines.push('Echange la position du lanceur avec la bombe ciblee');
+        break;
+      case 'swapWithSummon':
+        lines.push('Echange ta place avec une de tes invocations');
+        break;
+      case 'prey':
+        lines.push(`Proie (${eff.duration} tours) : tes invocations la ciblent, +25% degats`);
         break;
       case 'detonateBomb':
         lines.push(`Detonation de la bombe ciblee${eff.bonus ? ` (+${Math.round(eff.bonus * 100)}% degats)` : ''}`);

@@ -29,7 +29,7 @@ const RIGS = {
   kwakwa:    { hip: 0.3, legOnly: true },
 };
 // Variantes "royales" : meme squelette (le modele est simplement agrandi).
-const ALIAS = { chaferRoyal: 'chafer', bouftouRoyal: 'bouftou', tofuRoyal: 'tofu', waWabbit: 'wabbit', bouftouInvoc: 'bouftou', craqueleurSauvage: 'craqueleur', craqueleurLegendaire: 'craqueleur' };
+const ALIAS = { chaferRoyal: 'chafer', bouftouRoyal: 'bouftou', tofuRoyal: 'tofu', waWabbit: 'wabbit', bouftouInvoc: 'bouftou', tofuInvoc: 'tofu', craqueleurSauvage: 'craqueleur', craqueleurLegendaire: 'craqueleur' };
 // Variantes du bestiaire : squelette de leur modele de base.
 for (const [id, v] of Object.entries(VARIANTS)) if (RIGS[v.base] || ALIAS[v.base]) ALIAS[id] = ALIAS[v.base] || v.base;
 
