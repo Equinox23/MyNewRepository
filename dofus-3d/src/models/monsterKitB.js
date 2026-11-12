@@ -57,22 +57,30 @@ export function rockBlob(r, mat, o = {}) {
   }
   if (o.flat) planes.push({ c: new THREE.Vector3(0, -1, 0), h: o.flat, t: 0.85 });
   const surf = (d, out = new THREE.Vector3()) => {
-    let rr = 1, t = 1;
+    let rr = 1, t = 1, hit = null;
     for (const p of planes) {
       const k = d.dot(p.c);
-      if (k > 0.05) { const v = p.h / k; if (v < rr) { rr = v; t = p.t; } }
+      if (k > 0.05) { const v = p.h / k; if (v < rr) { rr = v; t = p.t; hit = p; } }
     }
     out.set(d.x * rr * r * sc[0], d.y * rr * r * sc[1], d.z * rr * r * sc[2]);
     out.w_ = t;
+    out.n_ = hit ? hit.c : d;
     return out;
   };
+  const nrm = [];
   const m = paintSphere((d, out) => {
     surf(d, out);
     const t = out.w_;
+    // Normale de la facette (aretes franches) ; transposee inverse de l echelle.
+    const nn = out.n_;
+    const nx = nn.x / sc[0], ny = nn.y / sc[1], nz = nn.z / sc[2];
+    const l = Math.hypot(nx, ny, nz) || 1;
+    nrm.push(nx / l, ny / l, nz / l);
     // Dessous un peu plus sombre (ancre le rocher au sol).
     const g = t * (0.9 + 0.1 * sstep(-0.9, 0.2, d.y));
     return [g, g, g * (1 - (1 - t) * 0.3)];
   }, mat, o.ws || 44, o.hs || 32);
+  m.geometry.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
   m.userData.surf = surf;
   return m;
 }

@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import {
-  M, buildHero, loft, sculptSphere, tubeAlong, roundBox,
+  M, buildHero, loft, sculptSphere, tubeAlong,
   faceEyes, faceBrows, faceSmile, faceNose, hairShell, hairSpike,
 } from './humanoid.js';
 import { woolBlob } from './kit.js';
-import { band, torsoStrap, torsoRadius, detail } from './heroKitA.js';
+import { band, torsoStrap, detail } from './heroKitA.js';
 
 // Osamodas : dresseur de betes un peu sauvage, souriant. Bras nus,
 // tunique verte sans manches a jupe courte et pan de cuir, col de
@@ -35,11 +35,10 @@ export function buildOsamodas() {
   });
   const { group, head, headR: hr, at } = H;
   group.userData.restyled = true; // proportions deja finales
-  const R = torsoRadius(H);
 
   // ---- Col de fourrure pose sur les epaules ----
-  const mantle = woolBlob(0.2, furBlob, { lobes: 18, amp: 0.2, scale: [1.2, 0.34, 0.86], seed: 11, ws: 48, hs: 28, shade: 0.14 });
-  mantle.position.set(0, 1.005, -0.012);
+  const mantle = woolBlob(0.2, furBlob, { lobes: 30, amp: 0.3, scale: [1.2, 0.42, 0.88], seed: 11, ws: 64, hs: 40, shade: 0.2 });
+  mantle.position.set(0, 1.01, -0.012);
   mantle.rotation.x = 0.16;
   group.add(mantle);
 

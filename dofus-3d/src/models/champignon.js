@@ -124,7 +124,7 @@ export function buildChampignon(opts = {}) {
       let best = 0;
       for (const s of spots) {
         const ang = Math.acos(Math.min(1, d.dot(s.c)));
-        best = Math.max(best, 1 - sstep(s.r * 0.86, s.r, ang));
+        best = Math.max(best, 1 - sstep(s.r * 0.78, s.r * 1.02, ang));
       }
       // Verrue : pastille claire en leger relief.
       rad *= 1 + 0.035 * best;

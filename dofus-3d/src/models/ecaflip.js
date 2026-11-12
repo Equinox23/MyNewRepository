@@ -55,7 +55,7 @@ export function buildEcaflip() {
   const tailPts = [[0, 0.57, -0.08], [0.03, 0.5, -0.24], [0.0, 0.56, -0.4], [-0.07, 0.78, -0.47], [-0.1, 0.99, -0.4], [-0.04, 1.1, -0.3]];
   group.add(tubeAlong(tailPts, t => 0.03 + 0.016 * Math.sin(Math.PI * Math.min(1, t * 1.2)) + 0.012 * t, M(0xe8893a, { r: 0.9 }), {
     steps: 48, segs: 12,
-    shade: t => (t > 0.12 && Math.sin(t * Math.PI * 11) > 0.35 ? 0.66 : 1),
+    shade: t => (t > 0.12 && Math.sin(t * Math.PI * 11) > 0.2 ? 0.55 : 1),
   }));
   const tip = sculptSphere((d, out) => { out.set(d.x * 0.046, d.y * 0.06, d.z * 0.046); }, cream, 14, 10);
   tip.position.set(-0.035, 1.105, -0.292);
@@ -76,7 +76,7 @@ export function buildEcaflip() {
 
   // Joues touffues (deux pointes de pelage par cote).
   for (const s of [-1, 1]) {
-    for (const [y0, y1, len, r] of [[0.52, 0.5, 0.5, 0.2], [0.3, 0.12, 0.42, 0.17]]) {
+    for (const [y0, y1, len, r] of [[0.56, 0.6, 0.4, 0.2], [0.36, 0.22, 0.34, 0.19]]) {
       head.add(tubeAlong([
         [s * hr * 0.72, hr * y0, hr * 0.3], [s * hr * 0.95, hr * (y0 * 0.7 + y1 * 0.3), hr * 0.26],
         [s * hr * (0.95 + len), hr * y1, hr * 0.1],
@@ -103,20 +103,31 @@ export function buildEcaflip() {
     for (const [dy, a] of [[0.06, 0.16], [-0.02, -0.02], [-0.1, -0.22]]) {
       const p = at(s * hr * 0.36, hr * (0.42 + dy), 0);
       head.add(detail(tubeAlong([
-        p, [p.x + s * hr * 0.4, p.y + a * hr * 0.4, p.z - hr * 0.06], [p.x + s * hr * 0.78, p.y + a * hr * 0.95 - hr * 0.04, p.z - hr * 0.22],
-      ], t => 0.0042 * (1 - 0.7 * t), white, { steps: 8, segs: 5 })));
+        p, [p.x + s * hr * 0.3, p.y + a * hr * 0.3, p.z - hr * 0.04], [p.x + s * hr * 0.58, p.y + a * hr * 0.7 - hr * 0.03, p.z - hr * 0.16],
+      ], t => 0.0034 * (1 - 0.7 * t), white, { steps: 8, segs: 5 })));
     }
   }
 
   // Yeux verts fendus, sourcils narquois.
   const eyes = faceEyes(head, hr, at, { x: 0.42, y: 0.86, size: 0.23, tall: 1.1, iris: 0x3fc46a, lash: 0x4a2014, tilt: 0.2 });
   for (const e of eyes) { e.children[2].scale.x *= 0.5; e.children[2].scale.y *= 1.25; }
-  faceBrows(head, hr, at, furDk, { y: 1.2, rise: 0.16, thick: 0.045 });
+  faceBrows(head, hr, at, furDk, { y: 1.15, rise: 0.17, thick: 0.045 });
   // Rayures du front et des tempes.
   const stripe = (x0, y0, x1, y1, r) => head.add(line(at, [[x0 * hr, y0 * hr], [(x0 + x1) / 2 * hr, (y0 + y1) / 2 * hr], [x1 * hr, y1 * hr]], t => hr * r * (1 - 0.8 * t), furDk, { lift: hr * 0.01, flat: 0.5 }));
   stripe(0, 1.72, 0, 1.36, 0.05);
   stripe(-0.26, 1.68, -0.2, 1.42, 0.042);
   stripe(0.26, 1.68, 0.2, 1.42, 0.042);
+
+  // Rayures a l arriere du crane.
+  for (const x0 of [-0.36, 0, 0.36]) {
+    const pts = [];
+    for (let i = 0; i <= 6; i++) {
+      const a = 0.35 + (i / 6) * 1.0;
+      const d = new THREE.Vector3(x0 * (1 + 0.25 * i / 6), Math.cos(a), -Math.sin(a)).normalize();
+      pts.push([d.x * hr * 1.12, cy + d.y * hr * 0.975, d.z * hr * 1.065]);
+    }
+    head.add(detail(tubeAlong(pts, t => hr * 0.05 * Math.sin(Math.PI * (0.1 + 0.9 * t)), furDk, { steps: 14, segs: 6 })));
+  }
 
   // Grandes oreilles pointues (pavillon rose).
   for (const s of [-1, 1]) {

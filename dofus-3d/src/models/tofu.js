@@ -19,6 +19,8 @@ export function buildTofu(opts = {}) {
   const wingMat = M(royal ? 0x9a2018 : 0xf7a51e, { r: 0.85 });
   const beakMat = M(royal ? 0xf0a02a : 0xf07a22, { r: 0.55 });
   const beakDk = M(royal ? 0xc8701a : 0xc8521a, { r: 0.6 });
+  // Le bec garde sa couleur dans les variantes recolorees (comme les yeux).
+  beakMat.name = 'eye'; beakDk.name = 'eye';
   const legMat = M(royal ? 0xe08a22 : 0xe8782a, { r: 0.65 });
   const dark = M(0x3a1a0c, { r: 0.6 });
   const cheekMat = M(royal ? 0xf07a5a : 0xff9a6a, { r: 0.8 });
@@ -103,7 +105,7 @@ export function buildTofu(opts = {}) {
   // ---- Visage ----
   const face = new THREE.Group();
   face.position.set(0, bodyY, 0);
-  const eyes = addEyes(face, { x: 0, y: 0.105, z: 0.248, size: 0.1, spacing: 0.228, turn: 0.32, lid: bodyHex, angry: royal });
+  const eyes = addEyes(face, { x: 0, y: 0.105, z: 0.248, size: 0.1, spacing: 0.228, turn: 0.32, });
   for (const e of eyes) e.traverse(o => { o.userData.noOutline = true; });
   // Sourcils : moqueurs (un leve) ou severes pour le Royal.
   for (const s of [-1, 1]) {

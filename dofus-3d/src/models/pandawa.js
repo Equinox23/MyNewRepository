@@ -1,127 +1,144 @@
 import * as THREE from 'three';
-import { M, buildHumanoid, lathe, taper, bentCone, roundBox, cloth, strand, place, faceMouth } from './humanoid.js';
+import {
+  M, buildHero, loft, sculptSphere, tubeAlong,
+  faceEyes, faceSmile,
+} from './humanoid.js';
+import { makeAt, patch, ellipse, line, detail } from './heroKitB.js';
 
-// Pandawa facon Dofus : maitre bambouseur bon vivant. Carrure trapue,
-// kimono ouvert a bords brodes sur un ventre blanc, large ceinture nouee
-// dont les pans pendent, bras et jambes noirs, tete de panda (oreilles
-// rondes, taches autour des yeux, museau), gourde de lait de bambou dans
-// le dos et long baton de bambou.
+// Pandawa : lutteur bon vivant. Carrure large et ventre rond, pelage
+// blanc, bras, jambes et oreilles noirs, taches autour des yeux, museau
+// court et sourire tranquille. Tunique verte croisee a lisere clair,
+// manches courtes, large ceinture rouge nouee, bandages aux poignets et
+// aux chevilles. Baton de bambou dans la main gauche, gourde a la hanche.
 export function buildPandawa() {
-  const white = M(0xf2eee4, { r: 0.9 });
-  const black = M(0x24222a, { r: 0.85 });
-  const kimono = M(0x3a7a4a, { r: 0.8 });
-  const kimonoLt = M(0x6aaa5a, { r: 0.8 });
-  const sash = M(0xc8322a, { r: 0.75 });
-  const gold = M(0xe8c14a, { r: 0.35, m: 0.5 });
-  const wood = M(0x9a6232, { r: 0.8 });
-  const bamboo = M(0x7ab04a, { r: 0.7 });
-  const bambooDk = M(0x4a7a2a, { r: 0.75 });
-  const pink = M(0xf09aa8, { r: 0.8 });
+  const white = M(0xf6f1e6, { r: 0.9 });
+  const black = M(0x2b2832, { r: 0.85 });
+  const kimono = M(0x3f8a4e, { r: 0.75 });
+  const kimonoLt = M(0x9bd06a, { r: 0.75 });
+  const sash = M(0xcf3526, { r: 0.7 });
+  const wrap = M(0xd9bf8c, { r: 0.9 });
+  const wood = M(0xb07a3c, { r: 0.75 });
+  const bamboo = M(0x8cc152, { r: 0.65 });
+  const leafM = M(0x4f9a36, { r: 0.7 });
+  const pink = M(0xf4a6b0, { r: 0.8 });
+  const dark = M(0x1c1a22, { r: 0.6 });
 
-  const H = buildHumanoid({
-    skin: white, top: white, bottom: black, boots: black, gloves: black, sleeve: black, forearm: black,
-    build: 1.2, headR: 0.33, noNose: true, headShape: { jaw: 0.08, chin: 0.02, wide: 1.1 },
-    eyes: { iris: 0x6a3a1a, lid: 0x24222a, sleepy: true },
+  const b = 1.2;
+  const H = buildHero({
+    skin: white, top: kimono, bottom: black, boots: black, gloves: black, bootCuff: wrap, bracer: wrap, arm: black,
+    build: b, headR: 0.24, ears: false, headShape: { taper: 0.2, chin: 0.0, wide: 1.13 },
   });
   const { group, head, headR: hr } = H;
+  group.userData.restyled = true;
 
-  // ---- Ventre rond blanc sous un kimono ouvert ----
-  const belly = new THREE.Mesh(new THREE.SphereGeometry(0.2, 18, 14), white);
-  belly.scale.set(1.05, 1, 0.8);
-  belly.position.set(0, 0.56, 0.06);
-  belly.castShadow = true;
-  group.add(belly);
-  for (const sx of [-1, 1]) {
-    const panel = cloth(0.2, 0.44, kimono, { curve: -0.05, flare: 0.02, spread: 0.12, wave: 0.01 });
-    panel.position.set(sx * 0.13, 0.84, 0.13);
-    panel.rotation.set(-0.12, sx * 0.35, 0);
-    group.add(panel);
-    const trim = roundBox(0.035, 0.42, 0.02, 0.01, kimonoLt);
-    place(trim, sx * 0.09, 0.64, 0.19, -0.12, 0, sx * 0.12);
-    group.add(trim);
+  // ---- Tunique : ventre rond, col croise sur le poitrail blanc ----
+  const tunic = loft([
+    [0.6, 0.17, 0.13], [0.68, 0.212, 0.172, 0, 0.012], [0.8, 0.226, 0.182, 0, 0.014], [0.92, 0.238, 0.166, 0, 0.006],
+    [1.0, 0.236, 0.146], [1.045, 0.17, 0.118], [1.065, 0.09, 0.08],
+  ], kimono, { segs: 26, sub: 5, sq: 0.12 });
+  group.add(tunic);
+  const atT = makeAt([H.torso, tunic]);
+  group.add(patch(atT, [
+    [-0.105, 1.045], [-0.07, 0.97], [-0.035, 0.9], [0.0, 0.835], [0.035, 0.9], [0.07, 0.97], [0.105, 1.045], [0, 1.058],
+  ], white, { lift: 0.006, center: [0, 0.97] }));
+  // Lisere : le pan droit passe par-dessus le gauche jusqu a la ceinture.
+  group.add(line(atT, [[0.112, 1.05], [0.074, 0.97], [0.036, 0.9], [-0.01, 0.82], [-0.06, 0.755]], t => 0.016, kimonoLt, { lift: 0.012, flat: 0.6 }));
+  group.add(line(atT, [[-0.112, 1.05], [-0.074, 0.97], [-0.036, 0.9], [0.0, 0.838]], t => 0.016, kimonoLt, { lift: 0.01, flat: 0.6 }));
+  // Basque de la tunique + ourlet clair.
+  group.add(loft([[0.68, 0.19, 0.15], [0.6, 0.238, 0.196], [0.5, 0.256, 0.21], [0.47, 0.258, 0.212], [0.462, 0.2, 0.16]], kimono, { segs: 26, sub: 4 }));
+  group.add(loft([[0.486, 0.246, 0.202], [0.478, 0.268, 0.222], [0.452, 0.27, 0.224], [0.444, 0.22, 0.18]], kimonoLt, { segs: 26, sub: 3 }));
+  // Manches courtes.
+  for (const [arm, s] of [[H.armL, -1], [H.armR, 1]]) {
+    const sleeve = loft([
+      [0.07, 0.03, 0.03, -s * 0.03], [0.04, 0.1, 0.1, -s * 0.012], [-0.04, 0.108, 0.11, s * 0.006], [-0.105, 0.112, 0.114, s * 0.016], [-0.115, 0.08, 0.082, s * 0.018],
+    ], kimono, { segs: 18, sub: 4 });
+    arm.add(sleeve);
+    arm.add(loft([[-0.092, 0.1, 0.102, s * 0.015], [-0.1, 0.119, 0.121, s * 0.016], [-0.122, 0.119, 0.121, s * 0.018], [-0.13, 0.085, 0.087, s * 0.019]], kimonoLt, { segs: 18, sub: 3 }));
   }
-  const back = cloth(0.4, 0.46, kimono, { curve: 0.12, flare: 0.05, spread: 0.2, wave: 0.02 });
-  back.position.set(0, 0.84, -0.12);
-  group.add(back);
-  // Ceinture nouee + pans.
-  const belt = lathe([[0.235, 0], [0.245, 0.045], [0.235, 0.09]], sash, 22, 0.85);
-  belt.position.y = 0.37;
-  group.add(belt);
-  const knot = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), sash);
-  knot.position.set(0.1, 0.41, 0.2);
+
+  // ---- Ceinture nouee, pans qui pendent ----
+  group.add(loft([[0.655, 0.18, 0.15], [0.668, 0.232, 0.196, 0, 0.012], [0.745, 0.236, 0.198, 0, 0.013], [0.758, 0.19, 0.155]], sash, { segs: 26, sub: 3 }));
+  const knot = sculptSphere((d, out) => { out.set(d.x * 0.05, d.y * 0.042, d.z * 0.036); }, sash, 14, 10);
+  knot.position.set(0.1, 0.705, 0.205);
   group.add(knot);
-  for (const [dx, rz] of [[0.08, 0.15], [0.13, -0.1]]) {
-    const end = cloth(0.05, 0.2, sash, { curve: 0.01, flare: 0.02, spread: 0.3, wave: 0.01 });
-    end.position.set(dx, 0.4, 0.2);
-    end.rotation.set(-0.2, 0, rz);
-    group.add(end);
+  for (const [dx, len] of [[0.0, 0.2], [0.05, 0.16]]) {
+    group.add(tubeAlong([[0.1, 0.7, 0.2], [0.1 + dx * 0.5, 0.7 - len * 0.5, 0.232], [0.1 + dx, 0.7 - len, 0.24]],
+      t => 0.02 + 0.014 * t, sash, { steps: 10, segs: 8, flat: 0.35 }));
   }
 
   // ---- Tete de panda ----
-  for (const sx of [-1, 1]) {
-    const ear = new THREE.Mesh(new THREE.SphereGeometry(0.1, 14, 10), black);
-    ear.scale.set(1, 1, 0.6);
-    ear.position.set(sx * hr * 0.78, hr * 1.66, -0.02);
-    head.add(ear);
-    const patch = new THREE.Mesh(new THREE.SphereGeometry(hr * 0.3, 14, 10), black);
-    patch.scale.set(0.8, 1.15, 0.45);
-    patch.rotation.z = sx * 0.55;
-    patch.position.set(sx * hr * 0.38, hr * 0.92, hr * 0.8);
-    head.add(patch);
-    const cheek = new THREE.Mesh(new THREE.SphereGeometry(0.05, 10, 8), pink);
-    cheek.scale.set(1.3, 0.7, 0.5);
-    cheek.position.set(sx * hr * 0.68, hr * 0.55, hr * 0.78);
-    head.add(cheek);
-  }
-  const muzzle = new THREE.Mesh(new THREE.SphereGeometry(hr * 0.42, 16, 12), white);
-  muzzle.scale.set(1.2, 0.72, 0.75);
-  muzzle.position.set(0, hr * 0.52, hr * 0.8);
+  const cy = hr * 0.88;
+  const muzzle = sculptSphere((d, out) => {
+    out.set(d.x * hr * 0.46, d.y * hr * 0.3, d.z * hr * 0.33);
+  }, white, 26, 18);
+  muzzle.position.set(0, hr * 0.42, hr * 0.7);
   head.add(muzzle);
-  const nose = new THREE.Mesh(new THREE.SphereGeometry(0.045, 10, 8), black);
-  nose.scale.set(1.4, 0.9, 0.9);
-  nose.position.set(0, hr * 0.66, hr * 1.1);
-  head.add(nose);
-  faceMouth(head, hr, black, { width: hr * 0.15, y: 0.4, arc: 0.95 });
-  // Petit chignon noue sur le crane.
-  const bun = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), black);
-  bun.position.set(0, hr * 1.9, -0.05);
-  head.add(bun);
-  const tie = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.012, 6, 12), sash);
-  tie.rotation.x = Math.PI / 2;
-  tie.position.set(0, hr * 1.82, -0.05);
-  head.add(tie);
-
-  // ---- Gourde de lait de bambou dans le dos ----
-  const gourd = lathe([[0.02, 0], [0.1, 0.04], [0.12, 0.12], [0.07, 0.2], [0.09, 0.28], [0.06, 0.35], [0.03, 0.38]], wood, 16);
-  gourd.position.set(0.08, 0.46, -0.22);
-  gourd.rotation.z = -0.3;
-  group.add(gourd);
-  const cork = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.04, 8), sash);
-  cork.position.set(0.19, 0.83, -0.22);
-  cork.rotation.z = -0.3;
-  group.add(cork);
-  const strap = roundBox(0.035, 0.52, 0.02, 0.01, sash);
-  place(strap, 0, 0.66, 0.2, 0.1, 0, -0.65);
-  group.add(strap);
-
-  // ---- Baton de bambou (main gauche) ----
-  const staff = new THREE.Group();
-  for (let k = 0; k < 5; k++) {
-    const seg = taper(0.028, 0.03, 0.27, bamboo, 10);
-    seg.position.y = 1.0 - k * 0.27;
-    staff.add(seg);
-    const node = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.009, 5, 12), bambooDk);
-    node.rotation.x = Math.PI / 2;
-    node.position.y = 1.0 - k * 0.27;
-    staff.add(node);
+  const at = makeAt([H.skull, muzzle]);
+  const atS = makeAt([H.skull]);
+  for (const s of [-1, 1]) {
+    // Oreilles rondes.
+    const ear = sculptSphere((d, out) => { out.set(d.x * hr * 0.34, d.y * hr * 0.32, d.z * hr * 0.15); }, black, 18, 14);
+    ear.position.set(s * hr * 0.76, cy + hr * 0.72, -hr * 0.08);
+    ear.rotation.set(0, s * 0.2, -s * 0.5);
+    head.add(ear);
+    // Taches tombantes autour des yeux, joues roses.
+    head.add(patch(atS, ellipse(s * hr * 0.43, hr * 0.84, hr * 0.235, hr * 0.33, s * 0.5), black, { lift: hr * 0.012 }));
+    head.add(patch(atS, ellipse(s * hr * 0.74, hr * 0.42, hr * 0.13, hr * 0.085, 0, 14), pink, { lift: hr * 0.012, rings: 2 }));
   }
-  const leaf = bentCone(0.04, 0.18, 0.1, 0, bambooDk, 4, 3);
-  leaf.position.set(0, 1.0, 0);
-  leaf.rotation.z = -0.6;
-  leaf.scale.set(1, 1, 0.25);
-  staff.add(leaf);
-  staff.position.set(0, -0.1, 0.02);
-  staff.rotation.set(0.2, 0, 0.1);
+  faceEyes(head, hr, atS, { x: 0.41, y: 0.86, size: 0.165, tall: 1.15, iris: 0x7a4a1c, lash: 0x2b2832 });
+  const nose = detail(sculptSphere((d, out) => {
+    const w = 0.6 + 0.4 * Math.max(0, d.y + 0.4);
+    out.set(d.x * hr * 0.15 * w, d.y * hr * 0.085, d.z * hr * 0.07);
+  }, dark, 14, 10));
+  nose.position.copy(at(0, hr * 0.55, -hr * 0.012));
+  head.add(nose);
+  head.add(line(at, [[0, hr * 0.48], [0, hr * 0.38]], t => hr * 0.014, dark, { lift: hr * 0.012, steps: 4 }));
+  faceSmile(head, hr, at, dark, { y: 0.34, width: 0.25, curve: 0.11, thick: 0.026 });
+
+  // Petit chignon noue (masque sous une coiffe).
+  const bun = new THREE.Group();
+  bun.name = 'classHat';
+  const tuft = sculptSphere((d, out) => { out.set(d.x * hr * 0.24, d.y * hr * 0.2, d.z * hr * 0.24); }, black, 16, 12);
+  tuft.position.set(0, cy + hr * 1.06, -hr * 0.12);
+  bun.add(tuft);
+  const tie = detail(new THREE.Mesh(new THREE.TorusGeometry(hr * 0.17, hr * 0.045, 8, 16), sash));
+  tie.rotation.x = Math.PI / 2 - 0.25;
+  tie.position.set(0, cy + hr * 0.95, -hr * 0.1);
+  bun.add(tie);
+  head.add(bun);
+
+  // ---- Gourde pendue a la ceinture (hanche droite, derriere) ----
+  const gourd = new THREE.Group();
+  gourd.add(loft([[0, 0.02], [0.025, 0.075], [0.09, 0.1], [0.155, 0.074], [0.185, 0.05], [0.225, 0.064], [0.275, 0.05], [0.3, 0.03]], wood, { segs: 18, sub: 4 }));
+  gourd.add(loft([[0.295, 0.028], [0.335, 0.03], [0.345, 0.018]], sash, { segs: 12, sub: 2 }));
+  const rope = detail(new THREE.Mesh(new THREE.TorusGeometry(0.054, 0.012, 8, 18), sash));
+  rope.rotation.x = Math.PI / 2;
+  rope.position.y = 0.185;
+  gourd.add(rope);
+  gourd.position.set(0.2, 0.42, -0.2);
+  gourd.rotation.set(-0.15, 0, -0.25);
+  group.add(gourd);
+
+  // ---- Baton de bambou (main gauche) : une seule tige a noeuds ----
+  const staff = new THREE.Group();
+  const rings = [[-0.62, 0.02], [-0.6, 0.03]];
+  for (let k = 0; k < 6; k++) {
+    const y = -0.6 + k * 0.29;
+    if (k > 0) rings.push([y - 0.016, 0.03], [y, 0.038], [y + 0.016, 0.03]);
+    if (k < 5) rings.push([y + 0.145, 0.027]);
+  }
+  rings.push([0.87, 0.026]);
+  staff.add(loft(rings, bamboo, { segs: 14, sub: 3 }));
+  for (const [y, a, len] of [[0.56, -0.9, 0.2], [0.56, 0.7, 0.15]]) {
+    const leaf = sculptSphere((d, out) => {
+      out.set(d.x * 0.035 * (1 - 0.6 * Math.abs(d.y)), (d.y + 1) * len * 0.5, d.z * 0.008);
+    }, leafM, 12, 10);
+    leaf.position.set(0, y, 0);
+    leaf.rotation.set(0, 0.4, a);
+    staff.add(leaf);
+  }
+  staff.position.set(-0.01, -0.05, 0.03);
+  staff.rotation.set(0.2, 0, 0.13);
   H.handL.add(staff);
 
   return group;
