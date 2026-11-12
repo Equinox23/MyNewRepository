@@ -23,10 +23,11 @@
 .evo-strip .evo-arrow { color: #8a6f44; margin-top: 13px; font-size: 9px; flex: 0 0 auto; }
 
 /* ---- Carte du monde : avancement des regions ---- */
-#menu-root .wm-pips { display: flex; gap: 3px; margin-top: 2px; padding: 2px 5px; border-radius: 7px; background: rgba(20, 12, 4, 0.7); }
-#menu-root .wm-pips i { width: 7px; height: 7px; border-radius: 50%; background: #4a3d2a; border: 1px solid #241208; box-sizing: border-box; }
+/* Petite echelle a gauche du portrait : tranches vaincues (bas) puis donjon (haut). */
+#menu-root .wm-pips { position: absolute; left: 3px; top: 5px; display: flex; flex-direction: column-reverse; gap: 2px; padding: 3px; border-radius: 7px; background: rgba(20, 12, 4, 0.78); }
+#menu-root .wm-pips i { width: 6px; height: 6px; border-radius: 50%; background: #4a3d2a; border: 1px solid #241208; box-sizing: border-box; }
 #menu-root .wm-pips i.on { background: #9ad85a; }
-#menu-root .wm-pips i.dg { border-radius: 2px; margin-left: 2px; }
+#menu-root .wm-pips i.dg { border-radius: 2px; margin-bottom: 1px; }
 #menu-root .wm-pips i.dg.open { background: #b46aff; }
 #menu-root .wm-pips i.dg.on { background: #ffcf5a; }
 #menu-root .wm-danger {

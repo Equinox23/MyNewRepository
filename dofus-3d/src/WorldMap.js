@@ -122,7 +122,7 @@ export function renderWorld(menu, h) {
       ${done ? '<span class="wm-done">&#10003;</span>' : d.label === 'Tres dur' ? '<span class="wm-danger">!</span>' : ''}
       <span class="wm-name">${z.name.replace(/^.* (des|aux|du) /, '')}</span>
       <span class="wm-range">Niv. ${z.minLevel}-${z.maxLevel}</span>
-      <span class="wm-pips">${pips}</span>
+      <span class="wm-pips" title="Evolutions vaincues et donjon">${pips}</span>
     </button>`;
   }).join('');
 

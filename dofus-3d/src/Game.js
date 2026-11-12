@@ -1225,6 +1225,9 @@ export class Game {
           tf.character.hpBar.setHp(tf.hp, tf.maxHp);
           if (this.vfx) this.vfx.impact(cell.c, cell.r, { color: elementHex(hit.el), big: actual >= 40 || hit.crit });
           totalDealt += actual;
+          if (tf.alive && actual > 0) this._onHitSpecials(caster, tf, hit);
+          const resTxt = hit.res ? ` (res. ${ELEMENT_LABEL[hit.el]} ${hit.res > 0 ? '+' : ''}${hit.res}%)` : '';
+          this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} subit ${actual} degats${hit.crit ? ' CRITIQUES' : ''}${resTxt}`, 'attack');
           // Mot Vampirique : l attaquant recupere une part des degats.
           const vamp = actual > 0 && caster.alive && !caster.isBomb && tf.team !== caster.team
             && tf.buffs.find(b => b.state === 'vampirique' && b.team === caster.team);
@@ -1236,9 +1239,6 @@ export class Game {
               this.hud.log && this.hud.log(`Mot Vampirique : ${caster.name} recupere ${got} PV`, 'heal');
             }
           }
-          if (tf.alive && actual > 0) this._onHitSpecials(caster, tf, hit);
-          const resTxt = hit.res ? ` (res. ${ELEMENT_LABEL[hit.el]} ${hit.res > 0 ? '+' : ''}${hit.res}%)` : '';
-          this.hud.log && this.hud.log(`${caster.name} -> ${spell.name} : ${tf.name} subit ${actual} degats${hit.crit ? ' CRITIQUES' : ''}${resTxt}`, 'attack');
           if (!tf.alive) dying.push(tf);
           touched++;
           // Renvoi de degats vers l attaquant.

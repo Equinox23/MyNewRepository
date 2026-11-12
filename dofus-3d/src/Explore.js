@@ -239,14 +239,15 @@ export class Explore {
   // Telephone tenu debout : la carte ne tient pas en largeur, la camera
   // recule un peu et suit le heros. En paysage, toute la carte est visible.
   _follows() { return window.innerHeight > window.innerWidth; }
+  // La camera reste au-dessus de la carte (pas sur la foret autour).
+  _camClamp(v) { return Math.max(4, Math.min(MAP_SIZE - 5, v)); }
   _frameCamera() {
     const s = this.scene3d;
     s.resetCamera();
     if (this._follows()) {
       s.distance = 27;
-      s.target.x = this.pos.c;
-      s.target.z = this.pos.r;
-      s._clampTarget();
+      s.target.x = this._camClamp(this.pos.c);
+      s.target.z = this._camClamp(this.pos.r);
     }
     s.updateCamera();
   }
@@ -593,8 +594,9 @@ export class Explore {
   _measure() {
     const t = this.topEl.getBoundingClientRect(), b = this.barEl.getBoundingClientRect();
     const portrait = window.innerHeight > window.innerWidth;
-    // En paysage le bandeau n occupe qu un coin : la carte garde la hauteur.
-    this._insets = [portrait ? Math.round(t.bottom) : 0, Math.round(window.innerHeight - b.top)];
+    // En paysage la barre du bas n occupe que les coins.
+    this._insets = [Math.round(t.bottom), portrait ? Math.round(window.innerHeight - b.top) : 0];
+    this._barH = Math.round(window.innerHeight - b.top);
   }
 
   _thingById(id) {
@@ -917,22 +919,33 @@ export class Explore {
     // La camera accompagne le heros pendant qu il marche.
     if (this._running && this.lead && this._follows()) {
       const k = Math.min(1, dt * 3.5), p = this.lead.group.position;
-      s.target.x += (p.x - s.target.x) * k;
-      s.target.z += (p.z - s.target.z) * k;
+      s.target.x += (this._camClamp(p.x) - s.target.x) * k;
+      s.target.z += (this._camClamp(p.z) - s.target.z) * k;
       s.updateCamera();
     }
     // Etiquettes flottantes au-dessus des groupes et des decors. Hors de
     // l ecran, elles restent collees au bord : on sait ou aller.
     const w = window.innerWidth, h = window.innerHeight;
-    const y0 = this._insets[0] + 30, y1 = h - this._insets[1] - 6;
+    const y0 = this._insets[0] + 30, y1 = h - (this._barH || 0) - 6;
+    const edge = [];
     for (const l of this._labels || []) {
       l.v.set(l.thing.c, l.y, l.thing.r);
       const p = s.worldToScreen(l.v);
       const hw = (l.w || (l.w = l.el.offsetWidth / 2 || 40)) + 4;
-      const x = Math.max(hw, Math.min(w - hw, p.x)), y = Math.max(y0, Math.min(y1, p.y));
-      const off = x !== p.x || y !== p.y;
+      l.x = Math.max(hw, Math.min(w - hw, p.x));
+      l.sy = Math.max(y0, Math.min(y1, p.y));
+      const off = l.x !== p.x || l.sy !== p.y;
       if (off !== l.off) { l.off = off; l.el.classList.toggle('off', off); }
-      l.el.style.transform = `translate(${Math.round(x)}px, ${Math.round(y)}px) translate(-50%, -100%)`;
+      if (off) edge.push(l);
+    }
+    // Les etiquettes collees au bord ne se chevauchent pas.
+    edge.sort((a, b) => a.sy - b.sy);
+    for (let i = 1; i < edge.length; i++) {
+      const a = edge[i - 1], b = edge[i];
+      if (Math.abs(a.x - b.x) < a.w + b.w + 8 && b.sy - a.sy < 28) b.sy = a.sy + 28;
+    }
+    for (const l of this._labels || []) {
+      l.el.style.transform = `translate(${Math.round(l.x)}px, ${Math.round(l.sy)}px) translate(-50%, -100%)`;
     }
   }
 }
