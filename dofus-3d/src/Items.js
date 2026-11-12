@@ -136,7 +136,7 @@ export function reqLevel(familyId, rarity) {
 const WEIGHTS = [0.4, 0.3, 0.18, 0.12];
 // Une signature en % (resistance, dommages, critique) pese moins lourd :
 // portee sur les 5 objets, elle plafonnerait sinon bien trop vite.
-const PCT_CORE = 0.26;
+const PCT_CORE = 0.2;
 const isPct = (k) => k === 'dmg' || k === 'crit' || k.startsWith('res.');
 
 export function itemStats(familyId, slot, rarity) {
@@ -148,7 +148,9 @@ export function itemStats(familyId, slot, rarity) {
   const budget = (6 + fam.level * 1.6) * R.mult;
   const w = WEIGHTS.slice(0, keys.length);
   if (isPct(fam.core)) w[0] = PCT_CORE;
-  const wsum = w.reduce((a, b) => a + b, 0);
+  // Le budget est reparti sur les 2 premieres stats : les stats en plus
+  // des raretes superieures s ajoutent, elles ne diluent pas les autres.
+  const wsum = w[0] + w[1];
   const stats = {};
   keys.forEach((k, i) => {
     stats[k] = Math.max(1, Math.round(budget * (w[i] / wsum) * STAT_UNIT[k]));
@@ -190,7 +192,7 @@ export function setBonus(familyId, count) {
   const add = (k, pts) => { if (pts > 0) stats[k] = (stats[k] || 0) + Math.max(1, Math.round(pts * STAT_UNIT[k] * SCALE(k))); };
   // Stat signature des 2 objets, puis deux stats secondaires (ou `bonus`).
   const bs = fam.bonus || [fam.core, fam.stats[0], fam.stats[1]];
-  add(bs[0], P * (isPct(bs[0]) ? 0.35 : 0.5) * (n - 1));
+  add(bs[0], P * (isPct(bs[0]) ? 0.25 : 0.5) * (n - 1));
   if (n >= 3) add(bs[1], P * 0.4 * (n - 2));
   if (n >= 4) add(bs[2], P * 0.35 * (n - 3));
   let special = null;
@@ -419,7 +421,7 @@ export function chestLoot(familyId, _level, count = 2) {
 
 // Valeur d un equipement complet : stats (ramenees en points de budget),
 // PA / PM et effets de panoplie. Sert a "Equiper le meilleur".
-const SPECIAL_VALUE = 45;
+const SPECIAL_VALUE = 80;
 export function loadoutScore(items) {
   const { flat, specials } = flatTotals(items);
   let s = specials.length * SPECIAL_VALUE;

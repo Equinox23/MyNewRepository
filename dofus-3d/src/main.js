@@ -194,6 +194,7 @@ canvas.addEventListener('wheel', (e) => {
 
 const pointers = new Map();
 let pinch = null;
+let longPressTimer = null;
 
 canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture(e.pointerId);
@@ -205,6 +206,20 @@ canvas.addEventListener('pointerdown', (e) => {
     moved: false, button: e.button, pointerType: e.pointerType,
     panAnchor: anchor,
   });
+  // Appui long (tactile) sur un combattant : affiche sa fiche.
+  clearTimeout(longPressTimer);
+  if (e.pointerType !== 'mouse' && pointers.size === 1) {
+    const id = e.pointerId, x = e.clientX, y = e.clientY;
+    longPressTimer = setTimeout(() => {
+      const p = pointers.get(id);
+      if (!p || p.moved || pointers.size !== 1) return;
+      const hit = picker.pick(x, y);
+      const f = hit && game.fighters.find(ff => ff.alive && ff.c === hit.c && ff.r === hit.r && !(ff.invisible && ff.team !== 'player'));
+      if (!f) return;
+      p.longPressed = true;
+      hud.pinFighterInfo(f);
+    }, 450);
+  }
   if (pointers.size === 2) {
     const [a, b] = pointers.values();
     pinch = { dist: Math.hypot(a.x - b.x, a.y - b.y), ang: Math.atan2(b.y - a.y, b.x - a.x), twist: 0, turning: false };
@@ -261,6 +276,8 @@ canvas.addEventListener('pointerup', (e) => {
   const p = pointers.get(e.pointerId);
   pointers.delete(e.pointerId);
   if (pointers.size < 2) pinch = null;
+  clearTimeout(longPressTimer);
+  if (p && p.longPressed) return;
   if (p && !p.moved && pointers.size === 0) {
     // Clic droit (sans drag) = annule la selection courante et revient
     // en mode "Deplacer". Le drag clic droit reste reserve a la rotation.
@@ -329,7 +346,8 @@ function handleTap(x, y, pointerType = 'mouse') {
   const visibleFighter = fighter
     && !(fighter.invisible && fighter.team !== 'player')
     ? fighter : null;
-  if (visibleFighter) hud.pinFighterInfo(visibleFighter);
+  // Tactile : la fiche d un combattant ne s ouvre que sur appui long.
+  if (visibleFighter && !isTouch) hud.pinFighterInfo(visibleFighter);
   game.onTileTap(hit.c, hit.r, pointerType);
 }
 

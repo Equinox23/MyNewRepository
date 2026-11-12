@@ -615,7 +615,7 @@ html, body { height: 100%; }
 #menu-root .inv-chip { background: rgba(154, 216, 90, 0.12); border: 1px solid rgba(154, 216, 90, 0.35); border-radius: 8px; padding: 1px 7px; white-space: nowrap; }
 #menu-root .inv-chip.none { color: var(--d-cream-dim); border-color: #5a4a32; background: none; }
 #menu-root .inv-bag-h { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 0; }
-#menu-root .inv-filter { min-height: 32px; padding: 2px 10px; border-radius: 16px; border: 1px solid #8fd0ff; background: rgba(143, 208, 255, 0.15); color: #cfeaff; font: 600 12px var(--d-font-title); cursor: pointer; }
+#menu-root .inv-filter { min-height: 44px; padding: 2px 10px; border-radius: 16px; border: 1px solid #8fd0ff; background: rgba(143, 208, 255, 0.15); color: #cfeaff; font: 600 12px var(--d-font-title); cursor: pointer; }
 #menu-root .inv-help { font-size: 11px; color: var(--d-cream-dim); margin-bottom: 2px; }
 #menu-root .inv-set-h { min-height: 44px; }
 #menu-root .inv-set-h svg { flex-shrink: 0; }
