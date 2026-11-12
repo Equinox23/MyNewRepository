@@ -46,14 +46,15 @@ export const DEFS = {
     role: 'Meute',
     hp: 150, pa: 5, pm: 4, initiative: 10,
     spellIds: ['morsureBouftou'],
-    ai: 'aggressive',
+    ai: 'pack',
   },
   bouftouRoyal: {
     name: 'Bouftou Royal',
     role: 'Chef de meute',
     hp: 400, pa: 7, pm: 5, initiative: 9,
     spellIds: ['morsureRoyale', 'soinAnimal'],
-    ai: 'aggressive',
+    ai: 'pack',
+    enrage: { name: 'Rage du troupeau', damageMult: 0.25, bonusPm: 1 },
   },
   craqueleur: {
     name: 'Craqueleur',
@@ -88,7 +89,7 @@ export const DEFS = {
     role: 'Crachat',
     hp: 130, pa: 4, pm: 3, initiative: 11,
     spellIds: ['crachat'],
-    ai: 'fearful',
+    ai: 'spitter',
     isAquatic: true,
   },
   crapaudChef: {
@@ -96,7 +97,8 @@ export const DEFS = {
     role: 'Maitre des crapauds',
     hp: 220, pa: 6, pm: 3, initiative: 10,
     spellIds: ['crachatEmpoisonne', 'peauDure'],
-    ai: 'fearful',
+    ai: 'spitter',
+    enrage: { name: 'Mue visqueuse', shield: 0.25, bonusPa: 1 },
     isAquatic: true,
   },
 
@@ -147,14 +149,16 @@ export const DEFS = {
     role: 'Lapin',
     hp: 95, pa: 5, pm: 5, initiative: 14,
     spellIds: ['morsureWabbit', 'lancerCarotte'],
-    ai: 'aggressive',
+    ai: 'skirmisher',
   },
   waWabbit: {
     name: 'Wa Wabbit',
     role: 'Roi des Wabbits',
     hp: 340, pa: 8, pm: 4, initiative: 12,
     spellIds: ['carotteGeante', 'morsureWabbit', 'soinAnimal'],
-    ai: 'aggressive',
+    ai: 'pack',
+    // Phase 2 : le roi panique et se bat comme ses sujets (frappe et fuit).
+    enrage: { name: 'Panique du Wa', bonusPm: 2, fuite: 12, ai: 'skirmisher' },
   },
 
   // ---------- CHAFER (squelettes) ----------
@@ -163,14 +167,15 @@ export const DEFS = {
     role: 'Fantassin',
     hp: 130, pa: 5, pm: 4, initiative: 9,
     spellIds: ['coupDeLance'],
-    ai: 'chafer',
+    ai: 'soldier',
   },
   chaferRoyal: {
     name: 'Chafer Royal',
     role: 'Officier squelette',
     hp: 380, pa: 8, pm: 4, initiative: 8,
     spellIds: ['coupDeLanceRoyal', 'invisibilite', 'piegeSournois'],
-    ai: 'chaferRoyal',
+    ai: 'soldier',
+    enrage: { name: 'Garde d outre-tombe', shield: 0.2, bonusPa: 1 },
   },
 
   // ---------- TOFU (oiseaux) ----------
@@ -179,14 +184,15 @@ export const DEFS = {
     role: 'Oiseau',
     hp: 85, pa: 6, pm: 5, initiative: 13,
     spellIds: ['coupDeBec'],
-    ai: 'tofu',
+    ai: 'raider',
   },
   tofuRoyal: {
     name: 'Tofu Royal',
     role: 'Roi des Tofus',
     hp: 300, pa: 8, pm: 5, initiative: 11,
     spellIds: ['coupDeBec', 'bourrasque'],
-    ai: 'tofuRoyal',
+    ai: 'raider',
+    enrage: { name: 'Tempete de plumes', damageMult: 0.2, bonusPm: 2 },
   },
 
   // ---------- CHAMPIGNON ----------
@@ -195,7 +201,7 @@ export const DEFS = {
     role: 'Sporifere',
     hp: 150, pa: 4, pm: 2, initiative: 7,
     spellIds: ['sporeToxique'],
-    ai: 'champignon',
+    ai: 'poisoner',
     isAquatic: true,
   },
   champignonRoyal: {
@@ -203,7 +209,8 @@ export const DEFS = {
     role: 'Mycelien royal',
     hp: 420, pa: 7, pm: 2, initiative: 6,
     spellIds: ['sporeToxique', 'nuageDeSpores'],
-    ai: 'champignonRoyal',
+    ai: 'poisoner',
+    enrage: { name: 'Sporulation', bonusPa: 2 },
     isAquatic: true,
   },
 
@@ -213,14 +220,15 @@ export const DEFS = {
     role: 'Golem',
     hp: 140, pa: 5, pm: 3, initiative: 8,
     spellIds: ['frappeRocheuse', 'lancerRocher'],
-    ai: 'aggressive',
+    ai: 'tank',
   },
   craqueleurLegendaire: {
     name: 'Craqueleur Legendaire',
     role: 'Boss',
     hp: 480, pa: 8, pm: 3, initiative: 7,
     spellIds: ['poingLegendaire', 'enracinement', 'eboulement'],
-    ai: 'boss',
+    ai: 'tank',
+    enrage: { name: 'Coeur de pierre', shield: 0.25, damageMult: 0.2 },
     isBoss: true,
   },
   kwakwa: {
@@ -228,7 +236,8 @@ export const DEFS = {
     role: 'Boss',
     hp: 400, pa: 8, pm: 4, initiative: 15,
     spellIds: ['kwakElementaire', 'plumesTranchantes', 'souffleKwakwa'],
-    ai: 'bossRanged',
+    ai: 'spitter',
+    enrage: { name: 'Furie elementaire', damageMult: 0.2, bonusPa: 1 },
     isBoss: true,
     // Change d element a chaque tour : tres resistant a son element du
     // moment, vulnerable a l element oppose.
@@ -239,29 +248,30 @@ export const DEFS = {
     role: 'Boss',
     hp: 500, pa: 8, pm: 4, initiative: 11,
     spellIds: ['chargeMinotoror', 'coupDeCorne', 'fureurMinotoror'],
-    ai: 'boss',
+    ai: 'charger',
+    enrage: { name: 'Fureur du Labyrinthe', damageMult: 0.25, bonusPm: 1 },
     isBoss: true,
   },
   // ---------- VARIANTES (bestiaire : 3 a 4 monstres par famille) ----------
-  boufton: { name: 'Boufton Noir', role: 'Jeune bouftou', hp: 110, pa: 5, pm: 5, initiative: 12, spellIds: ['morsureBouftou'], ai: 'aggressive' },
-  bouftouChef: { name: 'Chef de Guerre Bouftou', role: 'Chef de guerre', hp: 220, pa: 7, pm: 4, initiative: 10, spellIds: ['morsureRoyale', 'criDeGuerre'], ai: 'aggressive' },
-  wabbitNoir: { name: 'Black Wabbit', role: 'Lapin noir', hp: 120, pa: 5, pm: 5, initiative: 14, spellIds: ['morsureWabbit', 'lancerCarotte'], ai: 'aggressive' },
-  wabbitSquelette: { name: 'Wabbit Squelette', role: 'Lapin mort-vivant', hp: 170, pa: 6, pm: 4, initiative: 11, spellIds: ['morsureWabbit', 'carotteGeante'], ai: 'aggressive' },
-  crapaudVenimeux: { name: 'Crapaud Venimeux', role: 'Empoisonneur', hp: 140, pa: 5, pm: 3, initiative: 11, spellIds: ['crachatEmpoisonne', 'crachat'], ai: 'fearful', isAquatic: true },
-  crapaudMage: { name: 'Crapaud Mage', role: 'Sorcier des mares', hp: 170, pa: 7, pm: 3, initiative: 10, spellIds: ['bulleDEau', 'crachat', 'peauDure'], ai: 'fearful', isAquatic: true },
-  tofuNoir: { name: 'Tofu Noir', role: 'Oiseau sombre', hp: 100, pa: 6, pm: 5, initiative: 14, spellIds: ['coupDeBec'], ai: 'tofu' },
-  tofuMalefique: { name: 'Tofu Malefique', role: 'Oiseau maudit', hp: 170, pa: 7, pm: 5, initiative: 12, spellIds: ['coupDeBec', 'bourrasque'], ai: 'tofuRoyal' },
-  chaferArcher: { name: 'Chafer Archer', role: 'Tireur squelette', hp: 115, pa: 6, pm: 3, initiative: 10, spellIds: ['flecheOsseuse'], ai: 'fearful' },
-  chaferElite: { name: 'Chafer d Elite', role: 'Garde squelette', hp: 220, pa: 7, pm: 4, initiative: 9, spellIds: ['coupDeLanceRoyal', 'piegeSournois'], ai: 'chafer' },
-  champChamp: { name: 'Champ Champ', role: 'Petit champignon', hp: 120, pa: 4, pm: 3, initiative: 8, spellIds: ['sporeToxique'], ai: 'champignon', isAquatic: true },
-  champignonMutant: { name: 'Champignon Mutant', role: 'Sporifere mutant', hp: 230, pa: 6, pm: 2, initiative: 7, spellIds: ['sporeToxique', 'nuageDeSpores'], ai: 'champignonRoyal', isAquatic: true },
-  craqueleurPlaines: { name: 'Craqueleur des Plaines', role: 'Golem moussu', hp: 160, pa: 6, pm: 3, initiative: 8, spellIds: ['frappeRocheuse', 'lancerRocher'], ai: 'aggressive' },
-  craqueleurAncien: { name: 'Craqueleur Ancien', role: 'Golem millenaire', hp: 270, pa: 7, pm: 3, initiative: 7, spellIds: ['poingLegendaire', 'lancerRocher'], ai: 'aggressive' },
-  kwakFlamme: { name: 'Kwak de Flammes', role: 'Kwak', hp: 150, pa: 6, pm: 4, initiative: 14, spellIds: ['kwakElementaire'], ai: 'fearful', fixedElement: 'feu' },
-  kwakGlace: { name: 'Kwak de Glace', role: 'Kwak', hp: 160, pa: 6, pm: 4, initiative: 13, spellIds: ['kwakElementaire', 'souffleKwakwa'], ai: 'fearful', fixedElement: 'eau' },
-  kwakVent: { name: 'Kwak de Vent', role: 'Kwak', hp: 150, pa: 6, pm: 5, initiative: 15, spellIds: ['kwakElementaire', 'souffleKwakwa'], ai: 'fearful', fixedElement: 'air' },
-  mominotor: { name: 'Mominotor', role: 'Jeune minotaure', hp: 210, pa: 7, pm: 4, initiative: 11, spellIds: ['coupDeCorne'], ai: 'chafer' },
-  gardienLabyrinthe: { name: 'Gardien du Labyrinthe', role: 'Minotaure de pierre', hp: 320, pa: 8, pm: 4, initiative: 10, spellIds: ['coupDeCorne', 'chargeMinotoror'], ai: 'boss' },
+  boufton: { name: 'Boufton Noir', role: 'Jeune bouftou', hp: 110, pa: 5, pm: 5, initiative: 12, spellIds: ['morsureBouftou'], ai: 'pack', flank: true },
+  bouftouChef: { name: 'Chef de Guerre Bouftou', role: 'Chef de guerre', hp: 220, pa: 7, pm: 4, initiative: 13, spellIds: ['morsureRoyale', 'criDeGuerre'], ai: 'pack', leader: true },
+  wabbitNoir: { name: 'Black Wabbit', role: 'Lapin noir', hp: 120, pa: 5, pm: 5, initiative: 14, spellIds: ['morsureWabbit', 'lancerCarotte'], ai: 'skirmisher' },
+  wabbitSquelette: { name: 'Wabbit Squelette', role: 'Lapin mort-vivant', hp: 170, pa: 6, pm: 4, initiative: 15, spellIds: ['morsureWabbit', 'carotteGeante'], ai: 'spitter', leader: true },
+  crapaudVenimeux: { name: 'Crapaud Venimeux', role: 'Empoisonneur', hp: 140, pa: 5, pm: 3, initiative: 11, spellIds: ['crachatEmpoisonne', 'crachat'], ai: 'spitter', isAquatic: true },
+  crapaudMage: { name: 'Crapaud Mage', role: 'Sorcier des mares', hp: 170, pa: 7, pm: 3, initiative: 12, spellIds: ['bulleDEau', 'crachat', 'peauDure'], ai: 'spitter', isAquatic: true, leader: true },
+  tofuNoir: { name: 'Tofu Noir', role: 'Oiseau sombre', hp: 100, pa: 6, pm: 5, initiative: 14, spellIds: ['coupDeBec'], ai: 'raider' },
+  tofuMalefique: { name: 'Tofu Malefique', role: 'Oiseau maudit', hp: 170, pa: 7, pm: 5, initiative: 15, spellIds: ['coupDeBec', 'bourrasque'], ai: 'raider', leader: true },
+  chaferArcher: { name: 'Chafer Archer', role: 'Tireur squelette', hp: 115, pa: 6, pm: 3, initiative: 10, spellIds: ['flecheOsseuse'], ai: 'spitter', rearGuard: true },
+  chaferElite: { name: 'Chafer d Elite', role: 'Garde squelette', hp: 220, pa: 7, pm: 4, initiative: 11, spellIds: ['coupDeLanceRoyal', 'piegeSournois'], ai: 'soldier', leader: true },
+  champChamp: { name: 'Champ Champ', role: 'Petit champignon', hp: 120, pa: 4, pm: 3, initiative: 8, spellIds: ['sporeToxique'], ai: 'poisoner', isAquatic: true },
+  champignonMutant: { name: 'Champignon Mutant', role: 'Sporifere mutant', hp: 230, pa: 6, pm: 2, initiative: 9, spellIds: ['sporeToxique', 'nuageDeSpores'], ai: 'poisoner', isAquatic: true, leader: true },
+  craqueleurPlaines: { name: 'Craqueleur des Plaines', role: 'Golem moussu', hp: 160, pa: 6, pm: 3, initiative: 8, spellIds: ['frappeRocheuse', 'lancerRocher'], ai: 'tank' },
+  craqueleurAncien: { name: 'Craqueleur Ancien', role: 'Golem millenaire', hp: 270, pa: 7, pm: 3, initiative: 9, spellIds: ['poingLegendaire', 'lancerRocher'], ai: 'tank', leader: true },
+  kwakFlamme: { name: 'Kwak de Flammes', role: 'Kwak', hp: 150, pa: 6, pm: 4, initiative: 14, spellIds: ['kwakElementaire'], ai: 'spitter', fixedElement: 'feu' },
+  kwakGlace: { name: 'Kwak de Glace', role: 'Kwak', hp: 160, pa: 6, pm: 4, initiative: 13, spellIds: ['kwakElementaire', 'souffleKwakwa'], ai: 'spitter', fixedElement: 'eau' },
+  kwakVent: { name: 'Kwak de Vent', role: 'Kwak', hp: 150, pa: 6, pm: 5, initiative: 15, spellIds: ['kwakElementaire', 'souffleKwakwa'], ai: 'spitter', fixedElement: 'air', leader: true },
+  mominotor: { name: 'Mominotor', role: 'Jeune minotaure', hp: 210, pa: 7, pm: 4, initiative: 11, spellIds: ['coupDeCorne'], ai: 'charger' },
+  gardienLabyrinthe: { name: 'Gardien du Labyrinthe', role: 'Minotaure de pierre', hp: 320, pa: 8, pm: 4, initiative: 12, spellIds: ['coupDeCorne', 'chargeMinotoror'], ai: 'charger', leader: true },
 };
 
 // Stats tactiques : tacle / fuite et resistances elementaires (%).
@@ -361,15 +371,18 @@ for (const [id, list] of Object.entries(MONSTER_SPELLS)) if (DEFS[id]) DEFS[id].
 
 // Niveau FIXE de chaque monstre (sa force depend de son niveau).
 const MONSTER_LEVELS = {
-  bouftou: 1, boufton: 2, bouftouChef: 4, bouftouRoyal: 6,
-  wabbit: 3, wabbitNoir: 4, wabbitSquelette: 6, waWabbit: 8,
-  crapaud: 4, crapaudVenimeux: 5, crapaudMage: 7, crapaudChef: 9,
-  tofu: 5, tofuNoir: 6, tofuMalefique: 8, tofuRoyal: 10,
-  chafer: 7, chaferArcher: 8, chaferElite: 10, chaferRoyal: 12,
-  champignon: 8, champChamp: 9, champignonMutant: 11, champignonRoyal: 13,
-  craqueleurSauvage: 10, craqueleurPlaines: 11, craqueleurAncien: 13, craqueleurLegendaire: 15,
-  kwakFlamme: 13, kwakGlace: 14, kwakVent: 14, kwakwa: 17,
-  mominotor: 16, gardienLabyrinthe: 18, minotoror: 20,
+  // Une tranche de niveau par famille, 2 niveaux entre chaque evolution
+  // (sbire, variante, chef, royal) ; les tranches se chevauchent d une
+  // famille a la suivante.
+  bouftou: 1, boufton: 3, bouftouChef: 5, bouftouRoyal: 7,
+  wabbit: 2, wabbitNoir: 4, wabbitSquelette: 6, waWabbit: 8,
+  crapaud: 4, crapaudVenimeux: 6, crapaudMage: 8, crapaudChef: 10,
+  tofu: 5, tofuNoir: 7, tofuMalefique: 9, tofuRoyal: 11,
+  chafer: 7, chaferArcher: 9, chaferElite: 11, chaferRoyal: 13,
+  champignon: 8, champChamp: 10, champignonMutant: 12, champignonRoyal: 14,
+  craqueleurSauvage: 10, craqueleurPlaines: 12, craqueleurAncien: 14, craqueleurLegendaire: 16,
+  kwakFlamme: 12, kwakGlace: 14, kwakVent: 16, kwakwa: 18,
+  mominotor: 14, gardienLabyrinthe: 17, minotoror: 20,
 };
 for (const [id, lv] of Object.entries(MONSTER_LEVELS)) if (DEFS[id]) DEFS[id].level = lv;
 
